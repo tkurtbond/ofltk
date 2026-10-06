@@ -241,8 +241,9 @@ Programmer errors halt, as in polibfyaml. poc's `ASSERT(x, n)` prints
 | 71 | a widget opened twice (`Fl.OpenedTwice`) |
 | 72 | a NIL argument where a widget or timer is required (`Fl.NilArgument`) |
 | 73 | a closed resource used |
-| 74 | an index out of range: group child, browser line, menu item (`Fl.IndexOutOfRange`) |
+| 74 | an index out of range: group child, grid row or column, browser line, menu item (`Fl.IndexOutOfRange`) |
 | 75 | `RepeatTimeout` outside its own timer's `Fire` (`Fl.NotFiring`) |
+| 76 | a widget that must be a group's child isn't: a grid's cell, a flex's fixed size, a tab or wizard page, a tile's size range (`Fl.NotAChild`) |
 
 Bad data from outside the program is never a halt: an image that fails
 to load, a file chooser cancelled. Those come back as `BOOLEAN` results.
@@ -570,8 +571,65 @@ findings written into this file and AGENTS.md.
      wait for the clipboard (Phase 7).
    - `Fl::callback_reason()`, which says why a `Callback` runs, waits
      until a program needs it.
-4. **Layout** (`FlLayout`): `Flex` and `Grid` first, then `Pack`,
-   `Scroll`, `Tabs`, `Tile`, `Wizard`, and `resizable`.
+4. **`[done]` Layout** (`FlLayout`; 2026-10-06, poc 0.4.0, FLTK 1.4.5):
+   - **`FlLayout`**: `Flex`, `Grid`, `Pack`, `Scroll`, `Tabs`, `Tile`
+     and `Wizard`, each an `Fl.Group`.
+     - `Flex`: `Kind` (`Column`, `Row`), `SetFixed`/`Fixed`, margins,
+       gap, `Layout`.
+     - `Grid`: `SetLayout`, `Place` and `PlaceSpan` with an alignment
+       `SET`, margins and gaps, each row's and column's size, weight,
+       gap and computed size, `ShowGrid`.
+     - `Pack`: kind and spacing. `Scroll`: kind, position, `ScrollTo`,
+       scrollbar size. `Tabs`: `Value` (the page shown), `TabAlign`,
+       `HandleOverflow`, `ClientArea`. `Wizard`: `Value`, `Next`,
+       `Prev`. `Tile`: `SizeRange`, `InitSizeRange`,
+       `MoveIntersection`.
+     - `resizable` was already `Fl.Group`'s (Phase 1).
+   - **Halts**: a grid cell or span outside the grid, and a row or
+     column index, are `IndexOutOfRange` (74). A widget that must be
+     the group's child and isn't (a grid's cell, a flex's fixed size, a
+     tab or wizard page, a tile's size range) is the new `NotAChild`
+     (76).
+   - **`Fl`**: `Group.End` calls a flex as a flex, and `Group.Clear`
+     deletes only the children ofltk opened, so it can clear a scroll or
+     a spinner (findings, below).
+   - **Constants**, 28 more (flex, pack and scroll kinds, grid
+     alignments, tab overflow), for 359 values in `TestConstants`.
+   - **Tests**: `TestLayout` (31 checks: a flex column and row, fixed
+     sizes, gap and margins; a grid's cells, spans, weights, sizes and
+     gaps; a pack's stacking and `Clear`; a scroll's position and
+     `Clear`; tabs and a wizard's pages; a tile's border and size range;
+     clearing a spinner). Halt tests `HaltGridRange` and
+     `HaltNotAChild`. All pass on Wayland and on Xvfb, and under
+     valgrind on both with 0 errors and no ofltk leak.
+   - **The tests catch what they're for**: `TestLayout` failed with a
+     flex ended as a group, with a pack's `resizable()` left after
+     `Clear`, and without the tile's saved sizes reset (each tried).
+   - Defaults the comments state were checked: a grid's weights 50, its
+     gaps -1 (the grid's), widths 0; a flex's gap and margins 0; a
+     scroll's scrollbar size 0 (`Fl::scrollbar_size()`).
+
+   Findings, confirmed live and in FLTK's source (`doc/fltk-issues.md`,
+   21 to 25):
+   - **`Fl_Grid::widget` writes past its rows** for a row equal to
+     `rows()` (or a column equal to `cols()`), where it documents NULL:
+     valgrind shows an invalid read and write. `PlaceSpan` checks the
+     range first.
+   - **More hidden non-virtual methods**: `Fl_Flex::end` (asks for a
+     layout), `Fl_Scroll::clear` and `Fl_Pack::clear`. `Fl_Group::clear`
+     on a scroll or spinner would `delete` its member parts.
+   - **`Fl_Tile` size ranges set after a move put the children back**,
+     since without ranges `move_intersection` doesn't save the new
+     sizes. `SizeRange` and `InitSizeRange` save them first.
+   - **`Fl_Pack` resizes itself as it draws**, to fit its children.
+
+   Not done, and why:
+   - `Fl_Grid`'s `Cell` objects (per-cell size and alignment after
+     placing) and `Fl_Flex`'s `spacing` alias: `Place` again does the
+     first, `Gap` is the second.
+   - `Fl_Scroll`'s scrollbars are FLTK's, not ofltk widgets, so they
+     aren't reachable from Oberon; `Scroll.ScrollbarSize` and `Kind`
+     cover what programs set on them.
 5. **Menus and dialogs** (`FlMenus`, `FlDialogs`). Each menu item's
    callback reaches an Oberon procedure or method; FLTKAda's
    `menu_item_callback_hook` and its `test_shortcut` pitfall apply.

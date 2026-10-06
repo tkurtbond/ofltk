@@ -10,6 +10,11 @@
 #include <FL/Fl_Input_.H>
 #include <FL/Fl_Slider.H>
 #include <FL/Fl_Valuator.H>
+#include <FL/Fl_Flex.H>
+#include <FL/Fl_Grid.H>
+#include <FL/Fl_Pack.H>
+#include <FL/Fl_Scroll.H>
+#include <FL/Fl_Tabs.H>
 #include <stdint.h>
 #include <stdio.h>
 #include <string.h>
@@ -345,6 +350,34 @@ const Entry entries[] = {
   {"FL_SIMPLE_COUNTER", (int32_t)(FL_SIMPLE_COUNTER)},
   {"FL_INT_INPUT", (int32_t)(FL_INT_INPUT)},
   {"FL_FLOAT_INPUT", (int32_t)(FL_FLOAT_INPUT)},
+  {"Fl_Flex::COLUMN", (int32_t)(Fl_Flex::COLUMN)},
+  {"Fl_Flex::ROW", (int32_t)(Fl_Flex::ROW)},
+  {"Fl_Pack::VERTICAL", (int32_t)(Fl_Pack::VERTICAL)},
+  {"Fl_Pack::HORIZONTAL", (int32_t)(Fl_Pack::HORIZONTAL)},
+  {"Fl_Scroll::HORIZONTAL", (int32_t)(Fl_Scroll::HORIZONTAL)},
+  {"Fl_Scroll::VERTICAL", (int32_t)(Fl_Scroll::VERTICAL)},
+  {"Fl_Scroll::BOTH", (int32_t)(Fl_Scroll::BOTH)},
+  {"Fl_Scroll::ALWAYS_ON", (int32_t)(Fl_Scroll::ALWAYS_ON)},
+  {"Fl_Scroll::HORIZONTAL_ALWAYS", (int32_t)(Fl_Scroll::HORIZONTAL_ALWAYS)},
+  {"Fl_Scroll::VERTICAL_ALWAYS", (int32_t)(Fl_Scroll::VERTICAL_ALWAYS)},
+  {"Fl_Scroll::BOTH_ALWAYS", (int32_t)(Fl_Scroll::BOTH_ALWAYS)},
+  {"FL_GRID_CENTER", (int32_t)(FL_GRID_CENTER)},
+  {"FL_GRID_TOP", (int32_t)(FL_GRID_TOP)},
+  {"FL_GRID_BOTTOM", (int32_t)(FL_GRID_BOTTOM)},
+  {"FL_GRID_LEFT", (int32_t)(FL_GRID_LEFT)},
+  {"FL_GRID_RIGHT", (int32_t)(FL_GRID_RIGHT)},
+  {"FL_GRID_HORIZONTAL", (int32_t)(FL_GRID_HORIZONTAL)},
+  {"FL_GRID_VERTICAL", (int32_t)(FL_GRID_VERTICAL)},
+  {"FL_GRID_FILL", (int32_t)(FL_GRID_FILL)},
+  {"FL_GRID_PROPORTIONAL", (int32_t)(FL_GRID_PROPORTIONAL)},
+  {"FL_GRID_TOP_LEFT", (int32_t)(FL_GRID_TOP_LEFT)},
+  {"FL_GRID_TOP_RIGHT", (int32_t)(FL_GRID_TOP_RIGHT)},
+  {"FL_GRID_BOTTOM_LEFT", (int32_t)(FL_GRID_BOTTOM_LEFT)},
+  {"FL_GRID_BOTTOM_RIGHT", (int32_t)(FL_GRID_BOTTOM_RIGHT)},
+  {"Fl_Tabs::OVERFLOW_COMPRESS", (int32_t)(Fl_Tabs::OVERFLOW_COMPRESS)},
+  {"Fl_Tabs::OVERFLOW_CLIP", (int32_t)(Fl_Tabs::OVERFLOW_CLIP)},
+  {"Fl_Tabs::OVERFLOW_PULLDOWN", (int32_t)(Fl_Tabs::OVERFLOW_PULLDOWN)},
+  {"Fl_Tabs::OVERFLOW_DRAG", (int32_t)(Fl_Tabs::OVERFLOW_DRAG)},
   {"fl_gray_ramp(0)", (int32_t)(fl_gray_ramp(0))},
   {"fl_gray_ramp(23)", (int32_t)(fl_gray_ramp(23))},
   {"fl_color_cube(0, 0, 0)", (int32_t)(fl_color_cube(0, 0, 0))},

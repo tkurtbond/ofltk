@@ -4,7 +4,7 @@ MODULE TestConstants; (* ofltk's constants are FLTK's *)
    value the installed FLTK's headers give (CConstants). A failure means
    FLTK's headers changed: run the script again, and see what moved. *)
 
-IMPORT SYSTEM, Out, Fl, FlDraw, FlButtons, FlValuators, Check, CConstants;
+IMPORT SYSTEM, Out, Fl, FlDraw, FlButtons, FlValuators, FlLayout, Check, CConstants;
 
 VAR checked, wrong: INTEGER;
 
@@ -342,6 +342,34 @@ BEGIN
   Same(FlValuators.SimpleCounter, "FL_SIMPLE_COUNTER");
   Same(FlValuators.IntSpinner, "FL_INT_INPUT");
   Same(FlValuators.FloatSpinner, "FL_FLOAT_INPUT");
+  Same(FlLayout.Column, "Fl_Flex::COLUMN");
+  Same(FlLayout.Row, "Fl_Flex::ROW");
+  Same(FlLayout.PackVertical, "Fl_Pack::VERTICAL");
+  Same(FlLayout.PackHorizontal, "Fl_Pack::HORIZONTAL");
+  Same(FlLayout.ScrollHorizontal, "Fl_Scroll::HORIZONTAL");
+  Same(FlLayout.ScrollVertical, "Fl_Scroll::VERTICAL");
+  Same(FlLayout.ScrollBoth, "Fl_Scroll::BOTH");
+  Same(FlLayout.ScrollAlwaysOn, "Fl_Scroll::ALWAYS_ON");
+  Same(FlLayout.ScrollHorizontalAlways, "Fl_Scroll::HORIZONTAL_ALWAYS");
+  Same(FlLayout.ScrollVerticalAlways, "Fl_Scroll::VERTICAL_ALWAYS");
+  Same(FlLayout.ScrollBothAlways, "Fl_Scroll::BOTH_ALWAYS");
+  Same(SYSTEM.VAL(INTEGER, FlLayout.GridCenter), "FL_GRID_CENTER");
+  Same(SYSTEM.VAL(INTEGER, FlLayout.GridTop), "FL_GRID_TOP");
+  Same(SYSTEM.VAL(INTEGER, FlLayout.GridBottom), "FL_GRID_BOTTOM");
+  Same(SYSTEM.VAL(INTEGER, FlLayout.GridLeft), "FL_GRID_LEFT");
+  Same(SYSTEM.VAL(INTEGER, FlLayout.GridRight), "FL_GRID_RIGHT");
+  Same(SYSTEM.VAL(INTEGER, FlLayout.GridHorizontal), "FL_GRID_HORIZONTAL");
+  Same(SYSTEM.VAL(INTEGER, FlLayout.GridVertical), "FL_GRID_VERTICAL");
+  Same(SYSTEM.VAL(INTEGER, FlLayout.GridFill), "FL_GRID_FILL");
+  Same(SYSTEM.VAL(INTEGER, FlLayout.GridProportional), "FL_GRID_PROPORTIONAL");
+  Same(SYSTEM.VAL(INTEGER, FlLayout.GridTopLeft), "FL_GRID_TOP_LEFT");
+  Same(SYSTEM.VAL(INTEGER, FlLayout.GridTopRight), "FL_GRID_TOP_RIGHT");
+  Same(SYSTEM.VAL(INTEGER, FlLayout.GridBottomLeft), "FL_GRID_BOTTOM_LEFT");
+  Same(SYSTEM.VAL(INTEGER, FlLayout.GridBottomRight), "FL_GRID_BOTTOM_RIGHT");
+  Same(FlLayout.OverflowCompress, "Fl_Tabs::OVERFLOW_COMPRESS");
+  Same(FlLayout.OverflowClip, "Fl_Tabs::OVERFLOW_CLIP");
+  Same(FlLayout.OverflowPulldown, "Fl_Tabs::OVERFLOW_PULLDOWN");
+  Same(FlLayout.OverflowDrag, "Fl_Tabs::OVERFLOW_DRAG");
   Same(Fl.GrayRamp(0), "fl_gray_ramp(0)");
   Same(Fl.GrayRamp(23), "fl_gray_ramp(23)");
   Same(Fl.ColorCube(0, 0, 0), "fl_color_cube(0, 0, 0)");
@@ -350,6 +378,6 @@ BEGIN
   Same(Fl.RGB(255, 0, 0), "fl_rgb_color(255, 0, 0)");
   Same(Fl.RGB(1, 2, 3), "fl_rgb_color(1, 2, 3)");
   Same(Fl.RGB(0, 0, 255), "fl_rgb_color(0, 0, 255)");
-  Check.Check((wrong = 0) & (checked = 331), "each of 331 constants and values is FLTK's");
+  Check.Check((wrong = 0) & (checked = 359), "each of 359 constants and values is FLTK's");
   Check.Summary
 END TestConstants.

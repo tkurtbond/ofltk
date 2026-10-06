@@ -174,6 +174,23 @@ add("int", [(camel(k), "FL_" + k) for k in "NORMAL_COUNTER SIMPLE_COUNTER".split
 section("of a spinner (Spinner.SetKind): whole numbers, or real ones")
 add("int", [("IntSpinner", "FL_INT_INPUT"), ("FloatSpinner", "FL_FLOAT_INPUT")])
 
+module("FlLayout")
+section("kinds of flex (Flex.SetKind): one column, or one row")
+add("int", [("Column", "Fl_Flex::COLUMN"), ("Row", "Fl_Flex::ROW")])
+section("kinds of pack (Pack.SetKind)")
+add("int", [("PackVertical", "Fl_Pack::VERTICAL"), ("PackHorizontal", "Fl_Pack::HORIZONTAL")])
+section("kinds of scroll (Scroll.SetKind): which scrollbars, shown when needed or Always")
+add("int", [("Scroll" + camel(k), "Fl_Scroll::" + k) for k in
+            """HORIZONTAL VERTICAL BOTH ALWAYS_ON HORIZONTAL_ALWAYS VERTICAL_ALWAYS
+            BOTH_ALWAYS""".split()])
+section("a widget's place in its grid cell (Grid.Place)")
+add("set", [("Grid" + camel(k), "FL_GRID_" + k) for k in
+            """CENTER TOP BOTTOM LEFT RIGHT HORIZONTAL VERTICAL FILL PROPORTIONAL
+            TOP_LEFT TOP_RIGHT BOTTOM_LEFT BOTTOM_RIGHT""".split()])
+section("what tabs do when there are too many to fit (Tabs.HandleOverflow)")
+add("int", [("Overflow" + camel(k), "Fl_Tabs::OVERFLOW_" + k) for k in
+            "COMPRESS CLIP PULLDOWN DRAG".split()])
+
 # Not constants of Fl, but values the test also checks against C: what Fl's
 # procedures compute in Oberon.
 CHECKS = [
@@ -189,6 +206,8 @@ CHECKS = [
 HEADERS = ("#include <FL/Fl.H>\n#include <FL/Enumerations.H>\n#include <FL/fl_draw.H>\n"
            "#include <FL/Fl_Button.H>\n#include <FL/Fl_Counter.H>\n#include <FL/Fl_Dial.H>\n"
            "#include <FL/Fl_Input_.H>\n#include <FL/Fl_Slider.H>\n#include <FL/Fl_Valuator.H>\n"
+           "#include <FL/Fl_Flex.H>\n#include <FL/Fl_Grid.H>\n#include <FL/Fl_Pack.H>\n"
+           "#include <FL/Fl_Scroll.H>\n#include <FL/Fl_Tabs.H>\n"
            "#include <stdint.h>\n#include <stdio.h>\n")
 
 def oberon_set(v):

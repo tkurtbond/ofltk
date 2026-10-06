@@ -21,9 +21,9 @@ anything:
 
 ## Status
 
-As of 2026-10-06, Phases 0 to 3 of PLAN.md are done, and Phase 4
-(layout) is next. `src/` has the `Fl`, `FlDraw`, `FlButtons`, `FlInputs`
-and `FlValuators` modules, and the tests pass. Also kept:
+As of 2026-10-06, Phases 0 to 4 of PLAN.md are done, and Phase 5
+(menus and dialogs) is next. `src/` has the `Fl`, `FlDraw`, `FlButtons`,
+`FlInputs`, `FlValuators` and `FlLayout` modules, and the tests pass. Also kept:
 
 - `doc/design.md`: the feasibility analysis.
 - `doc/fltk-issues.md`: every FLTK bug and pitfall found, with its
@@ -50,8 +50,8 @@ and `FlValuators` modules, and the tests pass. Also kept:
   only" procedures (`BeginOpen`, `EndOpen`) are how another module
   opens a widget of its own class. Keep application code off them.
 - `src/FlDraw.Mod`, `src/FlDraw.cpp`: `fl_draw.H`, for `Draw` methods.
-- `src/FlButtons`, `src/FlInputs`, `src/FlValuators` (`.Mod` and
-  `.cpp`): the widget families of PLAN.md's module table. Each C++ part
+- `src/FlButtons`, `src/FlInputs`, `src/FlValuators`, `src/FlLayout`
+  (`.Mod` and `.cpp`): the widget families of PLAN.md's module table. Each C++ part
   has one `ofl_<family>_new(kind, ...)` that makes the class `kind`
   numbers as `ofl::W<class>`, copies the label and calls `ofl::open`;
   each Oberon `Open<Type>` passes it `Fl.BeginOpen(w)` and gives the
@@ -294,10 +294,19 @@ held only in C++ memory**.
   and the rest (public statics), then call `Fl::handle(event, window)`.
   Except keys no widget uses (above).
 - **Non-virtual methods hidden by a subclass** (`Fl_Window::copy_label`,
-  `Fl_Slider::bounds`, `Fl_Spinner::color` and others): calling through
-  an `Fl_Widget *` reaches the base's. Before binding a method, check
+  `Fl_Slider::bounds`, `Fl_Spinner::color`, `Fl_Flex::end`,
+  `Fl_Scroll::clear` and others): calling through an `Fl_Widget *` or
+  `Fl_Group *` reaches the base's. Before binding a method, check
   the class's header for one that hides a base's, and call the class
   as itself in the shim (`doc/fltk-issues.md`).
+- **`Fl_Grid::widget` overruns its rows** for a row equal to `rows()`
+  or a column equal to `cols()` (it checks `>`, not `>=`): valgrind
+  shows an invalid read and write. `Grid.PlaceSpan` checks first
+  (`doc/fltk-issues.md`, 21).
+- **`Fl_Tile` without size ranges doesn't save the sizes a move gives**,
+  so a range set later makes the next move put the children back.
+  `Tile.SizeRange` saves them first (`doc/fltk-issues.md`, 24).
+- **`Fl_Pack` resizes itself as it draws**, to fit its children.
 - **Name clashes with FLTK's keys**: the key constants take the prefix
   `Key`, since `FL_End` would be the keyword `END`. So `Fl::get_key` is
   `GetKey`, because `KeyDown` is the down arrow.

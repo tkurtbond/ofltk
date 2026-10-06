@@ -14,6 +14,9 @@ Record each new one here as it is found, in the same form:
 - **Effect on ofltk**, and the workaround, with where it lives.
 - **How it was confirmed**: the test or scratch program.
 
+Entries keep their numbers, since comments in the code cite them; a
+new one takes the next number, in whichever section it belongs.
+
 Unless an entry says otherwise, the version is FLTK 1.4.5 (Fedora's
 `fltk-1.4.5`), on Fedora 44, x86_64.
 
@@ -88,6 +91,24 @@ Unless an entry says otherwise, the version is FLTK 1.4.5 (Fedora's
   `TestInputs`, which gives inputs the focus in a window never shown:
   it crashed this way before the workaround, passes with it, and
   crashes again with it taken out.
+
+### 21. `Fl_Grid::widget` writes past its rows for a row or column just out of range
+
+- **What happens**: `widget(w, row, col, ...)` documents that it returns
+  NULL if `row` or `col` is out of bounds. For `row == rows()` (or
+  `col == cols()`) it returns a cell instead, made by reading and
+  writing one past the end of the grid's row array. Found 2026-10-06.
+- **Cause**: `Fl_Grid::widget(Fl_Widget *, int, int, int, int,
+  Fl_Grid_Align)` (`src/Fl_Grid.cxx`) checks `row > rows_` and
+  `col > cols_` where `cell()` checks `>=`, then `add_cell(row, col)`
+  indexes `Rows_[row]`.
+- **Effect on ofltk**: `Grid.PlaceSpan` and `Grid.Place` halt with
+  `IndexOutOfRange` unless the whole span is inside the grid, before
+  calling FLTK.
+- **Confirmed**: a C++ program placing a box at row 2 of a 2 by 2 grid,
+  under valgrind: an invalid read and an invalid write of 8 bytes just
+  after the block `layout(2, 2)` allocated, and a non-NULL result.
+  `test/HaltGridRange.Mod` checks the halt.
 
 ## Pitfalls
 
@@ -231,3 +252,49 @@ Unless an entry says otherwise, the version is FLTK 1.4.5 (Fedora's
   includes Fedora's own build flags (`-specs=...` hardening files).
 - **ofltk**: the makefile and `tools/gen-constants.py` pass only its
   `-I` and `-D` flags, without `-I/usr/include`.
+
+### 22. `Fl_Flex::end` hides `Fl_Group::end`
+
+- It isn't virtual, and it asks for a layout (`need_layout(1)`), so a
+  flex ended through an `Fl_Group *` doesn't lay its children out when
+  first drawn.
+- **ofltk**: `ofl_group_end` (`src/Fl.cpp`) calls a flex as a flex.
+  `TestLayout` draws a flex row after `End`, and fails without it.
+
+### 23. `Fl_Group::clear` deletes the parts some groups are made of
+
+- An `Fl_Scroll`'s scrollbars and an `Fl_Spinner`'s field and buttons
+  are its children, and members of it, not allocated by themselves;
+  `Fl_Group::clear` would `delete` them. `Fl_Scroll::clear` takes the
+  scrollbars out first, and `Fl_Pack::clear` also clears the pack's
+  `resizable()`, but neither is virtual, so through an `Fl_Group *`
+  `Fl_Group::clear` runs instead.
+- **ofltk**: `Group.Clear` (`ofl_group_clear` in `src/Fl.cpp`) deletes
+  only the children ofltk opened, and clears a pack's `resizable()`.
+  `TestLayout` clears a scroll, a spinner and a pack, and checks what
+  is left; it fails without the pack's case.
+
+### 24. `Fl_Tile` size ranges set after a move put the children back
+
+- Without size ranges, `move_intersection` moves the children but
+  leaves the sizes saved by `init_sizes()` as they were. Once a size
+  range is set, `move_intersection` starts from those saved sizes
+  (`drag_intersection`), so the next move puts the children back where
+  they were first. A plain C++ program: after moving the border from
+  150 to 100, setting a range and moving it from 100 to 20 left it at
+  150. With the range set first, it stopped at the range, 80.
+- **ofltk**: `Tile.SizeRange` and `Tile.InitSizeRange` call
+  `init_sizes()` first (`src/FlLayout.cpp`). With ranges, FLTK saves
+  the sizes after every move anyway, so that changes nothing else.
+  `TestLayout` moves a border, sets a range, and moves it again; it
+  fails without the fix.
+
+### 25. `Fl_Pack` sets its own size as it draws
+
+- `Fl_Pack::draw` places the children and then resizes the pack to fit
+  them (`Fl_Widget::resize`, `src/Fl_Pack.cxx`): a vertical pack's
+  height becomes theirs, plus the spacing. So its size before it is
+  first drawn isn't the size it will have, and an image of it made at
+  its old size doesn't match it.
+- **ofltk**: nothing to change; `TestLayout` allows for it.
+

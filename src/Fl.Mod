@@ -29,6 +29,7 @@ CONST
   NilArgument* = 72;    (* NIL where a widget or timer is required *)
   IndexOutOfRange* = 74; (* a child index outside the group *)
   NotFiring* = 75;      (* RepeatTimeout outside its timer's Fire *)
+  NotAChild* = 76;      (* a widget that must be a group's child isn't *)
 
   (* Widget.state *)
   new = 0; open = 1; closed = 2;
@@ -933,7 +934,8 @@ BEGIN
   RETURN i
 END Find;
 
-(* Deletes every child, as Delete does each. *)
+(* Deletes every child ofltk opened, as Delete does each; children FLTK
+   made itself, such as a scroll's scrollbars, stay. *)
 PROCEDURE (g: Group) Clear*;
 BEGIN CClear(Live(g))
 END Clear;

@@ -5,7 +5,9 @@
 
 #include <FL/Fl_Box.H>
 #include <FL/Fl_Double_Window.H>
+#include <FL/Fl_Flex.H>
 #include <FL/Fl_Group.H>
+#include <FL/Fl_Pack.H>
 #include <FL/Fl_Window.H>
 #include <FL/platform.H>
 
@@ -400,7 +402,17 @@ int32_t ofl_set_scheme(const char *name) { return Fl::scheme(name); }
 intptr_t ofl_scheme(void) { return reinterpret_cast<intptr_t>(Fl::scheme()); }
 
 void ofl_group_begin(intptr_t g) { ofl::as<Fl_Group>(g)->begin(); }
-void ofl_group_end(intptr_t g) { ofl::as<Fl_Group>(g)->end(); }
+
+// Fl_Flex::end also asks for a layout, but it hides Fl_Group's rather
+// than overriding it, so a flex must be called as one.
+void ofl_group_end(intptr_t g) {
+  Fl_Flex *flex = dynamic_cast<Fl_Flex *>(ofl::widget(g));
+  if (flex) {
+    flex->end();
+  } else {
+    ofl::as<Fl_Group>(g)->end();
+  }
+}
 
 int32_t ofl_group_children(intptr_t g) {
   return ofl::as<Fl_Group>(g)->children();
@@ -428,16 +440,25 @@ int32_t ofl_group_find(intptr_t g, intptr_t w) {
   return ofl::as<Fl_Group>(g)->find(ofl::widget(w));
 }
 
-// Deletes every child, later inside a dispatch, as ofl_widget_delete does.
+// Deletes every child ofltk opened, later inside a dispatch, as
+// ofl_widget_delete does. Not Fl_Group::clear: some groups' children
+// are FLTK's own members, not on the heap (a scroll's scrollbars, a
+// spinner's field and buttons), which it would delete. Fl_Scroll::clear
+// and Fl_Pack::clear allow for that, but hide Fl_Group's rather than
+// overriding it. A pack's resizable goes back to none, as
+// Fl_Pack::clear leaves it.
 void ofl_group_clear(intptr_t g) {
   Fl_Group *group = ofl::as<Fl_Group>(g);
-  if (ofl::depth > 0) {
-    for (int i = 0; i < group->children(); i++) {
-      Fl::delete_widget(group->child(i));
+  for (int i = group->children(); i-- > 0;) {
+    Fl_Widget *child = group->child(i);
+    if (ofl::object_of(child) == 0) continue;
+    if (ofl::depth > 0) {
+      Fl::delete_widget(child);
+    } else {
+      delete child;
     }
-  } else {
-    group->clear();
   }
+  if (dynamic_cast<Fl_Pack *>(group)) group->resizable(0);
 }
 
 // w is 0 for none.
