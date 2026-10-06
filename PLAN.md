@@ -95,6 +95,8 @@ together with their methods and their part of the shim:
 | `FlText` | `TextBuffer`, `TextDisplay`, `TextEditor`, style tables |
 | `FlBrowsers` | `Browser`, `HoldBrowser`, `MultiBrowser`, `SelectBrowser`, `CheckBrowser`, `FileBrowser`, `Tree` |
 | `FlImages` | `Image`, `RGBImage`, PNG, JPEG, GIF, SVG, BMP, XPM loading (`-lfltk_images`) |
+| `FlPreferences` | `Preferences`: `Fl_Preferences` databases and their groups |
+| `FlTable` | `Table`, `TableRow`: `Fl_Table` and `Fl_Table_Row`, their cells drawn by the program |
 
 `Fl` exports a few procedures that only the other ofltk modules should
 use (attaching a new widget's handle, registering it), as polibfyaml's
@@ -240,10 +242,11 @@ Programmer errors halt, as in polibfyaml. poc's `ASSERT(x, n)` prints
 | 70 | a method of a widget that isn't open: never opened, or deleted (`Fl.NotOpen`) |
 | 71 | a widget opened twice (`Fl.OpenedTwice`) |
 | 72 | a NIL argument where a widget or timer is required (`Fl.NilArgument`) |
-| 73 | a closed resource used, or one missing where it is needed: a closed `TextBuffer`, a display with no buffer, a removed `TreeItem` (`Fl.ClosedResource`) |
+| 73 | a closed resource used, or one missing where it is needed: a closed `TextBuffer`, a display with no buffer, a removed `TreeItem`, a closed `Image` or `Surface`, a closed or deleted `Preferences` (`Fl.ClosedResource`) |
 | 74 | an index out of range: group child, grid row or column, browser line, menu item (`Fl.IndexOutOfRange`) |
 | 75 | `RepeatTimeout` outside its own timer's `Fire` (`Fl.NotFiring`) |
 | 76 | a widget that must be a group's child isn't: a grid's cell, a flex's fixed size, a tab or wizard page, a tile's size range (`Fl.NotAChild`) |
+| 77 | a `Begin` and `End` out of order: an image surface's `End` that doesn't match the last `Begin` (`Fl.OutOfOrder`) |
 
 Bad data from outside the program is never a halt: an image that fails
 to load, a file chooser cancelled. Those come back as `BOOLEAN` results.
@@ -843,11 +846,84 @@ findings written into this file and AGENTS.md.
    - `Fl_Text_Editor` key bindings, and the buffer's
      `Fl_Text_Selection` beyond the primary selection: not needed by
      anything yet.
-7. **Images and the rest** (`FlImages`, `Fl`, `FlDraw`):
+7. **`[done]` Images and the rest** (`FlImages`, `FlPreferences`, `FlTable`, `Fl`,
+   `FlDialogs`; 2026-10-06, poc 0.4.1, FLTK 1.4.5):
    - shared and RGB images (data copied); offscreen drawing and
      `fl_read_image`;
    - the clipboard, drag and drop, `Preferences`, `NativeFileChooser`,
      `Table`.
+
+   Done:
+   - `FlImages` (`-lfltk_images`, from `fltk-config --use-images`):
+     - `Image`: `Load` (the format told by the file's contents, not its
+       name), `LoadData`, `OpenRGB` (the pixels copied), `Copy`, `Scale`,
+       `ColorAverage`, `Desaturate`, `Inactive`, `Draw`, `DrawPart`,
+       `Pixel`, `Alpha`, `SavePNG`;
+     - `SetImage`, `SetInactiveImage`, `SetIcon`: a widget holds its
+       images (`ofl::Shared`, counted, in `Ref`), so closing an image a
+       widget shows is safe;
+     - `Surface` (`Fl_Image_Surface`): `Begin` and `End` nest, and an
+       `End` out of order halts with the new code 77; `DrawWidget`,
+       `GetImage`; and `ReadImage`.
+   - The clipboard, in `Fl`: `Copy`, `Paste`, `PasteImage`,
+     `ClipboardHasText`, `ClipboardHasImage`, `EventIsImage`; and
+     `FlImages`' `CopyToClipboard` and `TakePastedImage`. A pasted image
+     not taken is deleted by ofltk (`doc/fltk-issues.md`, 48).
+   - Drag and drop: `Dnd`, `DndTextOps`, `SetDndTextOps`, bound but not
+     tested: a drag needs a real pointer, and `Fl::dnd` returns at once
+     under Wayland.
+   - `FlPreferences`: `Preferences`, a database (`Open`: `User`,
+     `System`, `Memory`; `OpenFile`) or a group in one (`Group`, which
+     takes a path), with entries (`SetInt`, `SetReal`, `SetText`, `Int`,
+     `Real`, `GetText`, `TextLength`, `Entries`, `EntryName`,
+     `HasEntry`, `DeleteEntry`, `DeleteEntries`), groups (`Groups`,
+     `GroupName`, `HasGroup`, `DeleteGroup`, `DeleteGroups`, `Clear`),
+     `Flush`, `FileName` and `Close`. Reals are written in the C locale.
+     A group is its database and its path, never an `Fl_Preferences`
+     kept (`doc/fltk-issues.md`, 51). Binary entries and
+     `get_userdata_path` aren't bound. Tested by `TestPreferences` and
+     `HaltClosedGroup` (73); mutations caught: no existence check (the
+     halt test exits 0), no `delete` in `Close` (`vg-check.sh`).
+   - `Fl.Option` and `Fl.SetOption` (`Fl::option`), and
+     `FlDialogs.NativeFileChooser` (`Fl_Native_File_Chooser`):
+     `OpenNativeFileChooser`, `SetKind`, `SetTitle` (copied: FLTK's
+     driver keeps it, `doc/fltk-issues.md`, 30), `SetFilter`,
+     `SetFilterValue`, `SetDirectory`, `SetPresetFile`, `SetOptions`,
+     `Show` (`Chosen`, `Cancelled`, `Failed`), `Count`, `FileName`,
+     `ErrorMessage`, `Close`. `TestDialogs` turns zenity, kdialog and GTK
+     off with `SetOption`, so FLTK's own chooser is shown and answered by
+     keys, on X11 and Wayland. The desktop's choosers are untested: they
+     are other programs, or GTK's windows, out of `Probe`'s reach.
+   - `FlTable`: `Table` (`Fl_Table`) and `TableRow` (`Fl_Table_Row`),
+     whose `draw_cell` reaches the Oberon `DrawCell` (a new dispatcher,
+     `ofl_table_register`); rows, columns, headers, sizes, resizing,
+     scrolling, `FindCell`, `VisibleCells`, cell selection, row
+     selection, and the callback's row, column and context. A table is a
+     `Group` of the widgets in its cells: Fl.cpp calls it as an
+     `Fl_Table` (`doc/fltk-issues.md`, 52). Tested by `TestTable` (cells'
+     pixels, a click, selection, widgets in cells) and `HaltTableRow`
+     (74).
+   - Every label goes through `ofl::label_text`: FLTK lays out an empty
+     label as a line of text, which moved label images
+     (`doc/fltk-issues.md`, 46).
+   - Tests: `TestImages`, `TestClipboard`, and the halt tests
+     `HaltClosedImage` (73) and `HaltSurfaceOrder` (77). They pass under
+     headless sway and Xvfb, and both valgrind runs are clean.
+   - FLTK issues 44 to 50: no window icons and no selection buffer under
+     Wayland; binary PNM unscaled; XPM color names only on X11; X11's
+     `Fl::copy` before the display is open crashes; Wayland leaks the
+     program's own pasted image.
+   - Mutations caught: no image held by its widget (valgrind invalid
+     reads); "" labels (`TestImages`); pixels not copied; PNM unscaled; no
+     release in `~Ref` (`vg-check.sh`); no `drop_pasted_image` (leaks in
+     the valgrind log).
+
+   Not done, and why:
+   - Multi, icon and image labels, images in menu items and tree items'
+     icons: images are in place, and these can come when something needs
+     them.
+   - Drag and drop is bound but untested (above).
+   - `Fl_Preferences`' binary entries and `get_userdata_path`.
 8. **Release.** README, and the examples complete. `make install` as a
    poc library, and poc 0.4.0's C++ parts and recorded link flags, were
    done early, once 0.4.0 was installed (2026-10-06; "poc 0.4.0" below).

@@ -31,6 +31,12 @@ CONST
   IndexOutOfRange* = 74; (* a child index outside the group *)
   NotFiring* = 75;      (* RepeatTimeout outside its timer's Fire *)
   NotAChild* = 76;      (* a widget that must be a group's child isn't *)
+  OutOfOrder* = 77;     (* an End that doesn't match the last Begin *)
+
+  (* where Copy puts text, and Paste takes it from: FLTK has no names *)
+  Selection* = 0;  (* the selection buffer, pasted with the middle button on X11 *)
+  Clipboard* = 1;  (* the clipboard, for cut, copy and paste *)
+  Both* = 2;       (* Copy only *)
 
   (* Widget.state *)
   new = 0; open = 1; closed = 2;
@@ -358,6 +364,18 @@ CONST
   CursorW* = 36;
   CursorNw* = 68;
   CursorNone* = 255;
+
+  (* FLTK's options (Fl::Fl_Option), Option and SetOption *)
+  OptionArrowFocus* = 0;
+  OptionVisibleFocus* = 1;
+  OptionDndText* = 2;
+  OptionShowTooltips* = 3;
+  OptionFnfcUsesGtk* = 4;
+  OptionFnfcUsesZenity* = 5;
+  OptionFnfcUsesKdialog* = 6;
+  OptionPrinterUsesGtk* = 7;
+  OptionShowScaling* = 8;
+  OptionSimpleZoomShortcut* = 9;
 (* END generated constants *)
 
 TYPE
@@ -454,6 +472,13 @@ PROCEDURE ["C", "ofl_get_key"] CGetKey(k: SYSTEM.INT32): SYSTEM.INT32;
 PROCEDURE ["C", "ofl_event_state"] CEventState(): SYSTEM.INT32;
 PROCEDURE ["C", "ofl_event_text"] CEventText(): SYSTEM.ADDRESS;
 PROCEDURE ["C", "ofl_event_length"] CEventLength(): SYSTEM.INT32;
+PROCEDURE ["C", "ofl_copy"] CCopy(text: ARRAY OF CHAR; n, destination: SYSTEM.INT32);
+PROCEDURE ["C", "ofl_paste"] CPaste(receiver: SYSTEM.ADDRESS; source, image: SYSTEM.INT32);
+PROCEDURE ["C", "ofl_clipboard_contains"] CClipboardContains(image: SYSTEM.INT32): SYSTEM.INT32;
+PROCEDURE ["C", "ofl_event_is_image"] CEventIsImage(): SYSTEM.INT32;
+PROCEDURE ["C", "ofl_dnd"] CDnd(): SYSTEM.INT32;
+PROCEDURE ["C", "ofl_dnd_text_ops"] CDndTextOps(what: SYSTEM.INT32): SYSTEM.INT32;
+PROCEDURE ["C", "ofl_option"] COption(o, what: SYSTEM.INT32): SYSTEM.INT32;
 PROCEDURE ["C", "ofl_event_inside"] CEventInside(x, y, w, h: SYSTEM.INT32): SYSTEM.INT32;
 PROCEDURE ["C", "ofl_focus"] CFocus(): SYSTEM.ADDRESS;
 PROCEDURE ["C", "ofl_belowmouse"] CBelowmouse(): SYSTEM.ADDRESS;
@@ -1209,6 +1234,89 @@ END EventText;
 PROCEDURE EventLength*(): INTEGER;
 BEGIN RETURN CEventLength()
 END EventLength;
+
+(* The clipboard, and drag and drop *)
+
+(* Puts text, up to its 0X, in the selection buffer, the clipboard, or
+   both (Selection, Clipboard, Both). Under Wayland, which has no
+   selection buffer, Both is the clipboard alone (doc/fltk-issues.md,
+   50). *)
+PROCEDURE Copy*(text-: ARRAY OF CHAR; destination: INTEGER);
+  VAR n: INTEGER;
+BEGIN
+  ASSERT((destination >= Selection) & (destination <= Both), IndexOutOfRange);
+  n := 0; WHILE (n < LEN(text)) & (text[n] # 0X) DO INC(n) END;
+  CCopy(text, n, destination)
+END Copy;
+
+(* Asks for the text in source, Selection or Clipboard, to be sent to
+   receiver as an EvPaste, its text in EventText: at once, if the program
+   copied it itself, else later, as the window system delivers it, or
+   never. Under Wayland only the clipboard can be pasted from; under X11
+   another program's text needs a window shown. *)
+PROCEDURE Paste*(receiver: Widget; source: INTEGER);
+BEGIN
+  ASSERT((source = Selection) OR (source = Clipboard), IndexOutOfRange);
+  CPaste(Live(receiver), source, 0)
+END Paste;
+
+(* The same for an image on the clipboard: the receiver's Handle takes it
+   with FlImages.TakePastedImage. *)
+PROCEDURE PasteImage*(receiver: Widget);
+BEGIN CPaste(Live(receiver), Clipboard, 1)
+END PasteImage;
+
+(* Whether the clipboard holds text, or an image. *)
+PROCEDURE ClipboardHasText*(): BOOLEAN;
+BEGIN RETURN CClipboardContains(0) # 0
+END ClipboardHasText;
+
+PROCEDURE ClipboardHasImage*(): BOOLEAN;
+BEGIN RETURN CClipboardContains(1) # 0
+END ClipboardHasImage;
+
+(* In an EvPaste, TRUE if it carries an image, not text. *)
+PROCEDURE EventIsImage*(): BOOLEAN;
+BEGIN RETURN CEventIsImage() # 0
+END EventIsImage;
+
+(* Starts dragging the text last copied to the selection buffer, from a
+   Handle's EvPush or EvDrag. A widget it is dragged over gets EvDndEnter,
+   EvDndDrag and EvDndLeave, and if it returned TRUE for them,
+   EvDndRelease and then the text as an EvPaste where it is dropped. On
+   X11 Dnd returns when the text is dropped; under Wayland at once, the
+   compositor doing the dragging. *)
+PROCEDURE Dnd*;
+VAR r: INTEGER;
+BEGIN r := CDnd()
+END Dnd;
+
+(* Whether text widgets let the user drag text out of them and drop it in;
+   TRUE to start with. *)
+PROCEDURE DndTextOps*(): BOOLEAN;
+BEGIN RETURN CDndTextOps(0) # 0
+END DndTextOps;
+
+PROCEDURE SetDndTextOps*(on: BOOLEAN);
+VAR r: INTEGER;
+BEGIN IF on THEN r := CDndTextOps(2) ELSE r := CDndTextOps(1) END
+END SetDndTextOps;
+
+(* FLTK's options, OptionArrowFocus and the rest: the user's and the
+   system's (set with FLTK's fltk-options), unless SetOption overrides
+   one for the rest of the run. *)
+PROCEDURE Option*(o: INTEGER): BOOLEAN;
+BEGIN
+  ASSERT((o >= OptionArrowFocus) & (o <= OptionSimpleZoomShortcut), IndexOutOfRange);
+  RETURN COption(o, 0) # 0
+END Option;
+
+PROCEDURE SetOption*(o: INTEGER; on: BOOLEAN);
+  VAR r: INTEGER;
+BEGIN
+  ASSERT((o >= OptionArrowFocus) & (o <= OptionSimpleZoomShortcut), IndexOutOfRange);
+  IF on THEN r := COption(o, 2) ELSE r := COption(o, 1) END
+END SetOption;
 
 (* TRUE if the event's position is inside the rectangle x, y, w, h. *)
 PROCEDURE EventInside*(x, y, w, h: INTEGER): BOOLEAN;

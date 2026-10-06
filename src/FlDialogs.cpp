@@ -8,9 +8,13 @@
 
 #include <FL/Fl_Color_Chooser.H>
 #include <FL/Fl_File_Chooser.H>
+#include <FL/Fl_Native_File_Chooser.H>
 #include <FL/fl_ask.H>
 #include <FL/fl_show_colormap.H>
+#include <stdlib.h>
 #include <string.h>
+
+#include <new>
 
 namespace {
 
@@ -28,6 +32,21 @@ const char *keep_title(const char *s) {
   chooser_title[sizeof chooser_title - 1] = 0;
   return chooser_title;
 }
+
+
+// Fl_Native_File_Chooser. FLTK's own driver, used when zenity, kdialog
+// and GTK are off or missing, keeps the title pointer (it is
+// Fl_File_Chooser::label, doc/fltk-issues.md, 30), so the title is copied
+// here, beside the chooser; the other drivers copy it themselves, as
+// every driver copies the filter, directory and preset file.
+struct Chooser {
+  Fl_Native_File_Chooser chooser;
+  char *title;
+  explicit Chooser(int kind) : chooser(kind), title(0) {}
+  ~Chooser() { free(title); }
+};
+
+Chooser *chooser(intptr_t c) { return reinterpret_cast<Chooser *>(c); }
 
 }  // namespace
 
@@ -110,6 +129,69 @@ int32_t ofl_file_chooser(int32_t dir, const char *title, const char *pattern,
   if (r == 0) return 0;
   ofl::copy_out(r, buf, n);
   return 1;
+}
+
+// A native file chooser of kind (Fl_Native_File_Chooser::Type); 0 if out
+// of memory. It opens the display, and looks for zenity and kdialog.
+intptr_t ofl_fnfc_new(int32_t kind) {
+  return reinterpret_cast<intptr_t>(new (std::nothrow) Chooser(kind));
+}
+
+void ofl_fnfc_close(intptr_t c) { delete chooser(c); }
+
+// what: 0 the title, 1 the filter, 2 the directory, 3 the preset file.
+// 0 if out of memory.
+int32_t ofl_fnfc_set_text(intptr_t c, int32_t what, const char *s) {
+  Fl_Native_File_Chooser &f = chooser(c)->chooser;
+  switch (what) {
+    case 0: {
+      char *t = strdup(s);
+      if (!t) return 0;
+      f.title(t);
+      free(chooser(c)->title);
+      chooser(c)->title = t;
+      break;
+    }
+    case 1: f.filter(s); break;
+    case 2: f.directory(s); break;
+    default: f.preset_file(s);
+  }
+  return 1;
+}
+
+// what: 0 the kind, 1 the options, 2 the filter chosen.
+void ofl_fnfc_set_int(intptr_t c, int32_t what, int32_t v) {
+  Fl_Native_File_Chooser &f = chooser(c)->chooser;
+  switch (what) {
+    case 0: f.type(v); break;
+    case 1: f.options(v); break;
+    default: f.filter_value(v);
+  }
+}
+
+// what: 0 the kind, 1 the options, 2 the filter chosen, 3 the number of
+// filters, 4 the number of files chosen.
+int32_t ofl_fnfc_get_int(intptr_t c, int32_t what) {
+  Fl_Native_File_Chooser &f = chooser(c)->chooser;
+  switch (what) {
+    case 0: return f.type();
+    case 1: return f.options();
+    case 2: return f.filter_value();
+    case 3: return f.filters();
+    default: return f.count();
+  }
+}
+
+// 0 a file chosen, 1 cancelled, -1 an error (ofl_fnfc_errmsg).
+int32_t ofl_fnfc_show(intptr_t c) { return chooser(c)->chooser.show(); }
+
+// File i chosen, of ofl_fnfc_get_int(c, 4).
+intptr_t ofl_fnfc_filename(intptr_t c, int32_t i) {
+  return reinterpret_cast<intptr_t>(chooser(c)->chooser.filename(i));
+}
+
+intptr_t ofl_fnfc_errmsg(intptr_t c) {
+  return reinterpret_cast<intptr_t>(chooser(c)->chooser.errmsg());
 }
 
 }  // extern "C"

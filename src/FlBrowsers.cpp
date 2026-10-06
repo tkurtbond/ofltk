@@ -45,7 +45,7 @@ template <class T>
 intptr_t make(int32_t x, int32_t y, int32_t w, int32_t h, const char *label,
               intptr_t self) {
   Br<T> *b = new Br<T>(x, y, w, h);
-  b->copy_label(label);
+  b->copy_label(ofl::label_text(label));
   return ofl::open(b, self);
 }
 
@@ -370,7 +370,7 @@ void ofl_check_browser_text(intptr_t b, int32_t item, char *buf, int32_t n) {
 intptr_t ofl_tree_new(int32_t x, int32_t y, int32_t w, int32_t h,
                       const char *label, intptr_t self) {
   Tr *t = new Tr(x, y, w, h);
-  t->copy_label(label);
+  t->copy_label(ofl::label_text(label));
   return ofl::open(t, self);
 }
 

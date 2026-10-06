@@ -18,9 +18,11 @@
 #include <FL/Fl_Menu_Item.H>
 #include <FL/Fl_Menu_Button.H>
 #include <FL/fl_ask.H>
+#include <FL/Fl_Native_File_Chooser.H>
 #include <FL/Fl_Text_Display.H>
 #include <FL/Fl_File_Browser.H>
 #include <FL/Fl_Tree.H>
+#include <FL/Fl_Table_Row.H>
 #include <stdint.h>
 #include <stdio.h>
 #include <string.h>
@@ -326,6 +328,16 @@ const Entry entries[] = {
   {"FL_CURSOR_W", (int32_t)(FL_CURSOR_W)},
   {"FL_CURSOR_NW", (int32_t)(FL_CURSOR_NW)},
   {"FL_CURSOR_NONE", (int32_t)(FL_CURSOR_NONE)},
+  {"Fl::OPTION_ARROW_FOCUS", (int32_t)(Fl::OPTION_ARROW_FOCUS)},
+  {"Fl::OPTION_VISIBLE_FOCUS", (int32_t)(Fl::OPTION_VISIBLE_FOCUS)},
+  {"Fl::OPTION_DND_TEXT", (int32_t)(Fl::OPTION_DND_TEXT)},
+  {"Fl::OPTION_SHOW_TOOLTIPS", (int32_t)(Fl::OPTION_SHOW_TOOLTIPS)},
+  {"Fl::OPTION_FNFC_USES_GTK", (int32_t)(Fl::OPTION_FNFC_USES_GTK)},
+  {"Fl::OPTION_FNFC_USES_ZENITY", (int32_t)(Fl::OPTION_FNFC_USES_ZENITY)},
+  {"Fl::OPTION_FNFC_USES_KDIALOG", (int32_t)(Fl::OPTION_FNFC_USES_KDIALOG)},
+  {"Fl::OPTION_PRINTER_USES_GTK", (int32_t)(Fl::OPTION_PRINTER_USES_GTK)},
+  {"Fl::OPTION_SHOW_SCALING", (int32_t)(Fl::OPTION_SHOW_SCALING)},
+  {"Fl::OPTION_SIMPLE_ZOOM_SHORTCUT", (int32_t)(Fl::OPTION_SIMPLE_ZOOM_SHORTCUT)},
   {"FL_SOLID", (int32_t)(FL_SOLID)},
   {"FL_DASH", (int32_t)(FL_DASH)},
   {"FL_DOT", (int32_t)(FL_DOT)},
@@ -404,6 +416,16 @@ const Entry entries[] = {
   {"FL_BEEP_QUESTION", (int32_t)(FL_BEEP_QUESTION)},
   {"FL_BEEP_PASSWORD", (int32_t)(FL_BEEP_PASSWORD)},
   {"FL_BEEP_NOTIFICATION", (int32_t)(FL_BEEP_NOTIFICATION)},
+  {"Fl_Native_File_Chooser::BROWSE_FILE", (int32_t)(Fl_Native_File_Chooser::BROWSE_FILE)},
+  {"Fl_Native_File_Chooser::BROWSE_DIRECTORY", (int32_t)(Fl_Native_File_Chooser::BROWSE_DIRECTORY)},
+  {"Fl_Native_File_Chooser::BROWSE_MULTI_FILE", (int32_t)(Fl_Native_File_Chooser::BROWSE_MULTI_FILE)},
+  {"Fl_Native_File_Chooser::BROWSE_MULTI_DIRECTORY", (int32_t)(Fl_Native_File_Chooser::BROWSE_MULTI_DIRECTORY)},
+  {"Fl_Native_File_Chooser::BROWSE_SAVE_FILE", (int32_t)(Fl_Native_File_Chooser::BROWSE_SAVE_FILE)},
+  {"Fl_Native_File_Chooser::BROWSE_SAVE_DIRECTORY", (int32_t)(Fl_Native_File_Chooser::BROWSE_SAVE_DIRECTORY)},
+  {"Fl_Native_File_Chooser::SAVEAS_CONFIRM", (int32_t)(Fl_Native_File_Chooser::SAVEAS_CONFIRM)},
+  {"Fl_Native_File_Chooser::NEW_FOLDER", (int32_t)(Fl_Native_File_Chooser::NEW_FOLDER)},
+  {"Fl_Native_File_Chooser::PREVIEW", (int32_t)(Fl_Native_File_Chooser::PREVIEW)},
+  {"Fl_Native_File_Chooser::USE_FILTER_EXT", (int32_t)(Fl_Native_File_Chooser::USE_FILTER_EXT)},
   {"Fl_Text_Display::WRAP_NONE", (int32_t)(Fl_Text_Display::WRAP_NONE)},
   {"Fl_Text_Display::WRAP_AT_COLUMN", (int32_t)(Fl_Text_Display::WRAP_AT_COLUMN)},
   {"Fl_Text_Display::WRAP_AT_PIXEL", (int32_t)(Fl_Text_Display::WRAP_AT_PIXEL)},
@@ -451,6 +473,17 @@ const Entry entries[] = {
   {"FL_TREE_REASON_OPENED", (int32_t)(FL_TREE_REASON_OPENED)},
   {"FL_TREE_REASON_CLOSED", (int32_t)(FL_TREE_REASON_CLOSED)},
   {"FL_TREE_REASON_DRAGGED", (int32_t)(FL_TREE_REASON_DRAGGED)},
+  {"Fl_Table::CONTEXT_NONE", (int32_t)(Fl_Table::CONTEXT_NONE)},
+  {"Fl_Table::CONTEXT_STARTPAGE", (int32_t)(Fl_Table::CONTEXT_STARTPAGE)},
+  {"Fl_Table::CONTEXT_ENDPAGE", (int32_t)(Fl_Table::CONTEXT_ENDPAGE)},
+  {"Fl_Table::CONTEXT_ROW_HEADER", (int32_t)(Fl_Table::CONTEXT_ROW_HEADER)},
+  {"Fl_Table::CONTEXT_COL_HEADER", (int32_t)(Fl_Table::CONTEXT_COL_HEADER)},
+  {"Fl_Table::CONTEXT_CELL", (int32_t)(Fl_Table::CONTEXT_CELL)},
+  {"Fl_Table::CONTEXT_TABLE", (int32_t)(Fl_Table::CONTEXT_TABLE)},
+  {"Fl_Table::CONTEXT_RC_RESIZE", (int32_t)(Fl_Table::CONTEXT_RC_RESIZE)},
+  {"Fl_Table_Row::SELECT_NONE", (int32_t)(Fl_Table_Row::SELECT_NONE)},
+  {"Fl_Table_Row::SELECT_SINGLE", (int32_t)(Fl_Table_Row::SELECT_SINGLE)},
+  {"Fl_Table_Row::SELECT_MULTI", (int32_t)(Fl_Table_Row::SELECT_MULTI)},
   {"fl_gray_ramp(0)", (int32_t)(fl_gray_ramp(0))},
   {"fl_gray_ramp(23)", (int32_t)(fl_gray_ramp(23))},
   {"fl_color_cube(0, 0, 0)", (int32_t)(fl_color_cube(0, 0, 0))},

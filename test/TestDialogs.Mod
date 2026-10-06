@@ -17,6 +17,8 @@ TYPE
 
 VAR
   answer: Answer;
+  fc: FlDialogs.NativeFileChooser;
+  title: ARRAY 16 OF CHAR;
   s: ARRAY 256 OF CHAR;
   i, r, g, b, font, size, c: INTEGER;
   ok: BOOLEAN;
@@ -128,6 +130,37 @@ BEGIN
   s := "..";
   Enter; ok := FlDialogs.ChooseDirectory("Folder", s, FALSE);
   Check.Check(ok & (s[0] = "/") & ~Ends(s, "/test"), "ChooseDirectory");
+
+  (* FLTK's own chooser, which keys can answer, and not the desktop's *)
+  Fl.SetOption(Fl.OptionFnfcUsesGtk, FALSE); Fl.SetOption(Fl.OptionFnfcUsesZenity, FALSE);
+  Fl.SetOption(Fl.OptionFnfcUsesKdialog, FALSE);
+  Check.Check(~Fl.Option(Fl.OptionFnfcUsesGtk) & ~Fl.Option(Fl.OptionFnfcUsesZenity), "SetOption");
+  NEW(fc); FlDialogs.OpenNativeFileChooser(fc, FlDialogs.BrowseFile);
+  Check.Check(fc.IsOpen() & (fc.Kind() = FlDialogs.BrowseFile) & (FlDialogs.openChoosers = 1), "OpenNativeFileChooser");
+  title := "Native"; fc.SetTitle(title); title := "Changed";
+  s := "Oberon?*.Mod?Text?*.txt"; s[6] := 09X; s[12] := 0AX; s[17] := 09X;
+  fc.SetFilter(s);
+  fc.SetFilterValue(1);
+  Check.Check((fc.Filters() = 2) & (fc.FilterValue() = 1), "SetFilter, SetFilterValue");
+  fc.SetFilterValue(0);
+  fc.SetOptions({}); fc.SetOptions(FlDialogs.SaveAsConfirm);
+  Check.Check(fc.Options() = FlDialogs.SaveAsConfirm, "SetOptions");
+  fc.SetOptions({});
+  fc.SetDirectory("."); fc.SetPresetFile("TestDialogs.Mod");
+  Enter; i := fc.Show();
+  Check.Check(answer.title = "Native", "the title, copied");
+  Check.Check(i = FlDialogs.Chosen, "Show: Chosen");
+  IF fc.Count() = 1 THEN fc.FileName(0, s) ELSE s := "" END;
+  Check.Check((s[0] = "/") & Ends(s, "/test/TestDialogs.Mod"), "FileName: the file chosen, absolute");
+  Escape; i := fc.Show();
+  Check.Check((i = FlDialogs.Cancelled) & (fc.Count() = 0), "Show: Cancelled");
+  fc.SetKind(FlDialogs.BrowseSaveFile); fc.SetPresetFile("New.txt");
+  Check.Check(fc.Kind() = FlDialogs.BrowseSaveFile, "SetKind");
+  Enter; i := fc.Show();
+  IF fc.Count() = 1 THEN fc.FileName(0, s) ELSE s := "" END;
+  Check.Check((i = FlDialogs.Chosen) & Ends(s, "/test/New.txt"), "BrowseSaveFile: a file that doesn't exist");
+  fc.Close; fc.Close;
+  Check.Check(~fc.IsOpen() & (FlDialogs.openChoosers = 0), "Close");
 
   Escape; c := FlDialogs.ChooseFromColormap(Fl.Red);
   Check.Check(c = Fl.Red, "ChooseFromColormap gives back old if none is picked");

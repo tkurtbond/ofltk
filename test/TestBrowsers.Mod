@@ -164,11 +164,11 @@ BEGIN
   SetFilter(files); Clobber;
   files.Filter(s);
   Check.Check(s = "*.cpp", "SetFilter, copied");
-  Check.Check(files.LoadDirectory(".") & (files.Count() = 3) & Is(files, 1, "../")
-    & Is(files, 2, "CConstants.cpp") & Is(files, 3, "Probe.cpp"),
+  Check.Check(files.LoadDirectory(".") & (files.Count() = 4) & Is(files, 1, "../")
+    & Is(files, 2, "images/") & Is(files, 3, "CConstants.cpp") & Is(files, 4, "Probe.cpp"),
     "LoadDirectory: the directories, then the files matching");
   files.SetFileType(FlBrowsers.Directories);
-  Check.Check(files.LoadDirectory(".") & (files.Count() = 1), "or the directories alone");
+  Check.Check(files.LoadDirectory(".") & (files.Count() = 2), "or the directories alone");
   Check.Check(~files.LoadDirectory("no such directory") & (files.Count() = 0), "a missing directory");
   files.SetTextSize(20);
   Check.Check((files.TextSize() = 20) & (files.IconSize() = 30), "SetTextSize sizes the icons too");

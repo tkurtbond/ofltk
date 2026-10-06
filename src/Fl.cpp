@@ -8,6 +8,7 @@
 #include <FL/Fl_Flex.H>
 #include <FL/Fl_Group.H>
 #include <FL/Fl_Pack.H>
+#include <FL/Fl_Table.H>
 #include <FL/Fl_Window.H>
 #include <FL/platform.H>
 
@@ -134,9 +135,9 @@ int32_t ofl_widget_base_handle(intptr_t w, int32_t event) {
 void ofl_widget_copy_label(intptr_t w, const char *label) {
   Fl_Window *win = ofl::widget(w)->as_window();
   if (win) {
-    win->copy_label(label);
+    win->copy_label(ofl::label_text(label));
   } else {
-    ofl::widget(w)->copy_label(label);
+    ofl::widget(w)->copy_label(ofl::label_text(label));
   }
 }
 
@@ -405,42 +406,79 @@ int32_t ofl_set_scheme(const char *name) { return Fl::scheme(name); }
 // The scheme's name, a const char *, or 0 for none.
 intptr_t ofl_scheme(void) { return reinterpret_cast<intptr_t>(Fl::scheme()); }
 
-void ofl_group_begin(intptr_t g) { ofl::as<Fl_Group>(g)->begin(); }
+// A table's children are its cells' widgets, in an inner Fl_Scroll;
+// Fl_Table's begin(), end(), children() and the rest reach them, but
+// hide Fl_Group's rather than overriding them, so a table must be called
+// as one (doc/fltk-issues.md, 52). Fl_Group's own would reach the
+// table's scrollbars and the inner group.
+static Fl_Table *table(intptr_t g) {
+  return dynamic_cast<Fl_Table *>(ofl::widget(g));
+}
 
-// Fl_Flex::end also asks for a layout, but it hides Fl_Group's rather
-// than overriding it, so a flex must be called as one.
+void ofl_group_begin(intptr_t g) {
+  if (Fl_Table *t = table(g)) {
+    t->begin();
+  } else {
+    ofl::as<Fl_Group>(g)->begin();
+  }
+}
+
+// Fl_Flex::end also asks for a layout, and Fl_Table::end shows the inner
+// group if it has children, but each hides Fl_Group's rather than
+// overriding it, so each must be called as itself.
 void ofl_group_end(intptr_t g) {
   Fl_Flex *flex = dynamic_cast<Fl_Flex *>(ofl::widget(g));
   if (flex) {
     flex->end();
+  } else if (Fl_Table *t = table(g)) {
+    t->end();
   } else {
     ofl::as<Fl_Group>(g)->end();
   }
 }
 
 int32_t ofl_group_children(intptr_t g) {
+  if (Fl_Table *t = table(g)) return t->children();
   return ofl::as<Fl_Group>(g)->children();
+}
+
+static Fl_Widget *child(intptr_t g, int i) {
+  if (Fl_Table *t = table(g)) return t->child(i);
+  return ofl::as<Fl_Group>(g)->child(i);
 }
 
 // The Oberon object of child i, or 0 (ofl::object_of).
 intptr_t ofl_group_child(intptr_t g, int32_t i) {
-  return ofl::object_of(ofl::as<Fl_Group>(g)->child(i));
+  return ofl::object_of(child(g, i));
 }
 
 void ofl_group_add(intptr_t g, intptr_t w) {
-  ofl::as<Fl_Group>(g)->add(ofl::widget(w));
+  if (Fl_Table *t = table(g)) {
+    t->add(ofl::widget(w));
+  } else {
+    ofl::as<Fl_Group>(g)->add(ofl::widget(w));
+  }
 }
 
 void ofl_group_insert(intptr_t g, intptr_t w, int32_t i) {
-  ofl::as<Fl_Group>(g)->insert(*ofl::widget(w), i);
+  if (Fl_Table *t = table(g)) {
+    t->insert(*ofl::widget(w), i);
+  } else {
+    ofl::as<Fl_Group>(g)->insert(*ofl::widget(w), i);
+  }
 }
 
 void ofl_group_remove(intptr_t g, intptr_t w) {
-  ofl::as<Fl_Group>(g)->remove(ofl::widget(w));
+  if (Fl_Table *t = table(g)) {
+    t->remove(*ofl::widget(w));
+  } else {
+    ofl::as<Fl_Group>(g)->remove(ofl::widget(w));
+  }
 }
 
 // The index of w among g's children, or children() if it isn't one.
 int32_t ofl_group_find(intptr_t g, intptr_t w) {
+  if (Fl_Table *t = table(g)) return t->find(ofl::widget(w));
   return ofl::as<Fl_Group>(g)->find(ofl::widget(w));
 }
 
@@ -450,18 +488,18 @@ int32_t ofl_group_find(intptr_t g, intptr_t w) {
 // spinner's field and buttons), which it would delete. Fl_Scroll::clear
 // and Fl_Pack::clear allow for that, but hide Fl_Group's rather than
 // overriding it. A pack's resizable goes back to none, as
-// Fl_Pack::clear leaves it.
+// Fl_Pack::clear leaves it. A table keeps its rows and columns.
 void ofl_group_clear(intptr_t g) {
-  Fl_Group *group = ofl::as<Fl_Group>(g);
-  for (int i = group->children(); i-- > 0;) {
-    Fl_Widget *child = group->child(i);
-    if (ofl::object_of(child) == 0) continue;
+  for (int i = ofl_group_children(g); i-- > 0;) {
+    Fl_Widget *c = child(g, i);
+    if (ofl::object_of(c) == 0) continue;
     if (ofl::depth > 0) {
-      Fl::delete_widget(child);
+      Fl::delete_widget(c);
     } else {
-      delete child;
+      delete c;
     }
   }
+  Fl_Group *group = ofl::as<Fl_Group>(g);
   if (dynamic_cast<Fl_Pack *>(group)) group->resizable(0);
 }
 
@@ -502,6 +540,64 @@ intptr_t ofl_event_text(void) {
 }
 
 int32_t ofl_event_length(void) { return Fl::event_length(); }
+
+// The clipboard and drag and drop. destination and source: 0 the
+// selection buffer, 1 the clipboard, 2 (copy) both.
+
+// Each opens the display first: FLTK 1.4.5's X11 driver uses it without
+// opening it, and crashes when no window has yet been shown
+// (doc/fltk-issues.md, 49).
+
+// Fl::copy copies the n bytes at text.
+void ofl_copy(const char *text, int32_t n, int32_t destination) {
+  fl_open_display();
+  Fl::copy(text, n, destination, Fl::clipboard_plain_text);
+}
+
+// FLTK's own record of the sources the program owns, in both drivers.
+// It is in no header, but exported.
+extern char fl_i_own_selection[2];
+
+// image: 0 text, 1 an image. Under X11, another program's data is asked
+// for through Fl::first_window. With no window shown, FLTK asks with
+// window 0 anyway, and the X server's BadWindow error is printed, so
+// ofltk doesn't ask: the paste does nothing, as it would have.
+void ofl_paste(intptr_t receiver, int32_t source, int32_t image) {
+  fl_open_display();
+  if (!fl_wl_display() && !Fl::first_window() &&
+      !fl_i_own_selection[source ? 1 : 0])
+    return;
+  Fl::paste(*ofl::widget(receiver), source,
+            image ? Fl::clipboard_image : Fl::clipboard_plain_text);
+}
+
+int32_t ofl_clipboard_contains(int32_t image) {
+  fl_open_display();
+  return Fl::clipboard_contains(image ? Fl::clipboard_image
+                                      : Fl::clipboard_plain_text);
+}
+
+// 1 if the EvPaste being handled carries an image (Fl::event_clipboard).
+int32_t ofl_event_is_image(void) {
+  return Fl::event_clipboard_type() == Fl::clipboard_image &&
+         Fl::event_clipboard() != 0;
+}
+
+int32_t ofl_dnd(void) { return Fl::dnd(); }
+
+// what: 0 get, 1 set off, 2 set on.
+int32_t ofl_dnd_text_ops(int32_t what) {
+  if (what) Fl::dnd_text_ops(what == 2);
+  return Fl::dnd_text_ops();
+}
+
+// Fl::option: what 0 get, 1 set off, 2 set on. FLTK reads the saved
+// options first, so one set here stays set.
+int32_t ofl_option(int32_t o, int32_t what) {
+  Fl::Fl_Option opt = static_cast<Fl::Fl_Option>(o);
+  if (what) Fl::option(opt, what == 2);
+  return Fl::option(opt);
+}
 
 int32_t ofl_event_inside(int32_t x, int32_t y, int32_t w, int32_t h) {
   return Fl::event_inside(x, y, w, h);

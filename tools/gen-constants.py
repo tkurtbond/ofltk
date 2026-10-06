@@ -148,6 +148,12 @@ add("int", [("Cursor" + camel(c), "FL_CURSOR_" + c) for c in
             """DEFAULT ARROW CROSS WAIT INSERT HAND HELP MOVE NS WE NWSE NESW N NE
             E SE S SW W NW NONE""".split()])
 
+section("FLTK's options (Fl::Fl_Option), Option and SetOption")
+add("int", [("Option" + camel(o), "Fl::OPTION_" + o) for o in
+            """ARROW_FOCUS VISIBLE_FOCUS DND_TEXT SHOW_TOOLTIPS FNFC_USES_GTK
+            FNFC_USES_ZENITY FNFC_USES_KDIALOG PRINTER_USES_GTK SHOW_SCALING
+            SIMPLE_ZOOM_SHORTCUT""".split()])
+
 module("FlDraw")
 WORDS.update({"DASHDOT": "DashDot", "DASHDOTDOT": "DashDotDot"})
 section("line styles (LineStyle): a dash pattern, plus a cap and a join")
@@ -205,6 +211,14 @@ module("FlDialogs")
 section("kinds of beep (Beep)")
 add("int", [("Beep" + camel(k), "FL_BEEP_" + k) for k in
             "DEFAULT MESSAGE ERROR QUESTION PASSWORD NOTIFICATION".split()])
+section("what a native file chooser asks for (OpenNativeFileChooser)")
+add("int", [("Browse" + camel(k), "Fl_Native_File_Chooser::BROWSE_" + k) for k in
+            """FILE DIRECTORY MULTI_FILE MULTI_DIRECTORY SAVE_FILE
+            SAVE_DIRECTORY""".split()])
+section("a native file chooser's options (NativeFileChooser.SetOptions)")
+WORDS.update({"SAVEAS": "SaveAs"})
+add("set", [(camel(k), "Fl_Native_File_Chooser::" + k) for k in
+            "SAVEAS_CONFIRM NEW_FOLDER PREVIEW USE_FILTER_EXT".split()])
 
 module("FlText")
 section("how a display wraps lines (TextDisplay.SetWrapMode)")
@@ -241,6 +255,15 @@ section("why a tree called back (Tree.CallbackReason)")
 add("int", [("Reason" + camel(k), "FL_TREE_REASON_" + k) for k in
             "NONE SELECTED DESELECTED RESELECTED OPENED CLOSED DRAGGED".split()])
 
+module("FlTable")
+WORDS.update({"STARTPAGE": "StartPage", "ENDPAGE": "EndPage", "RC": "RC"})
+section("what DrawCell draws, and where a Callback's event was (Table.CallbackContext)")
+add("int", [("Context" + camel(k), "Fl_Table::CONTEXT_" + k) for k in
+            "NONE STARTPAGE ENDPAGE ROW_HEADER COL_HEADER CELL TABLE RC_RESIZE".split()])
+section("how a table row's rows are selected (TableRow.SetSelectMode)")
+add("int", [("Select" + camel(k), "Fl_Table_Row::SELECT_" + k) for k in
+            "NONE SINGLE MULTI".split()])
+
 # Not constants of Fl, but values the test also checks against C: what Fl's
 # procedures compute in Oberon.
 CHECKS = [
@@ -259,7 +282,9 @@ HEADERS = ("#include <FL/Fl.H>\n#include <FL/Enumerations.H>\n#include <FL/fl_dr
            "#include <FL/Fl_Flex.H>\n#include <FL/Fl_Grid.H>\n#include <FL/Fl_Pack.H>\n"
            "#include <FL/Fl_Scroll.H>\n#include <FL/Fl_Tabs.H>\n"
            "#include <FL/Fl_Menu_Item.H>\n#include <FL/Fl_Menu_Button.H>\n#include <FL/fl_ask.H>\n"
+           "#include <FL/Fl_Native_File_Chooser.H>\n"
            "#include <FL/Fl_Text_Display.H>\n#include <FL/Fl_File_Browser.H>\n#include <FL/Fl_Tree.H>\n"
+           "#include <FL/Fl_Table_Row.H>\n"
            "#include <stdint.h>\n#include <stdio.h>\n")
 
 def oberon_set(v):

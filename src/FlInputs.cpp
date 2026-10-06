@@ -17,7 +17,7 @@ template <class T>
 intptr_t make(int32_t x, int32_t y, int32_t w, int32_t h, const char *label,
               intptr_t self) {
   ofl::W<T> *i = new ofl::W<T>(x, y, w, h);
-  i->copy_label(label);
+  i->copy_label(ofl::label_text(label));
   return ofl::open(i, self);
 }
 

@@ -145,6 +145,65 @@ Unless an entry says otherwise, the version is FLTK 1.4.5 (Fedora's
   checks, and in a plain C++ program searching with `matchCase` set;
   none with the shim's search.
 
+### 45. A binary PNM with a maxval under 255 is read unscaled
+
+- **What happens**: a PNM in a binary form (P5, P6) whose maxval is
+  under 255, such as ImageMagick writes for an image of pure colors
+  (maxval 1), is read with its samples as they are: red is 1, 0, 0, not
+  255, 0, 0. The text forms (P2, P3) are scaled. Found 2026-10-06.
+- **Cause**: `Fl_PNM_Image::Fl_PNM_Image` (`src/Fl_PNM_Image.cxx`)
+  reads P5 and P6 samples with `fread` when maxval is under 256, without
+  the `255 * val / maxval` it uses elsewhere.
+- **Effect on ofltk**: `ofl_image_load` (`src/FlImages.cpp`) reads the
+  maxval from the header itself, and scales the samples after FLTK.
+- **Confirmed**: `test/images/rb.ppm` (P6, maxval 1) read as 1, 0, 0;
+  `TestImages` fails without the scaling.
+
+### 48. Under Wayland a pasted image of the program's own is never deleted
+
+- **What happens**: `Fl::paste(receiver, 1, Fl::clipboard_image)` of an
+  image the program itself copied gives the receiver an `FL_PASTE` whose
+  `Fl::event_clipboard()` is a new `Fl_RGB_Image`. When `handle()`
+  returns 0, FLTK deletes it under X11, and for another program's image
+  under Wayland, but not for the program's own under Wayland: it leaks.
+  Found 2026-10-06.
+- **Cause**: `Fl_Wayland_Screen_Driver::paste`
+  (`src/drivers/Wayland/fl_wayland_clipboard_dnd.cxx`): the branch for
+  `fl_i_own_selection[1]` calls `receiver.handle(FL_PASTE)` and returns,
+  without the `delete` its other branch and the X11 driver's have.
+- **Effect on ofltk**: `W<B>::handle` (`src/ofltk.h`,
+  `drop_pasted_image`) deletes the image after the Oberon `Handle`,
+  whatever it returned, unless `FlImages.TakePastedImage` took it (it
+  sets `Fl::e_clipboard_data` to 0). FLTK then finds none to delete.
+- **Confirmed**: `TestClipboard` under valgrind, with `W<B>::handle` not
+  calling `drop_pasted_image`. Under X11 one image, accepted and not
+  taken, was lost (as FLTK intends: the receiver owns it). Under Wayland
+  the one refused was lost as well, made in
+  `Fl_Wayland_Screen_Driver::paste` by `own_bmp_to_RGB`. With the call,
+  none. `test/vg-check.sh` doesn't flag these, since FLTK allocates
+  them: read the log.
+
+### 49. Under X11, `Fl::copy` before the display is open crashes
+
+- **What happens**: `Fl::copy` (and `Fl::copy_image`, which
+  `Fl_Copy_Surface` calls) crashes in `XSetSelectionOwner` when no
+  window has been shown yet. Under Wayland it works. Found 2026-10-06.
+- **Cause**: `Fl_X11_Screen_Driver::copy` and `copy_image`
+  (`src/Fl_x.cxx`) call `XSetSelectionOwner(fl_display, ...)` without
+  `fl_open_display()`, and making a window doesn't open the display, so
+  `fl_display` is still NULL. In the same way, `paste` of another
+  program's data asks the X server with `fl_xid(Fl::first_window())`,
+  which is 0 with no window shown, and the server's `BadWindow` error is
+  printed.
+- **Effect on ofltk**: `ofl_copy`, `ofl_paste`, `ofl_clipboard_contains`
+  (`src/Fl.cpp`) and `ofl_image_copy_to_clipboard` (`src/FlImages.cpp`)
+  call `fl_open_display()` first. Under X11 with no window shown,
+  `ofl_paste` asks only for what the program owns (FLTK's exported
+  `fl_i_own_selection`), so nothing is pasted and nothing printed.
+- **Confirmed**: `TestClipboard` under Xvfb segfaulted in
+  `XSetSelectionOwner` (gdb) at its first `Fl.Copy`; without the paste
+  check, its first check printed `X_ConvertSelection: BadWindow` twice.
+
 ## Pitfalls
 
 ### 5. FLTK keeps the label pointer it is given
@@ -384,6 +443,15 @@ Unless an entry says otherwise, the version is FLTK 1.4.5 (Fedora's
   `src/Fl_File_Chooser.cxx`). The pattern and file name are copied.
 - **ofltk**: `ofl_file_chooser` (`src/FlDialogs.cpp`) copies the title
   into a static buffer first. Found in the source; no failure seen.
+- `Fl_Native_File_Chooser` does the same when it uses FLTK's chooser
+  (zenity, kdialog and GTK off or missing):
+  `Fl_Native_File_Chooser_FLTK_Driver::title` is
+  `_file_chooser->label(val)` (`src/Fl_Native_File_Chooser_FLTK.cxx`).
+  The other drivers copy it, and every driver copies the filter,
+  directory and preset file. `ofl_fnfc_set_text` keeps a copy beside
+  the chooser. Confirmed 2026-10-06: with the copy, `TestDialogs` sees
+  the title as set; passing the caller's string instead, it sees the
+  text the program later wrote there.
 
 ### 31. The common dialogs take a printf format
 
@@ -541,3 +609,90 @@ Unless an entry says otherwise, the version is FLTK 1.4.5 (Fedora's
 - **Effect on ofltk**: `Tree.Root` may return NIL, as documented; an
   old root's `TreeItem` is no longer live.
 - **Confirmed**: `TestTree`.
+
+### 44. Wayland has no window icons
+
+- `Fl_Window::icon` and `icons` do nothing under Wayland.
+- **Cause**: `Fl_Window_Driver::icons` is empty, and only the X11,
+  Windows and macOS drivers override it (`src/Fl_Window_Driver.H`,
+  `src/drivers/`).
+- **Effect on ofltk**: `FlImages.SetIcon` says so.
+- **Confirmed**: in the source.
+
+### 46. An empty label is laid out as a line of text
+
+- A widget whose label is `""`, not NULL, with an image, draws the image
+  above an empty line of text, so near the top of the widget, not in the
+  middle: in a 20 by 20 box, a 4 by 2 image is drawn at its top edge,
+  half outside it.
+- **Cause**: `fl_draw` (`src/fl_draw.cxx`) counts the lines of any
+  non-NULL text, and `""` is one line.
+- **Effect on ofltk**: Oberon has no NULL string, so every module's C++
+  part sets a label `""` as NULL (`ofl::label_text`, `src/ofltk.h`).
+- **Confirmed**: under Wayland and X11, a box with label `""` and an
+  image; `TestImages` fails when `""` reaches FLTK.
+
+### 47. XPM color names are read only on X11
+
+- An XPM image whose colors are names ("red") gets FLTK's gray for each
+  under Wayland; `#rrggbb` colors work on both.
+- **Cause**: `Fl_Pixmap` reads colors with `fl_parse_color`. The X11
+  driver asks the X server, which knows the names; the Wayland driver
+  uses `Fl_Screen_Driver::parse_color` (`src/Fl_Screen_Driver.cxx`),
+  which reads hexadecimal alone.
+- **Effect on ofltk**: none possible short of a color table of its own;
+  `FlImages` says to use `#rrggbb` in XPM files. `test/images/rb.xpm`
+  does.
+- **Confirmed**: an XPM of "red" and "blue" read back `C0C0C0` for both
+  under Wayland, and red and blue under X11.
+
+### 50. Wayland has no selection buffer
+
+- `Fl::copy` to the selection buffer (0) under Wayland keeps the text
+  but offers it to no one, and `Fl::paste` from it does nothing; to both
+  (2), it copies to the clipboard alone. X11 has both.
+- **Cause**: `Fl_Wayland_Screen_Driver::copy` and `paste`
+  (`src/drivers/Wayland/fl_wayland_clipboard_dnd.cxx`): `paste` returns
+  at once for a source other than 1.
+- **Effect on ofltk**: none; `Fl.Copy` and `Fl.Paste` say so.
+  `TestClipboard` tests the selection buffer under X11 alone.
+- **Confirmed**: `TestClipboard` under headless sway: text copied to the
+  selection buffer and pasted from it gives no `FL_PASTE`.
+
+### 51. An `Fl_Preferences` group outlives its node
+
+- An `Fl_Preferences` made for a group points to the group's node, which
+  `delete_group`, `delete_all_groups` and `clear` of a group above it
+  free, and deleting the database's root `Fl_Preferences` frees with
+  every node. The group object is then left pointing to freed memory.
+- **Cause**: `Fl_Preferences::~Fl_Preferences` (`src/Fl_Preferences.cxx`)
+  deletes the `RootNode` for a root, which deletes the node tree;
+  `Node::remove` deletes a node. A group object keeps a plain `Node *`.
+- **Effect on ofltk**: `FlPreferences` keeps no `Fl_Preferences` for a
+  group: a group is its database and its path, checked with
+  `group_exists` before each call and made a short-lived
+  `Fl_Preferences` for it (`src/FlPreferences.cpp`). A group deleted, or
+  of a closed database, halts with `Fl.ClosedResource`.
+- **Confirmed**: a scratch program reading `entries()` of a group after
+  `delete_group`, and after deleting the root: valgrind's invalid read
+  in `Fl_Preferences::entries`. `HaltClosedGroup`.
+
+### 52. `Fl_Table` hides `Fl_Group`'s child methods
+
+- A table's own children are its two scrollbars and an inner
+  `Fl_Scroll`; the widgets of its cells are the inner group's.
+  `Fl_Table`'s `begin`, `end`, `add`, `insert`, `remove`, `children`,
+  `child`, `find`, `array` and `init_sizes` reach the inner group, but
+  hide `Fl_Group`'s rather than overriding them, so through an
+  `Fl_Group *` they reach the scrollbars and the inner group instead.
+  `Fl_Table::end` also shows the inner group if it has widgets.
+- **Cause**: `FL/Fl_Table.H`: the methods are plain inline members,
+  forwarding to `table`, the protected `Fl_Scroll *`. The constructor
+  (`src/Fl_Table.cxx`) leaves `table->begin()` current.
+- **Effect on ofltk**: Fl.cpp's group functions call a table as an
+  `Fl_Table` (`dynamic_cast`), as they call a flex as an `Fl_Flex` (22),
+  so `Group`'s methods reach the widgets in its cells.
+- **Confirmed**: `TestTable`; with Fl.cpp calling a table as an
+  `Fl_Group`, its checks of `Children`, `Add`, `Remove`, `Insert` and
+  `Clear` fail.
+

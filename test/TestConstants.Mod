@@ -4,7 +4,7 @@ MODULE TestConstants; (* ofltk's constants are FLTK's *)
    value the installed FLTK's headers give (CConstants). A failure means
    FLTK's headers changed: run the script again, and see what moved. *)
 
-IMPORT SYSTEM, Out, Fl, FlDraw, FlButtons, FlValuators, FlLayout, FlMenus, FlDialogs, FlText, FlBrowsers, Check, CConstants;
+IMPORT SYSTEM, Out, Fl, FlDraw, FlButtons, FlValuators, FlLayout, FlMenus, FlDialogs, FlText, FlBrowsers, FlTable, Check, CConstants;
 
 VAR checked, wrong: INTEGER;
 
@@ -312,6 +312,16 @@ BEGIN
   Same(Fl.CursorW, "FL_CURSOR_W");
   Same(Fl.CursorNw, "FL_CURSOR_NW");
   Same(Fl.CursorNone, "FL_CURSOR_NONE");
+  Same(Fl.OptionArrowFocus, "Fl::OPTION_ARROW_FOCUS");
+  Same(Fl.OptionVisibleFocus, "Fl::OPTION_VISIBLE_FOCUS");
+  Same(Fl.OptionDndText, "Fl::OPTION_DND_TEXT");
+  Same(Fl.OptionShowTooltips, "Fl::OPTION_SHOW_TOOLTIPS");
+  Same(Fl.OptionFnfcUsesGtk, "Fl::OPTION_FNFC_USES_GTK");
+  Same(Fl.OptionFnfcUsesZenity, "Fl::OPTION_FNFC_USES_ZENITY");
+  Same(Fl.OptionFnfcUsesKdialog, "Fl::OPTION_FNFC_USES_KDIALOG");
+  Same(Fl.OptionPrinterUsesGtk, "Fl::OPTION_PRINTER_USES_GTK");
+  Same(Fl.OptionShowScaling, "Fl::OPTION_SHOW_SCALING");
+  Same(Fl.OptionSimpleZoomShortcut, "Fl::OPTION_SIMPLE_ZOOM_SHORTCUT");
   Same(FlDraw.Solid, "FL_SOLID");
   Same(FlDraw.Dash, "FL_DASH");
   Same(FlDraw.Dot, "FL_DOT");
@@ -390,6 +400,16 @@ BEGIN
   Same(FlDialogs.BeepQuestion, "FL_BEEP_QUESTION");
   Same(FlDialogs.BeepPassword, "FL_BEEP_PASSWORD");
   Same(FlDialogs.BeepNotification, "FL_BEEP_NOTIFICATION");
+  Same(FlDialogs.BrowseFile, "Fl_Native_File_Chooser::BROWSE_FILE");
+  Same(FlDialogs.BrowseDirectory, "Fl_Native_File_Chooser::BROWSE_DIRECTORY");
+  Same(FlDialogs.BrowseMultiFile, "Fl_Native_File_Chooser::BROWSE_MULTI_FILE");
+  Same(FlDialogs.BrowseMultiDirectory, "Fl_Native_File_Chooser::BROWSE_MULTI_DIRECTORY");
+  Same(FlDialogs.BrowseSaveFile, "Fl_Native_File_Chooser::BROWSE_SAVE_FILE");
+  Same(FlDialogs.BrowseSaveDirectory, "Fl_Native_File_Chooser::BROWSE_SAVE_DIRECTORY");
+  Same(ORD(FlDialogs.SaveAsConfirm), "Fl_Native_File_Chooser::SAVEAS_CONFIRM");
+  Same(ORD(FlDialogs.NewFolder), "Fl_Native_File_Chooser::NEW_FOLDER");
+  Same(ORD(FlDialogs.Preview), "Fl_Native_File_Chooser::PREVIEW");
+  Same(ORD(FlDialogs.UseFilterExt), "Fl_Native_File_Chooser::USE_FILTER_EXT");
   Same(FlText.WrapNone, "Fl_Text_Display::WRAP_NONE");
   Same(FlText.WrapAtColumn, "Fl_Text_Display::WRAP_AT_COLUMN");
   Same(FlText.WrapAtPixel, "Fl_Text_Display::WRAP_AT_PIXEL");
@@ -437,6 +457,17 @@ BEGIN
   Same(FlBrowsers.ReasonOpened, "FL_TREE_REASON_OPENED");
   Same(FlBrowsers.ReasonClosed, "FL_TREE_REASON_CLOSED");
   Same(FlBrowsers.ReasonDragged, "FL_TREE_REASON_DRAGGED");
+  Same(FlTable.ContextNone, "Fl_Table::CONTEXT_NONE");
+  Same(FlTable.ContextStartPage, "Fl_Table::CONTEXT_STARTPAGE");
+  Same(FlTable.ContextEndPage, "Fl_Table::CONTEXT_ENDPAGE");
+  Same(FlTable.ContextRowHeader, "Fl_Table::CONTEXT_ROW_HEADER");
+  Same(FlTable.ContextColHeader, "Fl_Table::CONTEXT_COL_HEADER");
+  Same(FlTable.ContextCell, "Fl_Table::CONTEXT_CELL");
+  Same(FlTable.ContextTable, "Fl_Table::CONTEXT_TABLE");
+  Same(FlTable.ContextRCResize, "Fl_Table::CONTEXT_RC_RESIZE");
+  Same(FlTable.SelectNone, "Fl_Table_Row::SELECT_NONE");
+  Same(FlTable.SelectSingle, "Fl_Table_Row::SELECT_SINGLE");
+  Same(FlTable.SelectMulti, "Fl_Table_Row::SELECT_MULTI");
   Same(Fl.GrayRamp(0), "fl_gray_ramp(0)");
   Same(Fl.GrayRamp(23), "fl_gray_ramp(23)");
   Same(Fl.ColorCube(0, 0, 0), "fl_color_cube(0, 0, 0)");
@@ -445,6 +476,6 @@ BEGIN
   Same(Fl.RGB(255, 0, 0), "fl_rgb_color(255, 0, 0)");
   Same(Fl.RGB(1, 2, 3), "fl_rgb_color(1, 2, 3)");
   Same(Fl.RGB(0, 0, 255), "fl_rgb_color(0, 0, 255)");
-  Check.Check((wrong = 0) & (checked = 426), "each of 426 constants and values is FLTK's");
+  Check.Check((wrong = 0) & (checked = 457), "each of 457 constants and values is FLTK's");
   Check.Summary
 END TestConstants.

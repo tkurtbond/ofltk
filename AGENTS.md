@@ -21,10 +21,11 @@ anything:
 
 ## Status
 
-As of 2026-10-06, Phases 0 to 6 of PLAN.md are done, and Phase 7
-(images and the rest) is next. `src/` has the `Fl`, `FlDraw`,
-`FlButtons`, `FlInputs`, `FlValuators`, `FlLayout`, `FlMenus`,
-`FlDialogs`, `FlText` and `FlBrowsers` modules, and the tests pass. Also kept:
+As of 2026-10-06, Phases 0 to 7 of PLAN.md are done, and Phase 8
+(release) is next. `src/` has the `Fl`, `FlDraw`, `FlButtons`,
+`FlInputs`, `FlValuators`, `FlLayout`, `FlMenus`, `FlDialogs`, `FlText`,
+`FlBrowsers`, `FlImages`, `FlPreferences` and `FlTable` modules, and the
+tests pass. Also kept:
 
 - `doc/design.md`: the feasibility analysis.
 - `doc/fltk-issues.md`: every FLTK bug and pitfall found, with its
@@ -45,7 +46,10 @@ As of 2026-10-06, Phases 0 to 6 of PLAN.md are done, and Phase 7
     `handle()` and `resize()`, and `Fl_Widget`'s protected `draw_box()`,
     `draw_label()` and `draw_focus()`;
   - `ofl::open`, which attaches a widget to its Oberon object;
-  - the `Ref` user data, whose destructor is the deletion hook;
+  - the `Ref` user data, whose destructor is the deletion hook, and
+    which holds the images a widget shows;
+  - `ofl::Shared`, a reference count for what widgets share (images);
+  - `ofl::label_text`, which every label goes through ("" is none);
   - the dispatch depth.
 - `src/Fl.Mod`, `src/Fl.cpp`: the core module. Its "For ofltk's modules
   only" procedures (`BeginOpen`, `EndOpen`) are how another module
@@ -59,7 +63,19 @@ As of 2026-10-06, Phases 0 to 6 of PLAN.md are done, and Phase 7
   each Oberon `Open<Type>` passes it `Fl.BeginOpen(w)` and gives the
   result to `Fl.EndOpen`. Methods get the handle with `Fl.Live(w)`.
 - `src/FlDialogs.Mod`, `src/FlDialogs.cpp`: FLTK's common dialogs,
-  procedures with no widget of their own.
+  procedures with no widget of their own, and `NativeFileChooser`. A
+  test turns zenity, kdialog and GTK off (`Fl.SetOption`), so the
+  chooser is FLTK's and keys can answer it.
+- `src/FlImages.Mod`, `src/FlImages.cpp`: images (loaded by their
+  contents, not their names, or from RGB pixels, which are copied),
+  widgets' images, image surfaces, and images on the clipboard. It
+  links `-lfltk_images`.
+- `src/FlPreferences.Mod`, `src/FlPreferences.cpp`: `Fl_Preferences`. A
+  group is its database and a path, not an `Fl_Preferences` kept.
+- `src/FlTable.Mod`, `src/FlTable.cpp`: `Fl_Table` and `Fl_Table_Row`.
+  `draw_cell` is a fourth virtual sent to Oberon, through a dispatcher
+  FlTable's body registers (`ofl_table_register`), as Fl's body
+  registers `Draw`'s.
 - **What a widget's C++ part keeps beside FLTK's object** goes in a base
   class listed before `ofl::W<B>`, so it is destroyed after FLTK's
   object, and is reached by `dynamic_cast`: `Holds` (`FlText`: the
@@ -78,6 +94,8 @@ As of 2026-10-06, Phases 0 to 6 of PLAN.md are done, and Phase 7
     widget's pixels, captured into an `Fl_Image_Surface`; mouse, wheel
     and key events sent as the window system would; the modal window (a
     dialog) and keys sent to it; and whether FLTK uses Wayland.
+  - `images/`: one 4x2 image, red left and blue right, in each format
+    `TestImages` reads.
 - `tools/gen-constants.py`: writes each module's constants and their
   test, from FLTK's headers (constants, below).
 - `tools/with-sway.sh`: runs a command on a headless sway (`make
@@ -152,7 +170,7 @@ make uninstall  # remove exactly what make install wrote
 `POC_OBERON_LIBRARIES` defaults to `/usr/local/sw/versions/oberon/poc/lib`,
 as polibfyaml's does. Try it elsewhere first with
 `make install POC_OBERON_LIBRARIES=<scratch dir>`. The manifest records
-`c++` and `-lfltk`, so a program using the installed library needs only:
+`c++`, `-lfltk_images` and `-lfltk`, so a program using the installed library needs only:
 
 ```sh
 poc -OC -library-path $POC_OBERON_LIBRARIES/ofltk Main.Mod
@@ -177,6 +195,13 @@ widgets never shown; `make test` stops with a message without one.
 
 - The user's desktop is Wayland, and FLTK 1.4 uses its Wayland back end
   there. `FLTK_BACKEND=x11 make test` runs the tests on X11 (XWayland).
+- **An agent never opens windows on the user's desktop**: not
+  `make test`, not `FLTK_BACKEND=x11 make test` (XWayland is the
+  desktop too), not a scratch program run directly. Use
+  `make test-sway`/`valgrind-sway` (Wayland) and
+  `make test-headless`/`valgrind-headless` (X11), and
+  `tools/with-sway.sh` or `env -u WAYLAND_DISPLAY xvfb-run -a` for a
+  single program (the user's instruction, 2026-10-06).
 - Under Wayland a test's windows and dialogs appear on the real
   desktop, where the user's typing or clicking can reach them: a
   `TestDialogs` run failed its `Choice` checks this way once
@@ -339,10 +364,11 @@ held only in C++ memory**.
   Except keys no widget uses (above).
 - **Non-virtual methods hidden by a subclass** (`Fl_Window::copy_label`,
   `Fl_Slider::bounds`, `Fl_Spinner::color`, `Fl_Flex::end`,
-  `Fl_Scroll::clear` and others): calling through an `Fl_Widget *` or
-  `Fl_Group *` reaches the base's. Before binding a method, check
-  the class's header for one that hides a base's, and call the class
-  as itself in the shim (`doc/fltk-issues.md`).
+  `Fl_Scroll::clear`, `Fl_Table`'s child methods and others): calling
+  through an `Fl_Widget *` or `Fl_Group *` reaches the base's. Before
+  binding a method, check the class's header for one that hides a
+  base's, and call the class as itself in the shim
+  (`doc/fltk-issues.md`).
 - **`Fl_Grid::widget` overruns its rows** for a row equal to `rows()`
   or a column equal to `cols()` (it checks `>`, not `>=`): valgrind
   shows an invalid read and write. `Grid.PlaceSpan` checks first
@@ -363,8 +389,9 @@ held only in C++ memory**.
   - clearing a menu in its own callback is safe in 1.4.5, despite
     FLTK's documentation.
 - **Dialogs**: `fl_message` and the rest take a printf format, so pass
-  text as `"%s"`; `fl_file_chooser` keeps its title pointer
-  (`doc/fltk-issues.md`, 30, 31).
+  text as `"%s"`; `fl_file_chooser`, and `Fl_Native_File_Chooser` using
+  FLTK's chooser, keep their title pointer (`doc/fltk-issues.md`, 30,
+  31).
 - **Text** (`doc/fltk-issues.md`, 34 to 36):
   - a text buffer and its displays don't detach from each other, so a
     buffer deleted first is used after it is freed: `FlText` reference
@@ -394,6 +421,27 @@ held only in C++ memory**.
   - `clear()` deletes the root;
   - `Fl_Tree_Item::is_visible()` is the item's own flag;
     `is_visible_r()` is whether its parents are open.
+- **Images** (`doc/fltk-issues.md`, 44 to 47):
+  - a widget keeps the image it is given, so `Ref` holds it, counted,
+    until the widget dies;
+  - an empty label is laid out as a line of text, which moves a label
+    image: every label goes through `ofl::label_text`;
+  - a binary PNM with a maxval under 255 is read unscaled (a bug): the
+    shim scales it;
+  - XPM color names are read only on X11; Wayland has no window icons.
+- **The clipboard** (`doc/fltk-issues.md`, 48 to 50):
+  - X11's `Fl::copy` before the display is open crashes (a bug): the
+    shim opens it first;
+  - a pasted image FLTK makes must be deleted by the program unless it
+    keeps it, and Wayland leaks the program's own (a bug): `W<B>::handle`
+    deletes any not taken;
+  - Wayland has no selection buffer.
+- **Preferences** (`doc/fltk-issues.md`, 51): a group's `Fl_Preferences`
+  outlives its node, deleted with the group or the database.
+- **Tables** (`doc/fltk-issues.md`, 52): `Fl_Table` hides `Fl_Group`'s
+  `begin`, `end`, `children`, `child`, `add` and the rest, which reach
+  the inner group holding the cells' widgets: Fl.cpp calls a table as
+  an `Fl_Table`.
 - **Name clashes with FLTK's keys**: the key constants take the prefix
   `Key`, since `FL_End` would be the keyword `END`. So `Fl::get_key` is
   `GetKey`, because `KeyDown` is the down arrow.
