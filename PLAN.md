@@ -201,11 +201,29 @@ This is the hard part; `doc/design.md` has the failures that motivate it.
     shim.
 - `Fl_Color` is an unsigned 32-bit `RGBI` value: an `INTEGER` (or
   `SYSTEM.INT32`) in Oberon, with `Fl.RGB(r, g, b)` building one.
-- Enum and flag values are exported Oberon constants. A test compares
-  each with the value the C++ part reports, so a changed FLTK header fails
-  `make test` instead of misbehaving.
+- Enum and flag values are exported Oberon constants, written by
+  `tools/gen-constants.py`, which takes each value from the installed
+  FLTK's headers. The same script writes `TestConstants`, which checks
+  each Oberon constant against a table compiled against the current
+  headers. So a changed FLTK value fails `make test`, a removed one fails
+  the build, and running the script again picks up the change. A constant
+  FLTK adds appears only once it is added to the script's list.
 - Bit-flag enums (`when`, damage, menu flags, alignment) are `SET`s where
-  every bit is below 32; otherwise integers with documented constants.
+  every bit is below 32; otherwise integers with documented constants. A
+  `SET` crosses to C as `SYSTEM.VAL(SYSTEM.INT32, s)`, not `ORD(s)`
+  (AGENTS.md, "poc 0.3.1 problems").
+- **Names.** FLTK's names in Oberon case, without `FL_`: `UpBox`,
+  `AlignTopLeft`, `HelveticaBold`, `DarkRed`, `WhenRelease`. Two
+  exceptions avoid clashes:
+  - events take the prefix `Ev` (`EvPush`, `EvFocus`), because
+    `Fl::focus()` and `Fl::paste()` will be procedures `Focus` and
+    `Paste`;
+  - a widget's `box()` is `BoxType`/`SetBoxType`, since `Box` is a type,
+    and `Fl::set_color` is `SetIndexColor`, so it doesn't read as a
+    widget's `SetColor`.
+- **Box and label types that FLTK defines on first use** (the macro
+  `FL_ROUND_UP_BOX` is a call of `fl_define_FL_ROUND_UP_BOX()`) are all
+  defined when Fl starts, so their constants are plain values.
 
 ### Halt codes
 
@@ -336,16 +354,43 @@ findings written into this file and AGENTS.md.
    - `prototype/` stays. Its custom drawing (Phase 2's `FlDraw`) and
      buttons (Phase 3's `FlButtons`) are not in `src/` yet. Retire it
      when they are.
-1. **Core object model** (`Fl`):
-   - `Widget`, `Group`, `Window`, `DoubleWindow`, `Box`;
-   - the registry and deletion hook;
-   - `Callback` and `action`;
-   - `Run`, `Wait`, `Check`, timeouts;
-   - labels, colors, fonts, box types, geometry, show/hide,
-     activate/deactivate, tooltips.
+1. **`[done]` Core object model** (`Fl`; 2026-10-06, poc 0.3.1). On top of
+   Phase 0's core:
+   - **Constants**: 188 of them (events, when, box types, label types,
+     alignment, fonts, colors), from `tools/gen-constants.py`.
+   - **Widget**:
+     - label font, size, color and type; box type;
+     - color and selection color; alignment; `when`;
+     - activate, deactivate, `Active`, `ActiveR`, `VisibleR`;
+     - tooltips (copied); position and size; `Parent`.
+   - **Group**: `Add`, `Insert`, `Remove`, `Find`, `Clear` (deferred
+     inside a dispatch, like `Delete`), resizable.
+   - **Window**: `Shown`, `SizeRange`, modal and non-modal, fullscreen.
+     The title is the label, set through `Fl_Window::copy_label`.
+   - **Colors**: `RGB`, `GrayRamp`, `ColorCube` (in Oberon, checked
+     against C), `SetIndexColor`, `GetRGB`, background, background2 and
+     foreground, `ColorAverage`, `Lighter`, `Darker`, `Contrast`,
+     `Inactive`.
+   - **Other globals**: `NormalSize`, schemes.
+   - **Tests**:
+     - `TestConstants` (196 values; a deliberately wrong constant fails
+       it and is named);
+     - `TestWidget` (33 checks).
 
-   Tests: liveness under GC churn; deletion three ways; dead-handle halt;
-   constants against C. Example: hello, the prototype's demo.
+     All pass on Wayland, on Xvfb, and under valgrind (0 errors).
+   - **Example**: `examples/Hello.Mod`, FLTK's `test/hello.cxx`, built by
+     `make`. A screenshot under Xvfb showed it as FLTK draws it: an up
+     box, and a bold italic shadow label of size 36.
+   - **Found**: poc 0.3.1 can't compile `ORD` of a `SET` under `-OC`. Any
+     use emits LLVM `trunc i32 to i32`, which clang rejects; `-O2` is
+     fine. `SYSTEM.VAL(SYSTEM.INT32, s)` gives the same bits, and is used
+     instead (AGENTS.md, "poc 0.3.1 problems").
+   - **Left for later**:
+     - `Fl_Window` icons, `xclass`, and border control;
+     - `Fl::readqueue`;
+     - multi, icon and image labels, which come with images in Phase 7;
+     - the prototype's demo, which needs Phase 2's drawing and Phase 3's
+       buttons.
 2. **Custom widgets and drawing** (`Fl`, `FlDraw`):
    - `Draw`/`Handle`/`Resize` overrides, through a C++ template that
      makes `My_X` for any class;

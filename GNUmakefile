@@ -40,38 +40,49 @@ NATIVE_CXX  := $(shell case "$(POC_VERSION)" in (0.[0-3].*) echo no;; (*) echo y
 MODULES := Fl
 HEADERS := src/ofltk.h
 LIBSRC  := $(MODULES:%=src/%.Mod) $(MODULES:%=src/%.cpp) $(HEADERS)
+# Test modules with a C++ part (test/<Module>.cpp), staged as src's are.
+TESTCXX := CConstants
+TESTSRC := $(TESTCXX:%=test/%.Mod) $(TESTCXX:%=test/%.cpp)
 
 ifeq ($(NATIVE_CXX),yes)
-  SRCDIR := src
-  STAGED :=
-  CXXPOC :=
+  SRCDIR  := src
+  TESTDIR := test
+  STAGED  :=
+  CXXPOC  :=
 else
-  SRCDIR := $(BUILD)/src
-  STAGED := $(MODULES:%=$(SRCDIR)/%.Mod) $(MODULES:%=$(SRCDIR)/%.c) $(HEADERS:src/%=$(SRCDIR)/%)
-  CXXPOC := -c-flag -xc++ -link -lstdc++
+  SRCDIR  := $(BUILD)/src
+  TESTDIR := $(BUILD)/test
+  STAGED  := $(MODULES:%=$(SRCDIR)/%.Mod) $(MODULES:%=$(SRCDIR)/%.c) $(HEADERS:src/%=$(SRCDIR)/%) \
+             $(TESTCXX:%=$(TESTDIR)/%.Mod) $(TESTCXX:%=$(TESTDIR)/%.c)
+  CXXPOC  := -c-flag -xc++ -link -lstdc++
 endif
 
 LINK := $(foreach f,$(FLTK_CXXFLAGS) $(CXXFLAGS),-c-flag $(f)) $(foreach f,$(FLTK_LIBS),-link $(f)) $(CXXPOC)
 
 # Test programs (test/<name>.Mod, each a main module).
-TESTS := TestLiveness TestDelete TestTimer
+TESTS := TestLiveness TestDelete TestTimer TestConstants TestWidget
 # Programs that must halt (test/<name>.Mod), as name:ASSERT-code. poc's
 # ASSERT(x, n) prints "assertion failed (n)" on standard error and exits
 # with status 10, so `make test` requires both.
 HALTTESTS := HaltNotOpen:70 HaltDeleted:70 HaltOpenTwice:71 HaltNil:72 HaltIndex:74 HaltRepeat:75
 ASSERTSTATUS := 10
 
+# Example programs (examples/<name>.Mod). They wait for the user, so make
+# builds them and make test doesn't run them.
+EXAMPLES := Hello
+
 TESTBINS := $(TESTS:%=$(BUILD)/%)
 HALTBINS := $(foreach h,$(HALTTESTS),$(BUILD)/$(firstword $(subst :, ,$(h))))
+EXAMPLEBINS := $(EXAMPLES:%=$(BUILD)/%)
 
 .PHONY: all tests test valgrind test-headless valgrind-headless clean display
 .NOTPARALLEL:
 
 all: tests
 
-tests: $(TESTBINS) $(HALTBINS)
+tests: $(TESTBINS) $(HALTBINS) $(EXAMPLEBINS)
 
-$(BUILD) $(SRCDIR):
+$(BUILD) $(SRCDIR) $(TESTDIR):
 	mkdir -p $@
 
 $(SRCDIR)/%.Mod: src/%.Mod | $(SRCDIR)
@@ -83,8 +94,19 @@ $(SRCDIR)/%.c: src/%.cpp | $(SRCDIR)
 $(SRCDIR)/%.h: src/%.h | $(SRCDIR)
 	cp $< $@
 
-$(BUILD)/Test%: test/Test%.Mod test/Check.Mod $(LIBSRC) $(STAGED) | $(BUILD)
-	$(POC) $(POCFLAGS) -import-path $(SRCDIR) -import-path test -output-dir $(BUILD) $(LINK) -o $@ $<
+ifneq ($(TESTDIR),test)
+$(TESTDIR)/%.Mod: test/%.Mod | $(TESTDIR)
+	cp $< $@
+
+$(TESTDIR)/%.c: test/%.cpp | $(TESTDIR)
+	cp $< $@
+endif
+
+$(BUILD)/Test%: test/Test%.Mod test/Check.Mod $(LIBSRC) $(TESTSRC) $(STAGED) | $(BUILD)
+	$(POC) $(POCFLAGS) -import-path $(SRCDIR) -import-path $(TESTDIR) -import-path test -output-dir $(BUILD) $(LINK) -o $@ $<
+
+$(EXAMPLEBINS): $(BUILD)/%: examples/%.Mod $(LIBSRC) $(STAGED) | $(BUILD)
+	$(POC) $(POCFLAGS) -import-path $(SRCDIR) -output-dir $(BUILD) $(LINK) -o $@ $<
 
 $(BUILD)/Halt%: test/Halt%.Mod $(LIBSRC) $(STAGED) | $(BUILD)
 	$(POC) $(POCFLAGS) -import-path $(SRCDIR) -output-dir $(BUILD) $(LINK) -o $@ $<

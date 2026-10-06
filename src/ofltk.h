@@ -59,6 +59,13 @@ inline intptr_t self_of(Fl_Widget *w) {
   return static_cast<Ref *>(w->user_data())->self;
 }
 
+// The Oberon object of w, or 0 if w is 0 or a widget ofltk didn't open
+// (FLTK makes some itself, such as a scroll group's scrollbars).
+inline intptr_t object_of(Fl_Widget *w) {
+  if (w == 0 || w->callback() != callback_trampoline) return 0;
+  return self_of(w);
+}
+
 // The FLTK class's own draw() and handle(), for the Oberon Draw and
 // Handle defaults to call (FLTKAda's fl_box_draw, for every class).
 class Hooks {

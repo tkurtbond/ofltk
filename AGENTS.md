@@ -20,8 +20,9 @@ anything:
 
 ## Status
 
-As of 2026-10-06, Phase 0 of PLAN.md is done, and Phase 1 is next: `src/`
-has the core of the `Fl` module, and the tests pass. Also kept:
+As of 2026-10-06, Phases 0 and 1 of PLAN.md are done, and Phase 2 is
+next. `src/` has the `Fl` module (Phase 1's scope), and the tests pass.
+Also kept:
 
 - `doc/design.md`: the feasibility analysis.
 - `prototype/`: the object-style sketch `FL.Mod`, its C++ part `FL.c`,
@@ -46,7 +47,14 @@ has the core of the `Fl` module, and the tests pass. Also kept:
 - `test/`:
   - one main module per concern, `Test*.Mod`, using `Check.Mod`;
   - halt tests, `Halt*.Mod`, one per code;
-  - `poc-gc.supp`, and `vg-check.sh` (Valgrind, below).
+  - `poc-gc.supp`, and `vg-check.sh` (Valgrind, below);
+  - `TestConstants.Mod`, `CConstants.Mod` and `CConstants.cpp`, written
+    by `tools/gen-constants.py`. `CConstants` is a test module with a C++
+    part, which the makefile stages as it does `src/`'s.
+- `tools/gen-constants.py`: writes Fl's constants and their test, from
+  FLTK's headers (constants, below).
+- `examples/`: example programs, such as FLTK's hello. `make` builds
+  them; they wait for the user, so `make test` doesn't run them.
 - `GNUmakefile`: build and test (Build, below).
 - `build/`: poc and clang output (ignored by git).
 - `PLAN.md`: design, decisions and findings, by section and phase.
@@ -86,7 +94,14 @@ make clean      # rm -rf build
 - **A new test** needs its name added to `TESTS`, a halt test to
   `HALTTESTS` (as `name:code`).
 - **A new module** needs its name added to `MODULES`, and a new header to
-  `HEADERS`.
+  `HEADERS`. A test module with a C++ part goes in `TESTCXX`, an example
+  in `EXAMPLES`.
+- **Constants**: never edit the block of `src/Fl.Mod` between
+  `BEGIN generated constants` and `END generated constants`. Add the
+  name and C expression to `SPEC` in `tools/gen-constants.py`, then run
+  `python3 tools/gen-constants.py` from the repository root (it needs
+  `clang++` and `fltk-config`). After an FLTK upgrade, run it again, and
+  read the diff: `TestConstants` fails until you do if a value moved.
 - **C++ parts are `src/<Module>.cpp`**, poc 0.4.0's form. With poc 0.3.1,
   detected from `poc -version`, the makefile stages `src/` into
   `build/src/`, renaming each `.cpp` to `.c`, and adds
@@ -220,6 +235,20 @@ held only in C++ memory**.
   `-I/usr/include`.
 - **No memory errors under valgrind** in FLTK's display stack, on either
   back end, only leaks (Valgrind, above).
+
+### poc 0.3.1 problems
+
+Worked around here. Check whether 0.4.0 fixes each, then remove the
+workaround.
+
+- **`ORD` of a `SET` doesn't compile under `-OC`** (2026-10-06). Any use
+  fails: `n := ORD(s)`, passing `ORD(s)` to a `SYSTEM.INT32`, and even
+  assigning it to a `HUGEINT`. poc emits `trunc i32 %x to i32`, which
+  clang rejects ("invalid cast opcode for cast from 'i32' to 'i32'").
+  Under `-O2` all three compile and give the right value. Use
+  `SYSTEM.VAL(SYSTEM.INT32, s)` or `SYSTEM.VAL(INTEGER, s)`, which give
+  the same bits. Reproduction: `MODULE M; VAR s: SET; n: INTEGER; BEGIN
+  s := {0, 2}; n := ORD(s) END M.`, built `poc -OC`.
 
 ### Carried from polibfyaml, re-checked or documented for 0.3.1
 
