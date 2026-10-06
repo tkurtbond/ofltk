@@ -21,6 +21,7 @@ POCFLAGS := -OC
 VALGRIND ?= valgrind --leak-check=full --show-leak-kinds=all --errors-for-leak-kinds=none --error-exitcode=99 --suppressions=$(CURDIR)/test/poc-gc.supp
 # Seconds a test may run before it counts as hung.
 TIMEOUT  ?= 60
+EXAMPLETIME ?= 3
 
 BUILD := build
 
@@ -67,7 +68,7 @@ ASSERTSTATUS := 10
 
 # Example programs (examples/<name>.Mod). They wait for the user, so make
 # builds them and make test doesn't run them.
-EXAMPLES := Hello Scribble Swatch Menus
+EXAMPLES := Hello Scribble Swatch Menus TableSimple TreeSimple TextEditorSimple BrowserSimple GridSimple FlexSimple TabsSimple WizardSimple ProgressSimple NativeFileChooserSimple SvgSimple
 
 TESTBINS := $(TESTS:%=$(BUILD)/%)
 HALTBINS := $(foreach h,$(HALTTESTS),$(BUILD)/$(firstword $(subst :, ,$(h))))
@@ -102,7 +103,9 @@ display:
 
 # Run every test from test/; report all, fail at the end if any failed.
 # Each halt test must exit with poc's ASSERT status and name its code on
-# standard error.
+# standard error. Each example waits for the user, so it must still be
+# running after EXAMPLETIME seconds, when timeout ends it (status 124):
+# it started, drew, and didn't crash.
 test: tests display
 	@status=0; for t in $(TESTS); do \
 	  echo "== $$t"; (cd test && timeout $(TIMEOUT) ../$(BUILD)/$$t) || status=1; \
@@ -113,6 +116,12 @@ test: tests display
 	  if [ $$got -eq $(ASSERTSTATUS) ] && grep -q "assertion failed ($$code)" $(BUILD)/$$t.err; then \
 	    echo "ok   - $$t: $$(cat $(BUILD)/$$t.err)"; \
 	  else echo "FAIL - $$t exited with $$got: $$(cat $(BUILD)/$$t.err)"; status=1; fi; \
+	done; \
+	for e in $(EXAMPLES); do \
+	  echo "== $$e (example: must still be running after $(EXAMPLETIME) s)"; \
+	  (cd examples && timeout $(EXAMPLETIME) ../$(BUILD)/$$e) > $(BUILD)/$$e.out 2>&1; got=$$?; \
+	  if [ $$got -eq 124 ]; then echo "ok   - $$e"; \
+	  else echo "FAIL - $$e exited with $$got: $$(cat $(BUILD)/$$e.out)"; status=1; fi; \
 	done; exit $$status
 
 # Memory errors fail a test (--error-exitcode); leaks don't count as

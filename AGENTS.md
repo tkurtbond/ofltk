@@ -21,8 +21,8 @@ anything:
 
 ## Status
 
-As of 2026-10-06, Phases 0 to 7 of PLAN.md are done, and Phase 8
-(release) is next. `src/` has the `Fl`, `FlDraw`, `FlButtons`,
+As of 2026-10-06, Phases 0 to 8 of PLAN.md are done: the roadmap is
+complete, and `README.md` is the user's guide. `src/` has the `Fl`, `FlDraw`, `FlButtons`,
 `FlInputs`, `FlValuators`, `FlLayout`, `FlMenus`, `FlDialogs`, `FlText`,
 `FlBrowsers`, `FlImages`, `FlPreferences` and `FlTable` modules, and the
 tests pass. Also kept:
@@ -102,11 +102,15 @@ tests pass. Also kept:
   test-sway`, below).
 - `examples/`: example programs (`Hello`, FLTK's hello; `Scribble`,
   drawing with the mouse; `Swatch`, the prototype's demo; `Menus`, a
-  menu bar, a choice and the dialogs). `make` builds them; they wait for the user,
-  so `make test` doesn't run them.
+  menu bar, a choice and the dialogs; and the `...Simple` ports of
+  FLTK's `examples/`). `make` builds them. They wait for the user, so
+  `make test` runs each for `EXAMPLETIME` seconds and checks it is still
+  running then.
 - `GNUmakefile`: build and test (Build, below).
 - `build/`: poc and clang output (ignored by git).
 - `PLAN.md`: design, decisions and findings, by section and phase.
+- `README.md`: for the binding's users: building, installing, the
+  modules and concepts. Keep its example the same as `examples/Hello.Mod`.
 
 ## Reference material
 
@@ -132,7 +136,7 @@ comments that are wrong.
 
 ```sh
 make            # the test programs, into build/
-make test       # every test and halt test; needs a display
+make test       # every test, halt test and example; needs a display
 make valgrind   # the tests under valgrind, then test/vg-check.sh on each log
 make test-headless      # make test on Xvfb, not the desktop
 make valgrind-headless  # make valgrind on Xvfb

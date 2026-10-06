@@ -298,8 +298,9 @@ Tests need a display. FLTK 1.4 opens one even to draw offscreen.
   `test/vg-check.sh` fails on any leaked block whose allocator is
   ofltk's own code.
 - **Examples**: ports of FLTK's `test/` and `examples/` programs, taking
-  FLTKAda's ports as a checklist. Each one that can end by itself is run
-  by `make test`.
+  FLTKAda's ports as a checklist. `make test` runs each, and checks that
+  it is still running after a few seconds, since all wait for the user
+  (Phase 8).
 
 ## Phased roadmap
 
@@ -924,9 +925,34 @@ findings written into this file and AGENTS.md.
      them.
    - Drag and drop is bound but untested (above).
    - `Fl_Preferences`' binary entries and `get_userdata_path`.
-8. **Release.** README, and the examples complete. `make install` as a
-   poc library, and poc 0.4.0's C++ parts and recorded link flags, were
-   done early, once 0.4.0 was installed (2026-10-06; "poc 0.4.0" below).
+8. **`[done]` Release** (2026-10-06, poc 0.4.1, FLTK 1.4.5). `make
+   install` as a poc library, and poc 0.4.0's C++ parts and recorded link
+   flags, were done early, once 0.4.0 was installed ("poc 0.4.0" below).
+   - `README.md`: what ofltk is, requirements, building and testing,
+     installing and using the library, the modules, the concepts
+     (opening, overriding, lifetime, resources, strings, halt codes),
+     and FLTK's problems.
+   - Examples: ports of FLTK's `examples/` programs, one for each module
+     the first four examples left out: `TableSimple`, `TreeSimple`,
+     `TextEditorSimple`, `BrowserSimple`, `GridSimple`, `FlexSimple`,
+     `TabsSimple`, `WizardSimple`, `ProgressSimple`,
+     `NativeFileChooserSimple`, `SvgSimple` (the SVG decoded from
+     memory). Each was looked at under Xvfb against what FLTK's draws,
+     and `ProgressSimple`, `WizardSimple`, `TreeSimple` and
+     `BrowserSimple` were driven with `xdotool`.
+   - `make test` runs every example too: none ends by itself, so each
+     must still be running after `EXAMPLETIME` seconds (3), when
+     `timeout` ends it (status 124). An example that halted at once
+     failed this (checked with a throwaway one).
+   - The README's install instructions were followed in the scratchpad:
+     `poc -OC -library-path <lib>/ofltk` built `TableSimple` alone, and
+     it ran.
+
+   Not done, and why:
+   - The examples aren't run under valgrind: killed by `timeout`, a
+     program frees nothing, so its leak report means nothing.
+   - No larger demo (an editor with files, a spreadsheet): the ports
+     show each module, and `Menus` the dialogs.
 
 ### poc 0.4.0 `[done]`
 
