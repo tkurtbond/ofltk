@@ -1,0 +1,137 @@
+# ofltk -- Oberon-2 binding to FLTK 1.4 for poc, the Peaseblossom Oberon
+# Compiler.  See AGENTS.md and PLAN.md.
+#
+# poc builds a program from its main module's source, finding the modules
+# it imports on the import path (src/, plus test/), and compiles every one
+# of them again on each build; a module's C++ part, src/<Module>.cpp, is
+# compiled and linked with it. What it writes - each module's .sym, .ll and
+# .o, and the programs - goes into $(BUILD), so make must not build two at
+# once.
+#
+# poc 0.4.0 compiles <Module>.cpp itself and links with clang++. Earlier
+# pocs know only <Module>.c, so for them each module is staged into
+# $(BUILD)/src with its part renamed .c, compiled as C++ (-xc++) and
+# linked with -lstdc++. Delete the staging once 0.4.0 is the oldest poc
+# ofltk supports.
+
+POC      ?= poc
+# The size model: decided in PLAN.md; never mix models.
+POCFLAGS := -OC
+VALGRIND ?= valgrind --leak-check=full --show-leak-kinds=all --errors-for-leak-kinds=none --error-exitcode=99 --suppressions=$(CURDIR)/test/poc-gc.supp
+# Seconds a test may run before it counts as hung.
+TIMEOUT  ?= 60
+
+BUILD := build
+
+FLTK_CONFIG ?= fltk-config
+# Only the -I and -D flags: the rest of --cxxflags is the distribution's
+# own build flags (Fedora's -specs=... hardening files among them). Not
+# -I/usr/include, which is searched anyway, and which ahead of the C++
+# library's own directories breaks its #include_next.
+FLTK_CXXFLAGS := $(filter-out -I/usr/include,$(filter -I% -D%,$(shell $(FLTK_CONFIG) --cxxflags)))
+FLTK_LIBS     := $(shell $(FLTK_CONFIG) --ldflags)
+# C++11, as FLTKAda's shim is, so code can move between them.
+CXXFLAGS      := -std=c++11 -Wall -Wextra -Werror
+
+POC_VERSION := $(shell $(POC) -version | sed -n 's/^poc \([0-9.]*\).*/\1/p')
+# The case patterns are written (pattern) so make sees balanced parentheses.
+NATIVE_CXX  := $(shell case "$(POC_VERSION)" in (0.[0-3].*) echo no;; (*) echo yes;; esac)
+
+MODULES := Fl
+HEADERS := src/ofltk.h
+LIBSRC  := $(MODULES:%=src/%.Mod) $(MODULES:%=src/%.cpp) $(HEADERS)
+
+ifeq ($(NATIVE_CXX),yes)
+  SRCDIR := src
+  STAGED :=
+  CXXPOC :=
+else
+  SRCDIR := $(BUILD)/src
+  STAGED := $(MODULES:%=$(SRCDIR)/%.Mod) $(MODULES:%=$(SRCDIR)/%.c) $(HEADERS:src/%=$(SRCDIR)/%)
+  CXXPOC := -c-flag -xc++ -link -lstdc++
+endif
+
+LINK := $(foreach f,$(FLTK_CXXFLAGS) $(CXXFLAGS),-c-flag $(f)) $(foreach f,$(FLTK_LIBS),-link $(f)) $(CXXPOC)
+
+# Test programs (test/<name>.Mod, each a main module).
+TESTS := TestLiveness TestDelete TestTimer
+# Programs that must halt (test/<name>.Mod), as name:ASSERT-code. poc's
+# ASSERT(x, n) prints "assertion failed (n)" on standard error and exits
+# with status 10, so `make test` requires both.
+HALTTESTS := HaltNotOpen:70 HaltDeleted:70 HaltOpenTwice:71 HaltNil:72 HaltIndex:74 HaltRepeat:75
+ASSERTSTATUS := 10
+
+TESTBINS := $(TESTS:%=$(BUILD)/%)
+HALTBINS := $(foreach h,$(HALTTESTS),$(BUILD)/$(firstword $(subst :, ,$(h))))
+
+.PHONY: all tests test valgrind test-headless valgrind-headless clean display
+.NOTPARALLEL:
+
+all: tests
+
+tests: $(TESTBINS) $(HALTBINS)
+
+$(BUILD) $(SRCDIR):
+	mkdir -p $@
+
+$(SRCDIR)/%.Mod: src/%.Mod | $(SRCDIR)
+	cp $< $@
+
+$(SRCDIR)/%.c: src/%.cpp | $(SRCDIR)
+	cp $< $@
+
+$(SRCDIR)/%.h: src/%.h | $(SRCDIR)
+	cp $< $@
+
+$(BUILD)/Test%: test/Test%.Mod test/Check.Mod $(LIBSRC) $(STAGED) | $(BUILD)
+	$(POC) $(POCFLAGS) -import-path $(SRCDIR) -import-path test -output-dir $(BUILD) $(LINK) -o $@ $<
+
+$(BUILD)/Halt%: test/Halt%.Mod $(LIBSRC) $(STAGED) | $(BUILD)
+	$(POC) $(POCFLAGS) -import-path $(SRCDIR) -output-dir $(BUILD) $(LINK) -o $@ $<
+
+# FLTK needs a display even for widgets never shown (PLAN.md, "Build and
+# test"): run under X11 or Wayland, or headless (test-headless below).
+display:
+	@if [ -z "$$DISPLAY$$WAYLAND_DISPLAY" ]; then \
+	  echo "ofltk's tests need a display: set DISPLAY or WAYLAND_DISPLAY, or use make test-headless"; exit 1; \
+	fi
+
+# Run every test from test/; report all, fail at the end if any failed.
+# Each halt test must exit with poc's ASSERT status and name its code on
+# standard error.
+test: tests display
+	@status=0; for t in $(TESTS); do \
+	  echo "== $$t"; (cd test && timeout $(TIMEOUT) ../$(BUILD)/$$t) || status=1; \
+	done; \
+	for h in $(HALTTESTS); do \
+	  t=$${h%%:*}; code=$${h##*:}; echo "== $$t (must fail ASSERT code $$code)"; \
+	  (cd test && timeout $(TIMEOUT) ../$(BUILD)/$$t) 2> $(BUILD)/$$t.err; got=$$?; \
+	  if [ $$got -eq $(ASSERTSTATUS) ] && grep -q "assertion failed ($$code)" $(BUILD)/$$t.err; then \
+	    echo "ok   - $$t: $$(cat $(BUILD)/$$t.err)"; \
+	  else echo "FAIL - $$t exited with $$got: $$(cat $(BUILD)/$$t.err)"; status=1; fi; \
+	done; exit $$status
+
+# Memory errors fail a test (--error-exitcode); leaks don't count as
+# errors (--errors-for-leak-kinds=none), because FLTK's font cache and
+# window decorations leak by design. test/vg-check.sh fails instead on any
+# leaked block that ofltk allocated.
+valgrind: tests display
+	@status=0; for t in $(TESTS); do \
+	  echo "== valgrind $$t"; \
+	  (cd test && $(VALGRIND) --log-file=../$(BUILD)/$$t.vg ../$(BUILD)/$$t) || status=1; \
+	  grep -E 'ERROR SUMMARY' $(BUILD)/$$t.vg; \
+	  test/vg-check.sh $(BUILD)/$$t.vg || { echo "FAIL - $$t: memory ofltk allocated was not freed"; status=1; }; \
+	done; exit $$status
+
+# The same, on a virtual X server (Xvfb), not the desktop. WAYLAND_DISPLAY
+# is unset because FLTK prefers Wayland when it is set, even under
+# xvfb-run, which sets only DISPLAY; without it FLTK uses X11 (confirmed,
+# PLAN.md Phase 0).
+test-headless: tests
+	env -u WAYLAND_DISPLAY xvfb-run -a $(MAKE) test
+
+valgrind-headless: tests
+	env -u WAYLAND_DISPLAY xvfb-run -a $(MAKE) valgrind
+
+clean:
+	rm -rf $(BUILD)

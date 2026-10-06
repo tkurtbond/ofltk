@@ -5,3 +5,6 @@
 .~
 .~*\#
 \#*\#
+
+# poc/clang output (.sym, .ll, .o, test programs, valgrind logs): see GNUmakefile
+/build/

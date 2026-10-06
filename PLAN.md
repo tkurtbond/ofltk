@@ -138,9 +138,8 @@ This is the hard part; `doc/design.md` has the failures that motivate it.
   widget.
 - **The registry.** Every opened widget is reachable from a module-level
   root in `Fl` until its C++ widget is destroyed, since poc's collector
-  never sees pointers that only C++ memory holds. The prototype's linked
-  list is O(n) to remove from. Use a doubly linked list, or keep each
-  widget's slot index in its record.
+  never sees pointers that only C++ memory holds. It is a doubly linked
+  list (the prototype's singly linked one was O(n) to remove from).
 - **The deletion hook.** `user_data()` points at a small C++ object,
   derived from `Fl_Callback_User_Data`, that holds the Oberon widget's
   address. With `AUTO_DELETE_USER_DATA`, FLTK deletes it when the widget
@@ -148,14 +147,19 @@ This is the hard part; `doc/design.md` has the failures that motivate it.
   with its parent, or by `Fl::delete_widget` after a callback). Its
   destructor tells `Fl` to unregister the widget and zero its handle. The
   `My_X` subclasses then need no destructors of their own.
-  - **To confirm in Phase 0:** that it fires for children deleted with
-    their group, and that nothing else in FLTK takes `user_data()` over.
-- **Dead handles.** A method on a widget whose handle is 0 is a programmer
-  error, an `ASSERT` with a distinct code (see "Halt codes"). `IsAlive()`
-  lets a program ask first. This replaces the prototype's silent no-op
-  `Redraw`.
-- **Deleting during a callback** goes through `Fl::delete_widget`
-  (deferred), as FLTKAda's `fl_inside_callback` guard does.
+  - Confirmed in Phase 0 for all of these, and for a shown window.
+    Replacing the user data also deletes the old one, so it is set once.
+  - **For each class bound**, check in the FLTK source that the class
+    doesn't set its own `user_data()` or callback. If it does, the
+    deletion hook would be lost.
+- **Dead handles.** A method of a widget that isn't open (never opened,
+  or deleted) is a programmer error, `ASSERT` code 70 (see "Halt codes").
+  `IsOpen()` lets a program ask first. This replaces the prototype's
+  silent no-op `Redraw`.
+- **Deleting during a dispatch** goes through `Fl::delete_widget`
+  (deferred), as FLTKAda's `fl_inside_callback` guard does. A dispatch is
+  a `Callback`, `Draw`, `Handle` or `Fire`, counted in `ofl::depth`. At
+  any other time `Delete` deletes at once.
 - **Resources Oberon owns** (`TextBuffer`, `Image`, `Preferences`) follow
   polibfyaml's `Document` rule:
   - explicit `Close` as the primary cleanup, idempotent, setting the
@@ -210,11 +214,12 @@ Programmer errors halt, as in polibfyaml. poc's `ASSERT(x, n)` prints
 
 | Code | Meaning |
 |---|---|
-| 70 | a method on a deleted (dead) widget |
-| 71 | a widget opened twice |
-| 72 | a NIL argument where a widget or resource is required |
+| 70 | a method of a widget that isn't open: never opened, or deleted (`Fl.NotOpen`) |
+| 71 | a widget opened twice (`Fl.OpenedTwice`) |
+| 72 | a NIL argument where a widget or timer is required (`Fl.NilArgument`) |
 | 73 | a closed resource used |
-| 74 | an index out of range (group child, browser line, menu item) |
+| 74 | an index out of range: group child, browser line, menu item (`Fl.IndexOutOfRange`) |
+| 75 | `RepeatTimeout` outside its own timer's `Fire` (`Fl.NotFiring`) |
 
 Bad data from outside the program is never a halt: an image that fails
 to load, a file chooser cancelled. Those come back as `BOOLEAN` results.
@@ -222,22 +227,25 @@ to load, a file chooser cancelled. Those come back as `BOOLEAN` results.
 ## Build and test
 
 `GNUmakefile`, modelled on polibfyaml's:
-- `make`, `make test`, `make valgrind`, `make clean`, and
+- `make`, `make test`, `make valgrind`, `make clean`; later
   `make install`/`uninstall` (the poc library `ofltk`, `-OC`);
 - output in `build/`, `.NOTPARALLEL`;
-- `FLTK_CFLAGS`/`FLTK_LIBS` from `fltk-config`, passed as
+- `fltk-config`'s `-I`/`-D` flags and `--ldflags`, passed as
   `-c-flag`/`-link`;
-- every `.Mod` with a C++ part compiled with `-c-flag -xc++` until poc
-  takes C++ parts directly.
+- C++ parts are `src/<Module>.cpp`, as poc 0.4.0 takes them. With an
+  older poc, detected from `poc -version`, the makefile stages each
+  module into `build/src/` with its part renamed `.c`, and adds
+  `-c-flag -xc++ -link -lstdc++`.
 
 Tests need a display. FLTK 1.4 opens one even to draw offscreen.
 
 - **Where tests run.** `make test` needs `DISPLAY` or `WAYLAND_DISPLAY`
-  and stops with a message if neither is set. Headless runs use
-  `xvfb-run` (package `xorg-x11-server-Xvfb`, not installed now) with
-  FLTK forced onto X11.
-  - **To confirm in Phase 0:** that `FLTK_BACKEND=x11` does that in
-    1.4.5.
+  and stops with a message if neither is set. `make test-headless` and
+  `make valgrind-headless` run them on Xvfb: `xvfb-run` (package
+  `xorg-x11-server-Xvfb`) with `WAYLAND_DISPLAY` unset. FLTK prefers
+  Wayland whenever `WAYLAND_DISPLAY` is set, even under `xvfb-run`, which
+  sets only `DISPLAY`. Unset, FLTK uses X11 by itself; `FLTK_BACKEND=x11`
+  forces X11 regardless.
 - **Behaviour tests** need no clicks. They drive the program the way the
   prototype's `Demo` does:
   - `do_callback`, and `Fl::handle` with synthesized events;
@@ -248,12 +256,13 @@ Tests need a display. FLTK 1.4 opens one even to draw offscreen.
   pixels, so `Draw` overrides are tested by value, not by eye.
 - **Liveness tests** force `GarbageCollectedHeap.Collect` between steps.
   They check that widgets held only by FLTK survive, and that deleted
-  ones leave the registry (`Fl.LiveCount`).
+  ones leave the registry (`Fl.OpenWidgets`).
 - **Halt tests**: one small program per code, as `test/Halt*.Mod`.
-- **Valgrind**: needs polibfyaml's `poc-gc.supp`, plus suppressions for
-  FLTK's own and its display stack's one-time allocations (fontconfig,
-  Wayland or X11, Cairo). Keep those narrow, and write down each one's
-  reason.
+- **Valgrind**: polibfyaml's `poc-gc.supp`, and no suppressions for
+  FLTK, whose display stack leaks too much to list (Phase 0). Memory
+  errors fail a test. Leaks don't count as valgrind errors; instead
+  `test/vg-check.sh` fails on any leaked block whose allocator is
+  ofltk's own code.
 - **Examples**: ports of FLTK's `test/` and `examples/` programs, taking
   FLTKAda's ports as a checklist. Each one that can end by itself is run
   by `make test`.
@@ -263,18 +272,70 @@ Tests need a display. FLTK 1.4 opens one even to draw offscreen.
 Each phase ends with every test passing, `make valgrind` clean, and its
 findings written into this file and AGENTS.md.
 
-0. **Skeleton and the deciding experiments.**
-   - Set up the repo:
-     - `GNUmakefile`, `.gitignore` (`build/`), `.gitattributes`;
-     - `test/Check.Mod` (polibfyaml's).
-   - Confirm by experiment, before building on them:
-     - the `AUTO_DELETE_USER_DATA` deletion hook, for explicit deletion,
-       deletion with the parent, and `Fl::delete_widget`;
-     - `FLTK_BACKEND=x11` under `xvfb-run`;
-     - pixel checks through `Fl_Image_Surface`;
-     - valgrind on a minimal window, and the suppressions it needs.
-   - Move the prototype's working parts into `src/`. Retire `prototype/`
-     once nothing in it is unique.
+0. **`[done]` Skeleton and the deciding experiments** (2026-10-06, poc
+   0.3.1, FLTK 1.4.5, Fedora 44 under Wayland).
+   - `GNUmakefile` (see "Build and test"), `build/` in `.gitignore`,
+     `test/Check.Mod` and `test/poc-gc.supp` from polibfyaml, and
+     `test/vg-check.sh`.
+   - `src/Fl.Mod`, `src/Fl.cpp` and `src/ofltk.h`: the core of Phase 1,
+     enough to test the object model. It has:
+     - `Widget`, `Group`, `Window`, `DoubleWindow`, `Box`;
+     - the registry, a doubly linked list, and the deletion hook;
+     - `Callback` and `action`, `Draw`, `Handle`;
+     - `Child`, which finds a child's Oberon object through FLTK;
+     - labels (copied), geometry, show, hide;
+     - `Run`, `Check`, `Wait`, and `Timer` with add, repeat and remove.
+   - Tests: `TestLiveness` (5 checks), `TestDelete` (12), `TestTimer`
+     (8), and 6 halt tests, one per code 70, 71, 72, 74 and 75 (70
+     twice). All pass under Wayland and under `FLTK_BACKEND=x11`, and
+     `make valgrind` is clean: 0 errors.
+   - **The tests catch what they're for.** In a scratch copy:
+     - with the registry no longer a root, `TestLiveness` failed and then
+       crashed calling a freed object's callback, the original bug;
+     - with `AUTO_DELETE_USER_DATA` off, 9 checks failed;
+     - a program that never deletes its box failed `make valgrind`.
+
+   Findings, confirmed live (C++ programs in the scratchpad, then the
+   tests above):
+   - **The deletion hook covers every way a widget dies**:
+     - explicit `delete`;
+     - with its parent group, at any depth;
+     - `Fl::delete_widget` from inside its own callback, at the next
+       `Fl::check`;
+     - a shown top-level window, with its children.
+   - **Replacing a widget's user data deletes the old one** (FLTK frees
+     the previous `Fl_Callback_User_Data`), which would unregister a live
+     widget. So `ofl::open` sets it once, and nothing sets it again.
+   - **The callback must be ofltk's for every widget**, so FLTK's own
+     defaults are bound for the Oberon defaults to call:
+     `Fl_Widget::default_callback` queues the widget for
+     `Fl::readqueue`, and `Fl_Window::default_callback` calls
+     `Fl::atclose`, which hides the window.
+   - **`FLTK_BACKEND=x11` switches FLTK 1.4.5 to X11**, checked with
+     `fl_x11_display()`/`fl_wl_display()`; here it goes through XWayland.
+     With no display at all, FLTK prints "Can't open display" and exits
+     1.
+   - **Headless runs work on Xvfb**, and the tests pass there, including
+     under valgrind. But a plain `xvfb-run` in a Wayland session leaves
+     `WAYLAND_DISPLAY` set, and FLTK then quietly uses the real desktop.
+     Hence `make test-headless`, which unsets it.
+   - **Pixel checks work**: a widget never shown, drawn into an
+     `Fl_Image_Surface`, reads back exactly (`FL_RED` is 255,0,0), under
+     both back ends. Binding it is Phase 2's.
+   - **FLTK's display stack leaks by design.** A C++ program that deletes
+     everything it makes shows about 390 KB "definitely lost" and 1,225
+     (X11) or 8,559 (Wayland) loss records, all allocated by fontconfig
+     and Pango's font cache, and under Wayland by GTK's window
+     decorations. It shows **no memory errors** on either back end. Hence
+     `vg-check.sh`'s rule above, rather than suppressions.
+   - `fltk-config --cxxflags` includes `-I/usr/include` and Fedora's
+     build flags, so the makefile passes only its `-I`/`-D` flags, without
+     `-I/usr/include`.
+
+   Not done, and why:
+   - `prototype/` stays. Its custom drawing (Phase 2's `FlDraw`) and
+     buttons (Phase 3's `FlButtons`) are not in `src/` yet. Retire it
+     when they are.
 1. **Core object model** (`Fl`):
    - `Widget`, `Group`, `Window`, `DoubleWindow`, `Box`;
    - the registry and deletion hook;
