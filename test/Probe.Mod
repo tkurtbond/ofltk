@@ -9,6 +9,7 @@ PROCEDURE ["C", "ofltest_pixel"] CPixel(x, y: SYSTEM.INT32): SYSTEM.INT32;
 PROCEDURE ["C", "ofltest_release"] CRelease;
 PROCEDURE ["C", "ofltest_mouse"] CMouse(win: SYSTEM.ADDRESS; event, x, y, button, state, clicks: SYSTEM.INT32): SYSTEM.INT32;
 PROCEDURE ["C", "ofltest_wheel"] CWheel(win: SYSTEM.ADDRESS; x, y, dx, dy: SYSTEM.INT32): SYSTEM.INT32;
+PROCEDURE ["C", "ofltest_shortcut"] CShortcut(win: SYSTEM.ADDRESS; key, state: SYSTEM.INT32; s: ARRAY OF CHAR): SYSTEM.INT32;
 PROCEDURE ["C", "ofltest_key"] CKey(event, key, state: SYSTEM.INT32; s: ARRAY OF CHAR): SYSTEM.INT32;
 
 (* Draws w, as FLTK would in its window, on white, for Pixel; TRUE if
@@ -48,5 +49,11 @@ END Wheel;
 PROCEDURE Key*(event, key: INTEGER; state: SET; text-: ARRAY OF CHAR): BOOLEAN;
 BEGIN RETURN CKey(event, key, SYSTEM.VAL(SYSTEM.INT32, state), text) # 0
 END Key;
+
+(* A key offered to win's widgets as a shortcut, as FLTK offers one the
+   focus doesn't use; TRUE if one used it. *)
+PROCEDURE Shortcut*(win: Fl.Window; key: INTEGER; state: SET; text-: ARRAY OF CHAR): BOOLEAN;
+BEGIN RETURN CShortcut(win.h, key, SYSTEM.VAL(SYSTEM.INT32, state), text) # 0
+END Shortcut;
 
 END Probe.

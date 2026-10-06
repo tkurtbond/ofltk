@@ -423,8 +423,11 @@ PROCEDURE ["C", "ofl_widget_base_resize"] CBaseResize(w: SYSTEM.ADDRESS; x, y, w
 PROCEDURE ["C", "ofl_widget_draw_box"] CDrawBox(w: SYSTEM.ADDRESS);
 PROCEDURE ["C", "ofl_widget_draw_label"] CDrawLabel(w: SYSTEM.ADDRESS);
 PROCEDURE ["C", "ofl_widget_draw_focus"] CDrawFocus(w: SYSTEM.ADDRESS);
+PROCEDURE ["C", "ofl_widget_changed"] CChanged(w: SYSTEM.ADDRESS): SYSTEM.INT32;
+PROCEDURE ["C", "ofl_widget_set_changed"] CSetChanged(w: SYSTEM.ADDRESS; c: SYSTEM.INT32);
 PROCEDURE ["C", "ofl_widget_damage"] CDamage(w: SYSTEM.ADDRESS): SYSTEM.INT32;
 PROCEDURE ["C", "ofl_widget_set_damage"] CSetDamage(w: SYSTEM.ADDRESS; d: SYSTEM.INT32);
+PROCEDURE ["C", "ofl_widget_clear_damage"] CClearDamage(w: SYSTEM.ADDRESS);
 PROCEDURE ["C", "ofl_widget_take_focus"] CTakeFocus(w: SYSTEM.ADDRESS): SYSTEM.INT32;
 PROCEDURE ["C", "ofl_widget_visible_focus"] CVisibleFocus(w: SYSTEM.ADDRESS): SYSTEM.INT32;
 PROCEDURE ["C", "ofl_widget_set_visible_focus"] CSetVisibleFocus(w: SYSTEM.ADDRESS; v: SYSTEM.INT32);
@@ -550,8 +553,9 @@ BEGIN
   w.prev := NIL; w.next := NIL; DEC(openCount)
 END Unregister;
 
-(* The handle of w, which must be open. *)
-PROCEDURE Live(w: Widget): SYSTEM.ADDRESS;
+(* The handle of w, which must be open: for ofltk's modules, whose
+   methods pass it to their C++ part. *)
+PROCEDURE Live*(w: Widget): SYSTEM.ADDRESS;
 BEGIN
   ASSERT(w # NIL, NilArgument); ASSERT(w.state = open, NotOpen);
   RETURN w.h
@@ -838,6 +842,19 @@ PROCEDURE (w: Widget) DrawFocus*;
 BEGIN CDrawFocus(Live(w))
 END DrawFocus;
 
+(* TRUE if the user has changed w's value: FLTK sets it before running
+   the Callback for a change, and clears it when the Callback returns, or
+   the program sets the value. So it tells a Callback whether it runs for
+   a change. *)
+PROCEDURE (w: Widget) Changed*(): BOOLEAN;
+BEGIN RETURN CChanged(Live(w)) # 0
+END Changed;
+
+PROCEDURE (w: Widget) SetChanged*(c: BOOLEAN);
+BEGIN
+  IF c THEN CSetChanged(Live(w), 1) ELSE CSetChanged(Live(w), 0) END
+END SetChanged;
+
 (* What needs redrawing: a set of the Damage constants, {} for nothing.
    Redraw sets DamageAll. *)
 PROCEDURE (w: Widget) Damage*(): SET;
@@ -848,6 +865,12 @@ END Damage;
 PROCEDURE (w: Widget) SetDamage*(d: SET);
 BEGIN CSetDamage(Live(w), SYSTEM.VAL(SYSTEM.INT32, d))
 END SetDamage;
+
+(* Sets what needs redrawing to {}, without redrawing: FLTK does this
+   after a Draw. *)
+PROCEDURE (w: Widget) ClearDamage*;
+BEGIN CClearDamage(Live(w))
+END ClearDamage;
 
 (* Gives w the keyboard focus, if it takes it: TRUE if it did. *)
 PROCEDURE (w: Widget) TakeFocus*(): BOOLEAN;

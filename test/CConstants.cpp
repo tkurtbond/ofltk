@@ -4,6 +4,12 @@
 #include <FL/Fl.H>
 #include <FL/Enumerations.H>
 #include <FL/fl_draw.H>
+#include <FL/Fl_Button.H>
+#include <FL/Fl_Counter.H>
+#include <FL/Fl_Dial.H>
+#include <FL/Fl_Input_.H>
+#include <FL/Fl_Slider.H>
+#include <FL/Fl_Valuator.H>
 #include <stdint.h>
 #include <stdio.h>
 #include <string.h>
@@ -320,6 +326,25 @@ const Entry entries[] = {
   {"FL_JOIN_MITER", (int32_t)(FL_JOIN_MITER)},
   {"FL_JOIN_ROUND", (int32_t)(FL_JOIN_ROUND)},
   {"FL_JOIN_BEVEL", (int32_t)(FL_JOIN_BEVEL)},
+  {"FL_NORMAL_BUTTON", (int32_t)(FL_NORMAL_BUTTON)},
+  {"FL_TOGGLE_BUTTON", (int32_t)(FL_TOGGLE_BUTTON)},
+  {"FL_RADIO_BUTTON", (int32_t)(FL_RADIO_BUTTON)},
+  {"FL_HIDDEN_BUTTON", (int32_t)(FL_HIDDEN_BUTTON)},
+  {"FL_VERTICAL", (int32_t)(FL_VERTICAL)},
+  {"FL_HORIZONTAL", (int32_t)(FL_HORIZONTAL)},
+  {"FL_VERT_SLIDER", (int32_t)(FL_VERT_SLIDER)},
+  {"FL_HOR_SLIDER", (int32_t)(FL_HOR_SLIDER)},
+  {"FL_VERT_FILL_SLIDER", (int32_t)(FL_VERT_FILL_SLIDER)},
+  {"FL_HOR_FILL_SLIDER", (int32_t)(FL_HOR_FILL_SLIDER)},
+  {"FL_VERT_NICE_SLIDER", (int32_t)(FL_VERT_NICE_SLIDER)},
+  {"FL_HOR_NICE_SLIDER", (int32_t)(FL_HOR_NICE_SLIDER)},
+  {"FL_NORMAL_DIAL", (int32_t)(FL_NORMAL_DIAL)},
+  {"FL_LINE_DIAL", (int32_t)(FL_LINE_DIAL)},
+  {"FL_FILL_DIAL", (int32_t)(FL_FILL_DIAL)},
+  {"FL_NORMAL_COUNTER", (int32_t)(FL_NORMAL_COUNTER)},
+  {"FL_SIMPLE_COUNTER", (int32_t)(FL_SIMPLE_COUNTER)},
+  {"FL_INT_INPUT", (int32_t)(FL_INT_INPUT)},
+  {"FL_FLOAT_INPUT", (int32_t)(FL_FLOAT_INPUT)},
   {"fl_gray_ramp(0)", (int32_t)(fl_gray_ramp(0))},
   {"fl_gray_ramp(23)", (int32_t)(fl_gray_ramp(23))},
   {"fl_color_cube(0, 0, 0)", (int32_t)(fl_color_cube(0, 0, 0))},

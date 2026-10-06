@@ -7,6 +7,7 @@
 #include <FL/Fl_Double_Window.H>
 #include <FL/Fl_Group.H>
 #include <FL/Fl_Window.H>
+#include <FL/platform.H>
 
 namespace ofl {
 
@@ -166,13 +167,31 @@ void ofl_widget_draw_focus(intptr_t w) {
   dynamic_cast<ofl::Hooks *>(ofl::widget(w))->hook_draw_focus();
 }
 
+int32_t ofl_widget_changed(intptr_t w) {
+  return ofl::widget(w)->changed() ? 1 : 0;
+}
+
+void ofl_widget_set_changed(intptr_t w, int32_t c) {
+  if (c) {
+    ofl::widget(w)->set_changed();
+  } else {
+    ofl::widget(w)->clear_changed();
+  }
+}
+
 int32_t ofl_widget_damage(intptr_t w) { return ofl::widget(w)->damage(); }
 
 void ofl_widget_set_damage(intptr_t w, int32_t d) {
   ofl::widget(w)->damage(static_cast<uchar>(d));
 }
 
+void ofl_widget_clear_damage(intptr_t w) { ofl::widget(w)->clear_damage(); }
+
+// The display is opened first: under Wayland, FLTK 1.4.5 crashes when a
+// text input takes the focus before it is open (doc/fltk-issues.md).
+// fl_open_display does nothing if it is open already.
 int32_t ofl_widget_take_focus(intptr_t w) {
+  fl_open_display();
   return ofl::widget(w)->take_focus();
 }
 
@@ -468,8 +487,11 @@ intptr_t ofl_focus(void) { return ofl::object_of(Fl::focus()); }
 intptr_t ofl_belowmouse(void) { return ofl::object_of(Fl::belowmouse()); }
 intptr_t ofl_pushed(void) { return ofl::object_of(Fl::pushed()); }
 
-// w is 0 for none.
-void ofl_set_focus(intptr_t w) { Fl::focus(ofl::widget(w)); }
+// w is 0 for none. The display is opened first, as for take_focus.
+void ofl_set_focus(intptr_t w) {
+  fl_open_display();
+  Fl::focus(ofl::widget(w));
+}
 
 // The event loop
 

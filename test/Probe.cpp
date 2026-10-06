@@ -27,6 +27,7 @@ int32_t send(intptr_t win, int32_t event) {
 
 extern "C" {
 
+
 // Draws w as FLTK would in its window, on white, into an image of w's
 // size, for ofltest_pixel. The window need not be shown.
 int32_t ofltest_capture(intptr_t w) {
@@ -106,6 +107,25 @@ int32_t ofltest_key(int32_t event, int32_t key, int32_t state,
   Fl::e_length = static_cast<int>(strlen(text));
   Fl::e_number = event;
   int32_t r = focus->handle(event);
+  Fl::e_text = old_text;
+  Fl::e_length = old_length;
+  return r;
+}
+
+// A key, typing s, offered to win and its widgets as a shortcut (as
+// FLTK offers a key the focus doesn't use): FL_SHORTCUT sent to win's
+// handle(), which an Fl_Group passes to each child.
+int32_t ofltest_shortcut(intptr_t win, int32_t key, int32_t state,
+                         const char *s) {
+  char *old_text = Fl::e_text;
+  int old_length = Fl::e_length;
+  strncpy(text, s, sizeof text - 1);
+  Fl::e_keysym = Fl::e_original_keysym = key;
+  Fl::e_state = state;
+  Fl::e_text = text;
+  Fl::e_length = static_cast<int>(strlen(text));
+  Fl::e_number = FL_SHORTCUT;
+  int32_t r = widget(win)->handle(FL_SHORTCUT);
   Fl::e_text = old_text;
   Fl::e_length = old_length;
   return r;

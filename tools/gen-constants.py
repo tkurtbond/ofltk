@@ -155,6 +155,25 @@ add("int", [(camel(c), "FL_" + c) for c in
             """SOLID DASH DOT DASHDOT DASHDOTDOT CAP_FLAT CAP_ROUND CAP_SQUARE
             JOIN_MITER JOIN_ROUND JOIN_BEVEL""".split()])
 
+module("FlButtons")
+section("kinds of button (Button.SetKind); not ToggleButton and RadioButton, the types")
+add("int", [("Normal", "FL_NORMAL_BUTTON"), ("Toggle", "FL_TOGGLE_BUTTON"),
+            ("Radio", "FL_RADIO_BUTTON"), ("Hidden", "FL_HIDDEN_BUTTON")])
+
+module("FlValuators")
+section("kinds of valuator (Valuator.SetKind): of a roller, scrollbar or other valuator")
+add("int", [("Vertical", "FL_VERTICAL"), ("Horizontal", "FL_HORIZONTAL")])
+section("of a slider or value slider")
+add("int", [(camel(k), "FL_" + k) for k in
+            """VERT_SLIDER HOR_SLIDER VERT_FILL_SLIDER HOR_FILL_SLIDER
+            VERT_NICE_SLIDER HOR_NICE_SLIDER""".split()])
+section("of a dial")
+add("int", [(camel(k), "FL_" + k) for k in "NORMAL_DIAL LINE_DIAL FILL_DIAL".split()])
+section("of a counter")
+add("int", [(camel(k), "FL_" + k) for k in "NORMAL_COUNTER SIMPLE_COUNTER".split()])
+section("of a spinner (Spinner.SetKind): whole numbers, or real ones")
+add("int", [("IntSpinner", "FL_INT_INPUT"), ("FloatSpinner", "FL_FLOAT_INPUT")])
+
 # Not constants of Fl, but values the test also checks against C: what Fl's
 # procedures compute in Oberon.
 CHECKS = [
@@ -168,6 +187,8 @@ CHECKS = [
 ]
 
 HEADERS = ("#include <FL/Fl.H>\n#include <FL/Enumerations.H>\n#include <FL/fl_draw.H>\n"
+           "#include <FL/Fl_Button.H>\n#include <FL/Fl_Counter.H>\n#include <FL/Fl_Dial.H>\n"
+           "#include <FL/Fl_Input_.H>\n#include <FL/Fl_Slider.H>\n#include <FL/Fl_Valuator.H>\n"
            "#include <stdint.h>\n#include <stdio.h>\n")
 
 def oberon_set(v):

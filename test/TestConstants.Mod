@@ -4,7 +4,7 @@ MODULE TestConstants; (* ofltk's constants are FLTK's *)
    value the installed FLTK's headers give (CConstants). A failure means
    FLTK's headers changed: run the script again, and see what moved. *)
 
-IMPORT SYSTEM, Out, Fl, FlDraw, Check, CConstants;
+IMPORT SYSTEM, Out, Fl, FlDraw, FlButtons, FlValuators, Check, CConstants;
 
 VAR checked, wrong: INTEGER;
 
@@ -323,6 +323,25 @@ BEGIN
   Same(FlDraw.JoinMiter, "FL_JOIN_MITER");
   Same(FlDraw.JoinRound, "FL_JOIN_ROUND");
   Same(FlDraw.JoinBevel, "FL_JOIN_BEVEL");
+  Same(FlButtons.Normal, "FL_NORMAL_BUTTON");
+  Same(FlButtons.Toggle, "FL_TOGGLE_BUTTON");
+  Same(FlButtons.Radio, "FL_RADIO_BUTTON");
+  Same(FlButtons.Hidden, "FL_HIDDEN_BUTTON");
+  Same(FlValuators.Vertical, "FL_VERTICAL");
+  Same(FlValuators.Horizontal, "FL_HORIZONTAL");
+  Same(FlValuators.VertSlider, "FL_VERT_SLIDER");
+  Same(FlValuators.HorSlider, "FL_HOR_SLIDER");
+  Same(FlValuators.VertFillSlider, "FL_VERT_FILL_SLIDER");
+  Same(FlValuators.HorFillSlider, "FL_HOR_FILL_SLIDER");
+  Same(FlValuators.VertNiceSlider, "FL_VERT_NICE_SLIDER");
+  Same(FlValuators.HorNiceSlider, "FL_HOR_NICE_SLIDER");
+  Same(FlValuators.NormalDial, "FL_NORMAL_DIAL");
+  Same(FlValuators.LineDial, "FL_LINE_DIAL");
+  Same(FlValuators.FillDial, "FL_FILL_DIAL");
+  Same(FlValuators.NormalCounter, "FL_NORMAL_COUNTER");
+  Same(FlValuators.SimpleCounter, "FL_SIMPLE_COUNTER");
+  Same(FlValuators.IntSpinner, "FL_INT_INPUT");
+  Same(FlValuators.FloatSpinner, "FL_FLOAT_INPUT");
   Same(Fl.GrayRamp(0), "fl_gray_ramp(0)");
   Same(Fl.GrayRamp(23), "fl_gray_ramp(23)");
   Same(Fl.ColorCube(0, 0, 0), "fl_color_cube(0, 0, 0)");
@@ -331,6 +350,6 @@ BEGIN
   Same(Fl.RGB(255, 0, 0), "fl_rgb_color(255, 0, 0)");
   Same(Fl.RGB(1, 2, 3), "fl_rgb_color(1, 2, 3)");
   Same(Fl.RGB(0, 0, 255), "fl_rgb_color(0, 0, 255)");
-  Check.Check((wrong = 0) & (checked = 312), "each of 312 constants and values is FLTK's");
+  Check.Check((wrong = 0) & (checked = 331), "each of 331 constants and values is FLTK's");
   Check.Summary
 END TestConstants.

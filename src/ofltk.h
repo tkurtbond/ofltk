@@ -130,6 +130,16 @@ template <class T> intptr_t open(T *w, intptr_t self) {
   return reinterpret_cast<intptr_t>(static_cast<Fl_Widget *>(w));
 }
 
+// s into buf, an Oberon ARRAY OF CHAR of n characters, truncated to fit;
+// "" if s is 0.
+inline void copy_out(const char *s, char *buf, int32_t n) {
+  int32_t i = 0;
+  if (s) {
+    for (; i < n - 1 && s[i]; i++) buf[i] = s[i];
+  }
+  buf[i] = 0;
+}
+
 inline Fl_Widget *widget(intptr_t h) {
   return reinterpret_cast<Fl_Widget *>(h);
 }

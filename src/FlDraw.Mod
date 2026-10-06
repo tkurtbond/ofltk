@@ -335,8 +335,8 @@ END NotClipped;
 
 (* The bounding box of the part of x, y, w, h that would show, in cx, cy,
    cw, ch; cw or ch is 0 if none would. (FLTK's fl_clip_box also says
-   whether the box is all of x, y, w, h, but says it wrongly: AGENTS.md,
-   "FLTK problems".) *)
+   whether the box is all of x, y, w, h, but says it wrongly:
+   doc/fltk-issues.md, 2.) *)
 PROCEDURE ClipBox*(x, y, w, h: INTEGER; VAR cx, cy, cw, ch: INTEGER);
   VAR X, Y, W, H: SYSTEM.INT32;
 BEGIN

@@ -38,7 +38,7 @@ ifeq ($(shell case "$(POC_VERSION)" in (0.[0-3].*) echo old;; esac),old)
   $(error ofltk needs poc 0.4.0 or later (C++ parts, libraries' link flags); $(POC) is $(POC_VERSION))
 endif
 
-MODULES := Fl FlDraw
+MODULES := Fl FlDraw FlButtons FlInputs FlValuators
 HEADERS := src/ofltk.h
 LIBSRC  := $(MODULES:%=src/%.Mod) $(MODULES:%=src/%.cpp) $(HEADERS)
 # Test modules with a C++ part (test/<Module>.cpp).
@@ -56,7 +56,7 @@ LIBDIR   = $(POC_OBERON_LIBRARIES)/$(LIBRARY)
 TRIPLE   = $(shell $(POC) -version | sed -n 's/^target \([^ ]*\).*/\1/p')
 
 # Test programs (test/<name>.Mod, each a main module).
-TESTS := TestLiveness TestDelete TestTimer TestConstants TestWidget TestDraw TestEvents
+TESTS := TestLiveness TestDelete TestTimer TestConstants TestWidget TestDraw TestEvents TestButtons TestInputs TestValuators
 # Programs that must halt (test/<name>.Mod), as name:ASSERT-code. poc's
 # ASSERT(x, n) prints "assertion failed (n)" on standard error and exits
 # with status 10, so `make test` requires both.
@@ -65,7 +65,7 @@ ASSERTSTATUS := 10
 
 # Example programs (examples/<name>.Mod). They wait for the user, so make
 # builds them and make test doesn't run them.
-EXAMPLES := Hello Scribble
+EXAMPLES := Hello Scribble Swatch
 
 TESTBINS := $(TESTS:%=$(BUILD)/%)
 HALTBINS := $(foreach h,$(HALTTESTS),$(BUILD)/$(firstword $(subst :, ,$(h))))

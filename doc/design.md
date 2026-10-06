@@ -79,10 +79,12 @@ layer, not getting the compiler to cooperate.
 - Every C entry point takes and returns `intptr_t`/`int32_t`, declared on
   the Oberon side as `SYSTEM.ADDRESS`/`SYSTEM.INT32`.
 
-The prototype is in `prototype/`: `FL.Mod` and its C++ part `FL.cpp` (the
+The prototype was `prototype/`: `FL.Mod` and its C++ part `FL.cpp` (the
 binding), and `Demo.Mod`, which drives clicks from an FLTK timeout, forces
 collections between them, and deletes a widget to exercise the registry.
-Build and run it there with:
+It was retired in Phase 3, once `src/` did all it did; it is in git up to
+commit f57262b, and its demo lives on as `examples/Swatch.Mod`. It was
+built and run there with:
 
 ```
 $ poc -link -lfltk Demo.Mod

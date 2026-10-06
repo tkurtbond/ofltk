@@ -24,8 +24,9 @@ through an open question once it's decided, saying what was decided.
   library with poc. Its build, test layout, halt tests, valgrind setup and
   conventions are this repo's model; its AGENTS.md lists poc facts that
   still apply (AGENTS.md here repeats the ones that matter).
-- **The prototype** (`prototype/`) and **probes** (`probes/`): the code
-  behind `doc/design.md`. Throwaway, but the starting point for Phase 0.
+- **The prototype** (`prototype/`, retired in Phase 3; in git up to
+  f57262b) and **probes** (`probes/`): the code behind `doc/design.md`.
+  Throwaway, but the starting point for Phase 0.
 
 ## Scope
 
@@ -490,9 +491,85 @@ findings written into this file and AGENTS.md.
      come with images in Phase 7.
    - `fl_line_style`'s dash arrays, `fl_frame` strings, the 3-point
      `fl_line`, and `fl_text_extents` wait until a program needs them.
-   - `prototype/` stays until Phase 3 gives it buttons.
-3. **Buttons, inputs and valuators** (`FlButtons`, `FlInputs`,
-   `FlValuators`). Values in and out, `when` flags, radio groups.
+   - `prototype/` stays until Phase 3 gives it buttons (done there).
+3. **`[done]` Buttons, inputs and valuators** (`FlButtons`, `FlInputs`,
+   `FlValuators`; 2026-10-06, poc 0.4.0, FLTK 1.4.5):
+   - **`FlButtons`**: `Button`, `LightButton`, `CheckButton`,
+     `RoundButton`, `RadioButton`, `RadioLightButton`,
+     `RadioRoundButton`, `ReturnButton`, `RepeatButton`,
+     `ToggleButton`, each extending what FLTK's extends. `Value`,
+     `SetValue`, `SetOnly`, `Kind`/`SetKind` (`Normal`, `Toggle`,
+     `Radio`, `Hidden`: the type names `ToggleButton` and `RadioButton`
+     are taken, so the kinds drop "Button"), `Shortcut`/`SetShortcut` as
+     a key and a `SET` of shift keys, `DownBox`.
+   - **`FlInputs`**: `Input`, `IntInput`, `FloatInput`,
+     `MultilineInput`, `SecretInput`, `Output`, `MultilineOutput`. The
+     text in and out (`Value` truncates to its argument; `Length`), as
+     numbers too, the cursor and selection (`Select`, since `Position`
+     is the widget's), undoable edits returning whether anything
+     changed, the maximum size, read-only, wrap, tab navigation,
+     shortcut, and the text's look.
+   - **`FlValuators`**: `Valuator` (FLTK's base, never opened),
+     `Slider`, `ValueSlider`, `Scrollbar`, `Counter`, `Dial`, `Roller`,
+     `Adjuster`, `ValueInput`, `ValueOutput`; and `Spinner` (an FLTK
+     group) and `Progress` (a plain widget) with values of their own.
+     Value, bounds, step, precision, `Round`/`Clamp`/`Increment`,
+     `Format`, and `Kind`/`SetKind` with FLTK's names (`HorSlider`,
+     `LineDial`, `Vertical`, ...), plus each class's own settings.
+   - **`Fl`**: `Live` is exported, for the other modules' methods;
+     `Changed`/`SetChanged`; `ClearDamage`. Every module's C++ part
+     opens a widget with its label copied, through `ofl::open`; Fl's
+     `BeginOpen`/`EndOpen` attach it.
+   - **Constants**, 19 more (button, valuator and spinner kinds), for 331
+     values in `TestConstants`.
+   - **Tests**: `TestButtons` (24 checks: clicks, toggles, a radio
+     group with a check button made radio, shortcuts and Enter, repeat
+     and its stopping), `TestInputs` (38: typing, BackSpace, Enter and
+     `when`, maximum size, editing and undo, number inputs, multiline,
+     secret and output), `TestValuators` (32: numbers and rounding,
+     kinds, dragging a slider, a slider's own bounds, scrollbar,
+     counter arrows, settings, typing into a value input, spinner,
+     progress). `Probe.Shortcut` offers a key as a shortcut. All pass
+     on Wayland and on Xvfb, and under valgrind on both with 0 errors
+     and no ofltk leak.
+   - **The tests catch what they're for**: with a slider's bounds set
+     as a valuator's, `TestValuators` failed; without the display
+     opened before focusing, `TestInputs` crashed on Wayland.
+   - **`prototype/` is retired** (in git up to f57262b): `src/` does all
+     it did. Its demo is `examples/Swatch.Mod`, a custom-drawn box and a
+     button; driven under Xvfb by `xdotool`, two clicks took the swatch
+     from red to green.
+
+   Findings, confirmed live and in FLTK's source (`doc/fltk-issues.md`
+   has each in full):
+   - **A text input taking the focus before the display is open
+     crashes FLTK 1.4.5 under Wayland**, also in plain C++, where giving
+     the first field the focus before `show()` is common. `TakeFocus`
+     and `SetFocus` open the display first.
+   - **`changed()` is cleared after every callback but FLTK's default**,
+     so `Changed` is TRUE only inside a `Callback`. **A push button is
+     off again before its callback.**
+   - **Non-virtual methods hidden by subclasses**: `Fl_Slider::bounds`
+     (adds a redraw), `Fl_Spinner`'s `color`, `selection_color` and
+     `type` (its field's). The shim calls each class as itself.
+     `Fl_Repeat_Button::deactivate` hides `Fl_Widget`'s too, but needs
+     no help: `Fl_Widget::deactivate` sends `FL_DEACTIVATE`, which stops
+     the repeating (a mutation test showed the override was redundant,
+     so it was removed).
+   - **`Fl_Spinner::format` keeps its pointer and uses it as a printf
+     format**, so it isn't bound.
+   - **Enter in an input calls back (`WhenEnterKey`) only if the text
+     changed, and selects all the text.** `Valuator.Increment` rounds
+     but doesn't clamp.
+   - **Synthesized keys need the text the window system gives**:
+     BackSpace with `08X`, since under Wayland a key with no text is
+     taken as composed text.
+
+   Not done, and why:
+   - `Fl_Spinner::format` (above); `Fl_Input_::copy` and `copy_cuts`
+     wait for the clipboard (Phase 7).
+   - `Fl::callback_reason()`, which says why a `Callback` runs, waits
+     until a program needs it.
 4. **Layout** (`FlLayout`): `Flex` and `Grid` first, then `Pack`,
    `Scroll`, `Tabs`, `Tile`, `Wizard`, and `resizable`.
 5. **Menus and dialogs** (`FlMenus`, `FlDialogs`). Each menu item's

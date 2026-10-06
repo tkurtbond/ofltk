@@ -21,16 +21,15 @@ anything:
 
 ## Status
 
-As of 2026-10-06, Phases 0, 1 and 2 of PLAN.md are done, and Phase 3
-(buttons, inputs, valuators) is next. `src/` has the `Fl` and `FlDraw`
-modules, and the tests pass. Also kept:
+As of 2026-10-06, Phases 0 to 3 of PLAN.md are done, and Phase 4
+(layout) is next. `src/` has the `Fl`, `FlDraw`, `FlButtons`, `FlInputs`
+and `FlValuators` modules, and the tests pass. Also kept:
 
 - `doc/design.md`: the feasibility analysis.
 - `doc/fltk-issues.md`: every FLTK bug and pitfall found, with its
   cause in FLTK's source and ofltk's workaround.
-- `prototype/`: the object-style sketch `FL.Mod`, its C++ part `FL.cpp`,
-  and `Demo.Mod`. It stays until `src/` has buttons (Phase 3); its
-  custom drawing is in `src/` now.
+- `prototype/` was retired in Phase 3, when `src/` had all it had; it
+  is in git up to commit f57262b. Its demo is `examples/Swatch.Mod`.
 - `probes/callback/`: C calling an Oberon procedure value.
 - `probes/gc-hazard/`: a flat binding (`Fltk.Mod`, `Fltk.cpp`). `Hazard.Mod`
   shows a callback's `user_data` being collected; `Hello.Mod` is a
@@ -51,6 +50,12 @@ modules, and the tests pass. Also kept:
   only" procedures (`BeginOpen`, `EndOpen`) are how another module
   opens a widget of its own class. Keep application code off them.
 - `src/FlDraw.Mod`, `src/FlDraw.cpp`: `fl_draw.H`, for `Draw` methods.
+- `src/FlButtons`, `src/FlInputs`, `src/FlValuators` (`.Mod` and
+  `.cpp`): the widget families of PLAN.md's module table. Each C++ part
+  has one `ofl_<family>_new(kind, ...)` that makes the class `kind`
+  numbers as `ofl::W<class>`, copies the label and calls `ofl::open`;
+  each Oberon `Open<Type>` passes it `Fl.BeginOpen(w)` and gives the
+  result to `Fl.EndOpen`. Methods get the handle with `Fl.Live(w)`.
 - `test/`:
   - one main module per concern, `Test*.Mod`, using `Check.Mod`;
   - halt tests, `Halt*.Mod`, one per code;
@@ -64,7 +69,7 @@ modules, and the tests pass. Also kept:
 - `tools/gen-constants.py`: writes each module's constants and their
   test, from FLTK's headers (constants, below).
 - `examples/`: example programs (`Hello`, FLTK's hello; `Scribble`,
-  drawing with the mouse). `make` builds them; they wait for the user,
+  drawing with the mouse; `Swatch`, the prototype's demo). `make` builds them; they wait for the user,
   so `make test` doesn't run them.
 - `GNUmakefile`: build and test (Build, below).
 - `build/`: poc and clang output (ignored by git).
@@ -173,7 +178,14 @@ widgets never shown; `make test` stops with a message without one.
     such a check last;
   - a key goes to the focus widget alone. Through `Fl::handle`, a key no
     widget uses crashes FLTK 1.4.5 when no window is shown and
-    `BelowMouse` is set (`doc/fltk-issues.md`, 3).
+    `BelowMouse` is set (`doc/fltk-issues.md`, 3);
+  - a key must carry the text the window system would give it
+    (BackSpace `08X`, Enter `0DX`): under Wayland, FLTK takes a key with
+    no text as composed text;
+  - `Probe.Shortcut` offers a key to a window's widgets as a shortcut,
+    for return buttons and shortcuts;
+  - waits on timers allow for valgrind's slowness: loop until the
+    condition holds, up to a generous limit.
 - **`xdotool` is installed** (2026-10-06), for trying an example by hand
   under Xvfb: run it in `xvfb-run -a -s '-screen 0 640x480x24' sh -c
   '...'` with `WAYLAND_DISPLAY` unset, move and click with `xdotool`, and
@@ -281,6 +293,11 @@ held only in C++ memory**.
 - **Synthesized events work in a window never shown**: set `Fl::e_x`
   and the rest (public statics), then call `Fl::handle(event, window)`.
   Except keys no widget uses (above).
+- **Non-virtual methods hidden by a subclass** (`Fl_Window::copy_label`,
+  `Fl_Slider::bounds`, `Fl_Spinner::color` and others): calling through
+  an `Fl_Widget *` reaches the base's. Before binding a method, check
+  the class's header for one that hides a base's, and call the class
+  as itself in the shim (`doc/fltk-issues.md`).
 - **Name clashes with FLTK's keys**: the key constants take the prefix
   `Key`, since `FL_End` would be the keyword `END`. So `Fl::get_key` is
   `GetKey`, because `KeyDown` is the down arrow.
