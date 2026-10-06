@@ -193,8 +193,8 @@ def write_test():
         "  RETURN FALSE\nEND Value;\n\nEND CConstants.\n")
     checks = []
     for name, expr, kind in entries:
-        # A SET's bits by SYSTEM.VAL: poc 0.3.1 can't compile ORD of a SET
-        # under -OC (AGENTS.md, "poc 0.3.1 problems").
+        # A SET's bits by SYSTEM.VAL: poc can't compile ORD of a SET under
+        # -OC (AGENTS.md, "poc problems").
         o = "SYSTEM.VAL(INTEGER, Fl.%s)" % name if kind == "set" else "Fl.%s" % name
         checks.append('  Same(%s, "%s");' % (o, expr))
     for o, c in CHECKS:

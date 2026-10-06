@@ -1,7 +1,9 @@
 # ofltk: an FLTK binding for Oberon-2 — feasibility and design
 
 *Analysis of 2026-10-06, against poc 0.3.1 (d9f505e), clang 22.1.8 and
-FLTK 1.4.5 on Fedora 44, x86_64.*
+FLTK 1.4.5 on Fedora 44, x86_64. poc 0.4.0, released the same day, removed
+the first two frictions under "Friction in poc"; the build commands below
+are 0.4.0's.*
 
 ## Verdict
 
@@ -54,6 +56,10 @@ layer, not getting the compiler to cooperate.
   `__gxx_personality_v0`. A `link <arg>` manifest line would remove this.
 - **The C part must be named `.c`.** A C++ file needs `-c-flag -xc++`.
   Accepting `Module.cpp` would be cleaner.
+
+  *Both are fixed in poc 0.4.0: a library's manifest records its `-link`
+  flags, and a module's part may be `<Module>.cpp`, compiled and linked by
+  clang++ (PLAN.md, "poc 0.4.0").*
 - **Two library builds are needed**, one each for `-O2` and `-OC`. Using
   `SYSTEM.INT32` and `SYSTEM.ADDRESS` in the C-facing declarations keeps the
   source the same under both.
@@ -73,13 +79,13 @@ layer, not getting the compiler to cooperate.
 - Every C entry point takes and returns `intptr_t`/`int32_t`, declared on
   the Oberon side as `SYSTEM.ADDRESS`/`SYSTEM.INT32`.
 
-The prototype is in `prototype/`: `FL.Mod` and its C++ part `FL.c` (the
+The prototype is in `prototype/`: `FL.Mod` and its C++ part `FL.cpp` (the
 binding), and `Demo.Mod`, which drives clicks from an FLTK timeout, forces
 collections between them, and deletes a widget to exercise the registry.
 Build and run it there with:
 
 ```
-$ poc -c-flag -xc++ -link -lfltk -link -lstdc++ Demo.Mod
+$ poc -link -lfltk Demo.Mod
 $ ./Demo
 ```
 
@@ -92,11 +98,11 @@ The earlier probes are in `probes/`:
 - `probes/callback/`: `Cb.Mod` hands an Oberon procedure to its C part,
   which calls it back (`poc Cb.Mod`).
 - `probes/gc-hazard/`: a flat, handle-only binding, `Fltk.Mod` and
-  `Fltk.c`. `Hazard.Mod` shows a callback's `user_data` being collected
+  `Fltk.cpp`. `Hazard.Mod` shows a callback's `user_data` being collected
   while FLTK still holds it. `Hello.Mod` is a one-button window that hides
   itself after three clicks; it builds but has not been run, since it waits
   for real clicks. Build either with
-  `poc -c-flag -xc++ -link -lfltk -link -lstdc++ Hazard.Mod`.
+  `poc -link -lfltk Hazard.Mod`.
 
 ## Why it's useful
 

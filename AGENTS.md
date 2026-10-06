@@ -25,11 +25,11 @@ next. `src/` has the `Fl` module (Phase 1's scope), and the tests pass.
 Also kept:
 
 - `doc/design.md`: the feasibility analysis.
-- `prototype/`: the object-style sketch `FL.Mod`, its C++ part `FL.c`,
+- `prototype/`: the object-style sketch `FL.Mod`, its C++ part `FL.cpp`,
   and `Demo.Mod`. It stays until `src/` has its custom drawing (Phase 2)
   and buttons (Phase 3).
 - `probes/callback/`: C calling an Oberon procedure value.
-- `probes/gc-hazard/`: a flat binding (`Fltk.Mod`, `Fltk.c`). `Hazard.Mod`
+- `probes/gc-hazard/`: a flat binding (`Fltk.Mod`, `Fltk.cpp`). `Hazard.Mod`
   shows a callback's `user_data` being collected; `Hello.Mod` is a
   one-button window that waits for real clicks.
 
@@ -50,7 +50,7 @@ Also kept:
   - `poc-gc.supp`, and `vg-check.sh` (Valgrind, below);
   - `TestConstants.Mod`, `CConstants.Mod` and `CConstants.cpp`, written
     by `tools/gen-constants.py`. `CConstants` is a test module with a C++
-    part, which the makefile stages as it does `src/`'s.
+    part.
 - `tools/gen-constants.py`: writes Fl's constants and their test, from
   FLTK's headers (constants, below).
 - `examples/`: example programs, such as FLTK's hello. `make` builds
@@ -68,7 +68,7 @@ Also kept:
 | FLTK docs (HTML) | `/usr/share/doc/fltk-devel/html/` |
 | FLTK 1.3 | also installed (`fltk1.3`, runtime only); never build against it |
 | FLUID | `fltk-fluid-1.4.5` |
-| poc | `/usr/bin/poc` (Peaseblossom RPM 0.3.1); `poc(1)`; `/usr/share/doc/peaseblossom/users-guide.md` (§9, "Calling C") and `reference-guide.md` |
+| poc | `/usr/bin/poc` (Peaseblossom RPM 0.4.0); `poc(1)`; `/usr/share/doc/peaseblossom/users-guide.md` (§9, "Calling C") and `reference-guide.md` |
 | poc source | `~/Repos/Oberon/Peaseblossom` |
 | FLTKAda | `/usr/local/sw/src/tkb/fltkada` (`AGENTS.md`, `doc/binding_architecture.md`, `progress.txt`, `test/`) |
 | polibfyaml | `~/Repos/Oberon/polibfyaml` (`AGENTS.md`, `GNUmakefile`, `test/Check.Mod`, `test/poc-gc.supp`) |
@@ -102,23 +102,37 @@ make clean      # rm -rf build
   `python3 tools/gen-constants.py` from the repository root (it needs
   `clang++` and `fltk-config`). After an FLTK upgrade, run it again, and
   read the diff: `TestConstants` fails until you do if a value moved.
-- **C++ parts are `src/<Module>.cpp`**, poc 0.4.0's form. With poc 0.3.1,
-  detected from `poc -version`, the makefile stages `src/` into
-  `build/src/`, renaming each `.cpp` to `.c`, and adds
-  `-c-flag -xc++ -link -lstdc++`. Without `-lstdc++` the link fails on
-  `__gxx_personality_v0`. When 0.4.0 is the oldest poc in use, delete the
-  staging.
+- **C++ parts are `src/<Module>.cpp`**, compiled by clang++, which also
+  links any program that has one. That needs poc 0.4.0, which the makefile
+  requires.
 - The C++ parts are compiled `-std=c++11 -Wall -Wextra -Werror`, as
   FLTKAda's shim is, so code can move between them.
 - `-verbose` on a poc command shows the clang commands it runs.
 
-By hand, as for an experiment in the scratchpad (poc 0.3.1):
-
 ```sh
-poc -OC -output-dir out -o out/Demo -c-flag -xc++ -link -lfltk -link -lstdc++ Demo.Mod
+make install    # the poc library ofltk, into $(POC_OBERON_LIBRARIES)/ofltk
+make uninstall  # remove exactly what make install wrote
 ```
 
-`-output-dir` and `-o` keep poc's `.sym`, `.ll`, `.o` and `.c.o` files
+`POC_OBERON_LIBRARIES` defaults to `/usr/local/sw/versions/oberon/poc/lib`,
+as polibfyaml's does. Try it elsewhere first with
+`make install POC_OBERON_LIBRARIES=<scratch dir>`. The manifest records
+`c++` and `-lfltk`, so a program using the installed library needs only:
+
+```sh
+poc -OC -library-path $POC_OBERON_LIBRARIES/ofltk Main.Mod
+```
+
+A library records the poc that built it, and another poc refuses it, so
+install again after upgrading poc.
+
+By hand, as for an experiment in the scratchpad:
+
+```sh
+poc -OC -output-dir out -o out/Demo -link -lfltk Demo.Mod
+```
+
+`-output-dir` and `-o` keep poc's `.sym`, `.ll`, `.o` and `.cpp.o` files
 out of the source directory.
 
 ### Tests and the display
@@ -160,7 +174,7 @@ widgets never shown; `make test` stops with a message without one.
     that the script still catches a deliberate leak whenever you change
     it.
 
-## Confirmed facts (poc 0.3.1, FLTK 1.4.5)
+## Confirmed facts (poc 0.3.1 and 0.4.0, FLTK 1.4.5)
 
 Each was confirmed by a program that ran, in the session of 2026-10-06
 unless it says otherwise.
@@ -236,12 +250,13 @@ held only in C++ memory**.
 - **No memory errors under valgrind** in FLTK's display stack, on either
   back end, only leaks (Valgrind, above).
 
-### poc 0.3.1 problems
+### poc problems
 
-Worked around here. Check whether 0.4.0 fixes each, then remove the
+Worked around here. Check whether each new poc fixes them, then remove the
 workaround.
 
-- **`ORD` of a `SET` doesn't compile under `-OC`** (2026-10-06). Any use
+- **`ORD` of a `SET` doesn't compile under `-OC`**: found in 0.3.1, and
+  still in 0.4.0 (2026-10-06). Any use
   fails: `n := ORD(s)`, passing `ORD(s)` to a `SYSTEM.INT32`, and even
   assigning it to a `HUGEINT`. poc emits `trunc i32 %x to i32`, which
   clang rejects ("invalid cast opcode for cast from 'i32' to 'i32'").

@@ -4,15 +4,14 @@
 # poc builds a program from its main module's source, finding the modules
 # it imports on the import path (src/, plus test/), and compiles every one
 # of them again on each build; a module's C++ part, src/<Module>.cpp, is
-# compiled and linked with it. What it writes - each module's .sym, .ll and
-# .o, and the programs - goes into $(BUILD), so make must not build two at
-# once.
+# compiled by clang++ and linked with it, and a program with one is linked
+# by clang++. What it writes - each module's .sym, .ll and .o, and the
+# programs - goes into $(BUILD), so make must not build two at once.
 #
-# poc 0.4.0 compiles <Module>.cpp itself and links with clang++. Earlier
-# pocs know only <Module>.c, so for them each module is staged into
-# $(BUILD)/src with its part renamed .c, compiled as C++ (-xc++) and
-# linked with -lstdc++. Delete the staging once 0.4.0 is the oldest poc
-# ofltk supports.
+# make install builds the poc library ofltk (-OC) in
+# $(POC_OBERON_LIBRARIES)/ofltk, recording -lfltk in its manifest, so a
+# program using it needs only -library-path: no FLTK or C++ flags.
+# Both need poc 0.4.0: C++ parts, and libraries that record link flags.
 
 POC      ?= poc
 # The size model: decided in PLAN.md; never mix models.
@@ -35,29 +34,26 @@ CXXFLAGS      := -std=c++11 -Wall -Wextra -Werror
 
 POC_VERSION := $(shell $(POC) -version | sed -n 's/^poc \([0-9.]*\).*/\1/p')
 # The case patterns are written (pattern) so make sees balanced parentheses.
-NATIVE_CXX  := $(shell case "$(POC_VERSION)" in (0.[0-3].*) echo no;; (*) echo yes;; esac)
+ifeq ($(shell case "$(POC_VERSION)" in (0.[0-3].*) echo old;; esac),old)
+  $(error ofltk needs poc 0.4.0 or later (C++ parts, libraries' link flags); $(POC) is $(POC_VERSION))
+endif
 
 MODULES := Fl
 HEADERS := src/ofltk.h
 LIBSRC  := $(MODULES:%=src/%.Mod) $(MODULES:%=src/%.cpp) $(HEADERS)
-# Test modules with a C++ part (test/<Module>.cpp), staged as src's are.
+# Test modules with a C++ part (test/<Module>.cpp).
 TESTCXX := CConstants
 TESTSRC := $(TESTCXX:%=test/%.Mod) $(TESTCXX:%=test/%.cpp)
 
-ifeq ($(NATIVE_CXX),yes)
-  SRCDIR  := src
-  TESTDIR := test
-  STAGED  :=
-  CXXPOC  :=
-else
-  SRCDIR  := $(BUILD)/src
-  TESTDIR := $(BUILD)/test
-  STAGED  := $(MODULES:%=$(SRCDIR)/%.Mod) $(MODULES:%=$(SRCDIR)/%.c) $(HEADERS:src/%=$(SRCDIR)/%) \
-             $(TESTCXX:%=$(TESTDIR)/%.Mod) $(TESTCXX:%=$(TESTDIR)/%.c)
-  CXXPOC  := -c-flag -xc++ -link -lstdc++
-endif
+CFLAGS := $(foreach f,$(FLTK_CXXFLAGS) $(CXXFLAGS),-c-flag $(f))
+LINK   := $(CFLAGS) $(foreach f,$(FLTK_LIBS),-link $(f))
 
-LINK := $(foreach f,$(FLTK_CXXFLAGS) $(CXXFLAGS),-c-flag $(f)) $(foreach f,$(FLTK_LIBS),-link $(f)) $(CXXPOC)
+# Each library in its own directory under POC_OBERON_LIBRARIES, so a
+# program names only the libraries it uses (as polibfyaml does).
+POC_OBERON_LIBRARIES ?= /usr/local/sw/versions/oberon/poc/lib
+LIBRARY := ofltk
+LIBDIR   = $(POC_OBERON_LIBRARIES)/$(LIBRARY)
+TRIPLE   = $(shell $(POC) -version | sed -n 's/^target \([^ ]*\).*/\1/p')
 
 # Test programs (test/<name>.Mod, each a main module).
 TESTS := TestLiveness TestDelete TestTimer TestConstants TestWidget
@@ -75,41 +71,24 @@ TESTBINS := $(TESTS:%=$(BUILD)/%)
 HALTBINS := $(foreach h,$(HALTTESTS),$(BUILD)/$(firstword $(subst :, ,$(h))))
 EXAMPLEBINS := $(EXAMPLES:%=$(BUILD)/%)
 
-.PHONY: all tests test valgrind test-headless valgrind-headless clean display
+.PHONY: all tests test valgrind test-headless valgrind-headless install uninstall clean display
 .NOTPARALLEL:
 
 all: tests
 
 tests: $(TESTBINS) $(HALTBINS) $(EXAMPLEBINS)
 
-$(BUILD) $(SRCDIR) $(TESTDIR):
+$(BUILD):
 	mkdir -p $@
 
-$(SRCDIR)/%.Mod: src/%.Mod | $(SRCDIR)
-	cp $< $@
+$(BUILD)/Test%: test/Test%.Mod test/Check.Mod $(LIBSRC) $(TESTSRC) | $(BUILD)
+	$(POC) $(POCFLAGS) -import-path src -import-path test -output-dir $(BUILD) $(LINK) -o $@ $<
 
-$(SRCDIR)/%.c: src/%.cpp | $(SRCDIR)
-	cp $< $@
+$(EXAMPLEBINS): $(BUILD)/%: examples/%.Mod $(LIBSRC) | $(BUILD)
+	$(POC) $(POCFLAGS) -import-path src -output-dir $(BUILD) $(LINK) -o $@ $<
 
-$(SRCDIR)/%.h: src/%.h | $(SRCDIR)
-	cp $< $@
-
-ifneq ($(TESTDIR),test)
-$(TESTDIR)/%.Mod: test/%.Mod | $(TESTDIR)
-	cp $< $@
-
-$(TESTDIR)/%.c: test/%.cpp | $(TESTDIR)
-	cp $< $@
-endif
-
-$(BUILD)/Test%: test/Test%.Mod test/Check.Mod $(LIBSRC) $(TESTSRC) $(STAGED) | $(BUILD)
-	$(POC) $(POCFLAGS) -import-path $(SRCDIR) -import-path $(TESTDIR) -import-path test -output-dir $(BUILD) $(LINK) -o $@ $<
-
-$(EXAMPLEBINS): $(BUILD)/%: examples/%.Mod $(LIBSRC) $(STAGED) | $(BUILD)
-	$(POC) $(POCFLAGS) -import-path $(SRCDIR) -output-dir $(BUILD) $(LINK) -o $@ $<
-
-$(BUILD)/Halt%: test/Halt%.Mod $(LIBSRC) $(STAGED) | $(BUILD)
-	$(POC) $(POCFLAGS) -import-path $(SRCDIR) -output-dir $(BUILD) $(LINK) -o $@ $<
+$(BUILD)/Halt%: test/Halt%.Mod $(LIBSRC) | $(BUILD)
+	$(POC) $(POCFLAGS) -import-path src -output-dir $(BUILD) $(LINK) -o $@ $<
 
 # FLTK needs a display even for widgets never shown (PLAN.md, "Build and
 # test"): run under X11 or Wayland, or headless (test-headless below).
@@ -154,6 +133,25 @@ test-headless: tests
 
 valgrind-headless: tests
 	env -u WAYLAND_DISPLAY xvfb-run -a $(MAKE) valgrind
+
+# Install only a library whose tests build: every test imports it. Built
+# in $(BUILD)/lib/ with FLTK's -link flags, which the manifest records,
+# then copied by poc -install-library: the archive (with Fl.cpp's object),
+# the shared object, the manifest, and each module's .sym and .owner. A
+# library records the poc that built it, and another poc refuses it:
+# install again after upgrading poc.
+install: tests
+	cd src && $(POC) $(POCFLAGS) -output-dir $(abspath $(BUILD))/lib $(LINK) \
+	  -library $(LIBRARY) $(MODULES:%=%.Mod)
+	install -d $(LIBDIR)
+	$(POC) $(POCFLAGS) -library-path $(BUILD)/lib -output-dir $(LIBDIR) -install-library $(LIBRARY)
+
+# Remove what make install wrote, and only that.
+uninstall:
+	d=$(LIBDIR)/$(TRIPLE)/OC; \
+	rm -f $$d/lib$(LIBRARY).a $$d/lib$(LIBRARY).so $$d/$(LIBRARY).library \
+	  $(foreach x,$(MODULES),$$d/$(x).sym $$d/$(x).owner); \
+	rmdir $$d 2>/dev/null; true
 
 clean:
 	rm -rf $(BUILD)

@@ -52,10 +52,14 @@ Later, if wanted: a FLUID back end that writes Oberon-2 instead of C++.
   `/usr/local/sw/src/lang/C++/fltk`). 1.4 is required: `Fl_Flex`,
   `Fl_Grid`, and `AUTO_DELETE_USER_DATA` (the deletion hook below) are
   new in 1.4.
-- poc **0.3.1** or later. A poc release is being prepared (2026-10-06)
-  that lets a library record its native link flags and accepts a C++
-  module part (AGENTS.md, "poc friction"). Adopt both when it is
-  installed; until then use the 0.3.1 workarounds.
+- poc **0.4.0** or later (installed 2026-10-06). ofltk relies on its two
+  changes, made for this binding:
+  - **a module's C++ part**, `<Module>.cpp`, compiled by clang++, with
+    programs that use one linked by clang++;
+  - **libraries that record their `-link` flags**, so a program using
+    ofltk needs no FLTK or C++ flags.
+
+  The makefile refuses an older poc.
 - Platforms: x86_64 Fedora first, under Wayland and X11. The BSDs poc runs
   on come later; FLTKAda's readme has NetBSD notes.
 
@@ -124,7 +128,7 @@ them.
   C++ calls with the widget's `user_data()`. Prefer registering their
   addresses from `Fl`'s body (the prototype's way, which uses only
   documented poc behaviour) over naming poc's symbols from C++ (AGENTS.md:
-  it works in 0.3.1 but isn't promised).
+  it works in 0.3.1 and 0.4.0, but isn't promised).
 
 ### Lifetime and the collector
 
@@ -211,7 +215,7 @@ This is the hard part; `doc/design.md` has the failures that motivate it.
 - Bit-flag enums (`when`, damage, menu flags, alignment) are `SET`s where
   every bit is below 32; otherwise integers with documented constants. A
   `SET` crosses to C as `SYSTEM.VAL(SYSTEM.INT32, s)`, not `ORD(s)`
-  (AGENTS.md, "poc 0.3.1 problems").
+  (AGENTS.md, "poc problems").
 - **Names.** FLTK's names in Oberon case, without `FL_`: `UpBox`,
   `AlignTopLeft`, `HelveticaBold`, `DarkRed`, `WhenRelease`. Two
   exceptions avoid clashes:
@@ -250,10 +254,11 @@ to load, a file chooser cancelled. Those come back as `BOOLEAN` results.
 - output in `build/`, `.NOTPARALLEL`;
 - `fltk-config`'s `-I`/`-D` flags and `--ldflags`, passed as
   `-c-flag`/`-link`;
-- C++ parts are `src/<Module>.cpp`, as poc 0.4.0 takes them. With an
-  older poc, detected from `poc -version`, the makefile stages each
-  module into `build/src/` with its part renamed `.c`, and adds
-  `-c-flag -xc++ -link -lstdc++`.
+- C++ parts are `src/<Module>.cpp`, which poc 0.4.0 compiles with
+  clang++.
+- `make install` builds the poc library `ofltk` with FLTK's `-link`
+  flags, which its manifest records. A program then needs only
+  `-library-path`.
 
 Tests need a display. FLTK 1.4 opens one even to draw offscreen.
 
@@ -384,7 +389,7 @@ findings written into this file and AGENTS.md.
    - **Found**: poc 0.3.1 can't compile `ORD` of a `SET` under `-OC`. Any
      use emits LLVM `trunc i32 to i32`, which clang rejects; `-O2` is
      fine. `SYSTEM.VAL(SYSTEM.INT32, s)` gives the same bits, and is used
-     instead (AGENTS.md, "poc 0.3.1 problems").
+     instead (AGENTS.md, "poc problems"). poc 0.4.0 still has it.
    - **Left for later**:
      - `Fl_Window` icons, `xclass`, and border control;
      - `Fl::readqueue`;
@@ -414,9 +419,33 @@ findings written into this file and AGENTS.md.
    - shared and RGB images (data copied);
    - the clipboard, drag and drop, `Preferences`, `NativeFileChooser`,
      `Table`.
-8. **Release.** README, `make install` as a poc library, the examples
-   complete, and the poc-release flags (native link dependencies, C++
-   parts) adopted.
+8. **Release.** README, and the examples complete. `make install` as a
+   poc library, and poc 0.4.0's C++ parts and recorded link flags, were
+   done early, once 0.4.0 was installed (2026-10-06; "poc 0.4.0" below).
+
+### poc 0.4.0 `[done]`
+
+When poc 0.4.0 was installed (2026-10-06), the 0.3.1 workarounds came out:
+- **The makefile's staging is gone.** It copied `src/` to `build/src/`
+  with each `.cpp` renamed `.c`, compiled them `-xc++` and linked
+  `-lstdc++`. The makefile now refuses a poc older than 0.4.0.
+  - It had a bug of its own, never exercised under 0.3.1: with a native
+    poc, its `mkdir` rule for `test/` replaced the `test` target's
+    recipe.
+- **`make install`/`uninstall`** build and install the poc library
+  `ofltk` in `$(POC_OBERON_LIBRARIES)/ofltk`, as polibfyaml's do.
+  - Its manifest records `c++` and `link -lfltk`.
+  - Tried in a scratch directory: `TestDelete` and `Hello`, built with
+    only `poc -OC -library-path <dir>`, linked (by clang++, with
+    `-lfltk`). `TestDelete` passed linked statically, and with
+    `-shared-libraries`, where `libofltk.so` brings `libfltk` and
+    `libstdc++` itself.
+  - `make uninstall` removes exactly what was installed.
+- **The prototype's and probes' C++ parts are `.cpp` now**
+  (`prototype/FL.cpp`, `probes/gc-hazard/Fltk.cpp`). They build with
+  `-link -lfltk` alone, and still behave as recorded.
+- **Still worked around**: `ORD` of a `SET` under `-OC` fails in 0.4.0 as
+  in 0.3.1.
 
 ## Open questions
 
