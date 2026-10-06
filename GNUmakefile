@@ -72,7 +72,7 @@ TESTBINS := $(TESTS:%=$(BUILD)/%)
 HALTBINS := $(foreach h,$(HALTTESTS),$(BUILD)/$(firstword $(subst :, ,$(h))))
 EXAMPLEBINS := $(EXAMPLES:%=$(BUILD)/%)
 
-.PHONY: all tests test valgrind test-headless valgrind-headless install uninstall clean display
+.PHONY: all tests test valgrind test-headless valgrind-headless test-sway valgrind-sway install uninstall clean display
 .NOTPARALLEL:
 
 all: tests
@@ -92,10 +92,11 @@ $(BUILD)/Halt%: test/Halt%.Mod $(LIBSRC) | $(BUILD)
 	$(POC) $(POCFLAGS) -import-path src -output-dir $(BUILD) $(LINK) -o $@ $<
 
 # FLTK needs a display even for widgets never shown (PLAN.md, "Build and
-# test"): run under X11 or Wayland, or headless (test-headless below).
+# test"): run under X11 or Wayland, or headless (test-headless and
+# test-sway below).
 display:
 	@if [ -z "$$DISPLAY$$WAYLAND_DISPLAY" ]; then \
-	  echo "ofltk's tests need a display: set DISPLAY or WAYLAND_DISPLAY, or use make test-headless"; exit 1; \
+	  echo "ofltk's tests need a display: set DISPLAY or WAYLAND_DISPLAY, or use make test-headless or make test-sway"; exit 1; \
 	fi
 
 # Run every test from test/; report all, fail at the end if any failed.
@@ -134,6 +135,15 @@ test-headless: tests
 
 valgrind-headless: tests
 	env -u WAYLAND_DISPLAY xvfb-run -a $(MAKE) valgrind
+
+# The same on Wayland, on a headless sway (tools/with-sway.sh): a compositor
+# with no screen, so no window appears on the desktop, where the user's
+# input could reach it.
+test-sway: tests
+	tools/with-sway.sh $(MAKE) test
+
+valgrind-sway: tests
+	tools/with-sway.sh $(MAKE) valgrind
 
 # Install only a library whose tests build: every test imports it. Built
 # in $(BUILD)/lib/ with FLTK's -link flags, which the manifest records,

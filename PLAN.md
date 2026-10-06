@@ -271,6 +271,12 @@ Tests need a display. FLTK 1.4 opens one even to draw offscreen.
   Wayland whenever `WAYLAND_DISPLAY` is set, even under `xvfb-run`, which
   sets only `DISPLAY`. Unset, FLTK uses X11 by itself; `FLTK_BACKEND=x11`
   forces X11 regardless.
+- **Wayland without the desktop**: `make test-sway` and
+  `make valgrind-sway` run them on a headless sway (`tools/with-sway.sh`,
+  added 2026-10-06 after a `TestDialogs` run on the desktop was
+  disturbed, probably by the user's own input reaching its dialog). All
+  the tests pass there; pop-up menus are closed at once, as on the
+  desktop, so they are still tested on X11 alone.
 - **Behaviour tests** need no clicks. They drive the program the way the
   prototype's `Demo` does:
   - `do_callback`, and `Fl::handle` with synthesized events;

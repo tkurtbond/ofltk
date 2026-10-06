@@ -80,6 +80,8 @@ As of 2026-10-06, Phases 0 to 6 of PLAN.md are done, and Phase 7
     dialog) and keys sent to it; and whether FLTK uses Wayland.
 - `tools/gen-constants.py`: writes each module's constants and their
   test, from FLTK's headers (constants, below).
+- `tools/with-sway.sh`: runs a command on a headless sway (`make
+  test-sway`, below).
 - `examples/`: example programs (`Hello`, FLTK's hello; `Scribble`,
   drawing with the mouse; `Swatch`, the prototype's demo; `Menus`, a
   menu bar, a choice and the dialogs). `make` builds them; they wait for the user,
@@ -116,6 +118,8 @@ make test       # every test and halt test; needs a display
 make valgrind   # the tests under valgrind, then test/vg-check.sh on each log
 make test-headless      # make test on Xvfb, not the desktop
 make valgrind-headless  # make valgrind on Xvfb
+make test-sway          # make test on Wayland, on a headless sway
+make valgrind-sway      # make valgrind on a headless sway
 make clean      # rm -rf build
 ```
 
@@ -181,6 +185,20 @@ widgets never shown; `make test` stops with a message without one.
   appear on the desktop. It unsets `WAYLAND_DISPLAY`: a plain `xvfb-run`
   in a Wayland session leaves it set, and FLTK then uses the real desktop
   (confirmed).
+- **`make test-sway`** runs them on Wayland without the desktop: on a
+  headless sway, through `tools/with-sway.sh` (2026-10-06). sway's
+  headless back end (`WLR_BACKENDS=headless`, software rendering with
+  `WLR_RENDERER=pixman`, no input devices) has an output but no screen.
+  sway runs the command itself, from an `exec` in its own config, so the
+  command gets sway's `WAYLAND_DISPLAY`, and finding the socket can't
+  race another compositor; `DISPLAY` is unset, so FLTK can't fall back
+  to X11. The kernel's VKMS driver would need root and a seat for no
+  gain here.
+  - Pop-up menus are closed at once there too (three runs of three), as
+    on the desktop, so `TestMenus` still tests them on X11 alone.
+  - So the four runs that leave the desktop alone are `test-headless`
+    and `valgrind-headless` (X11) and `test-sway` and `valgrind-sway`
+    (Wayland).
 - A test drives itself, with no input tool:
   - `DoCallback`;
   - events from `test/Probe`, sent to a window never shown;
