@@ -91,7 +91,7 @@ together with their methods and their part of the shim:
 | `FlValuators` | `Slider` (and its kinds), `Counter`, `Dial`, `Roller`, `Spinner`, `Adjuster`, `ValueInput`, `ValueOutput`, `Scrollbar`, `Progress` |
 | `FlLayout` | `Flex`, `Grid`, `Pack`, `Scroll`, `Tabs`, `Tile`, `Wizard` |
 | `FlMenus` | `MenuBar`, `MenuButton`, `Choice`, menu items |
-| `FlDialogs` | `fl_alert`/`fl_ask`/`fl_choice`/`fl_input`, `NativeFileChooser`, `FileChooser`, `ColorChooser` |
+| `FlDialogs` | `fl_message`/`fl_alert`/`fl_choice`/`fl_input`/`fl_password`, `fl_color_chooser`, `fl_show_colormap`, `fl_file_chooser`/`fl_dir_chooser`; `NativeFileChooser` (Phase 7) |
 | `FlText` | `TextBuffer`, `TextDisplay`, `TextEditor`, style tables |
 | `FlBrowsers` | `Browser`, `HoldBrowser`, `MultiBrowser`, `SelectBrowser`, `CheckBrowser`, `FileBrowser`, `Tree` |
 | `FlImages` | `Image`, `RGBImage`, PNG, JPEG, GIF, SVG, BMP, XPM loading (`-lfltk_images`) |
@@ -630,10 +630,93 @@ findings written into this file and AGENTS.md.
    - `Fl_Scroll`'s scrollbars are FLTK's, not ofltk widgets, so they
      aren't reachable from Oberon; `Scroll.ScrollbarSize` and `Kind`
      cover what programs set on them.
-5. **Menus and dialogs** (`FlMenus`, `FlDialogs`). Each menu item's
-   callback reaches an Oberon procedure or method; FLTKAda's
-   `menu_item_callback_hook` and its `test_shortcut` pitfall apply.
-   Dialogs return their results; a cancel is not an error.
+5. **`[done]` Menus and dialogs** (`FlMenus`, `FlDialogs`; 2026-10-06,
+   poc 0.4.0, FLTK 1.4.5):
+   - **`FlMenus`**: `Menu` (FLTK's `Fl_Menu_`, never opened), `MenuBar`,
+     `MenuButton` (`Popup`, `Kind` for the pop-up kinds) and `Choice`.
+     - Items are indexes into FLTK's array, as in FLTK: `Add`, `Insert`
+       (a label is a path, "File/Open"), `Remove`, `Clear`,
+       `ClearSubmenu`, `Length` (`size()`, ends included; `Size` is
+       `Fl.Widget`'s), `IsItem`, `FindIndex`, `ItemPath`.
+     - `Value`, `SetValue`, `Pick` (as if picked), `SetOnly`; each
+       item's label, flags (a `SET`), shortcut (key and `SET`, as
+       `Button`'s) and action; the items' font, size, color and boxes;
+       `Global`.
+     - **Item actions** are procedures, `Action = PROCEDURE (w:
+       Fl.Widget)`, so one procedure serves a button and a menu item.
+       Each is stored as the item's `user_data`, with no FLTK callback on
+       the item, so FLTK calls the menu's callback for every pick
+       (`Fl_Menu_::picked`). `Menu.Callback` then calls the action of
+       `Value`, or the menu's own. A procedure is code, so the collector
+       needs no root for it, and an extension can override `Callback`.
+     - `FL_SUBMENU_POINTER` is never set (it would make the action a
+       menu array), and `SetItemFlags` keeps an item's submenu bits,
+       which describe the array's shape.
+     - Halts: an index that is outside the array or names the end of a
+       menu is `IndexOutOfRange` (74), as is `ClearSubmenu` of an item
+       that isn't a submenu.
+   - **`FlDialogs`**: `Message`, `Alert`, `Choice` (FLTK's
+     `fl_choice_n`, so Escape and the close button are told apart),
+     `Input`, `Password`, `SetTitle`, `SetDefaultTitle`, hotspot, font,
+     `Beep`; `ChooseColor`, `ChooseFromColormap`; `ChooseFile`,
+     `ChooseDirectory` (FLTK's own chooser). A cancel is `FALSE` or a
+     negative `Choice`, never a halt.
+   - **`Fl`**: `Window.WaitForExpose`.
+   - **Constants**, 20 more (item flags, pop-up kinds, beeps), for 379
+     values in `TestConstants`.
+   - **Tests**:
+     - `TestMenus` (40 checks): the array and paths, picking by `Pick`
+       and by shortcut, toggle and radio items, changing items, removing
+       and the value, a menu cleared in its own callback, a choice, a
+       global menu and its deletion, and on X11 a pop-up answered by
+       keys.
+     - `TestDialogs` (25): every dialog, answered by keys sent from a
+       timer to the modal window (`Probe.ModalKey`), titles read back
+       (`Probe.Modal`).
+     - `HaltMenuItem`. All pass on Wayland and on Xvfb, `TestDialogs`
+       on X11 (XWayland) too, and under valgrind on both with 0 errors
+       and no ofltk leak.
+   - **The tests catch what they're for**: `TestMenus` failed without
+     the value kept across insert and remove, with a choice's value set
+     as a menu's, and with `SetItemFlags` setting the submenu bits; it
+     crashed without the global menu forgotten on deletion. The Wayland
+     wait in `Popup` is checked by a C++ program only (findings).
+   - **`examples/Menus.Mod`**: a menu bar with shortcuts, a choice, and
+     the file, color and question dialogs. Driven under Xvfb by
+     `xdotool`, its File menu and its Quit question looked right.
+
+   Findings, confirmed live or in FLTK's source (`doc/fltk-issues.md`,
+   26 to 33):
+   - **Inserting or removing items moves `value()` to another item**:
+     FLTK keeps it as a pointer into the array. ofltk finds the item
+     again by its text pointer.
+   - **A deleted `global()` menu is used by the next shortcut**
+     (valgrind, in plain C++). ofltk keeps its own pointer, cleared by
+     the menu's destructor.
+   - **Under Wayland, a menu popped up over a window not yet on the
+     screen kills the program** (a protocol error), and **a pop-up of a
+     window without the focus is closed at once** by the compositor.
+     `Popup` waits for the window; the second needs a real user, so the
+     test pops up only on X11.
+   - **`fl_file_chooser` keeps its title pointer** in its one window;
+     **the common dialogs take printf formats**. The shim copies the
+     title, and passes text as `"%s"`.
+   - **`Fl_Choice::value(int)` hides `Fl_Menu_::value(int)`**.
+   - **A menu cleared in its own callback is safe in 1.4.5**, although
+     FLTK's documentation forbids it: nothing reads the item after the
+     callback (valgrind, in plain C++, through both a menu bar's and a
+     choice's shortcut). So ofltk doesn't forbid it.
+   - **A key a timer sends to a dialog ends its loop only at the next
+     event**, which never comes under Xvfb; the tests fire once more.
+
+   Not done, and why:
+   - `Fl_Native_File_Chooser` stays in Phase 7, as planned: it runs the
+     desktop's own chooser, which keys from a test can't answer.
+   - `Fl_Sys_Menu_Bar` is an `Fl_Menu_Bar` except on macOS; menu item
+     images and multi-labels come with images (Phase 7).
+   - `fl_yes`, `fl_no` and the other button labels are pointers FLTK
+     keeps; `fl_message_icon` returns an FLTK-made widget. Not bound
+     until a program needs them.
 6. **Text and browsers** (`FlText`, `FlBrowsers`):
    - `TextBuffer` as an Oberon-owned resource; `TextDisplay`,
      `TextEditor`, style buffers;

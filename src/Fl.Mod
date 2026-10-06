@@ -504,6 +504,7 @@ PROCEDURE ["C", "ofl_group_clear"] CClear(g: SYSTEM.ADDRESS);
 PROCEDURE ["C", "ofl_group_set_resizable"] CSetResizable(g, w: SYSTEM.ADDRESS);
 PROCEDURE ["C", "ofl_group_resizable"] CResizable(g: SYSTEM.ADDRESS): SYSTEM.ADDRESS;
 PROCEDURE ["C", "ofl_window_shown"] CShown(w: SYSTEM.ADDRESS): SYSTEM.INT32;
+PROCEDURE ["C", "ofl_window_wait_for_expose"] CWaitForExpose(w: SYSTEM.ADDRESS);
 PROCEDURE ["C", "ofl_window_size_range"] CSizeRange(w: SYSTEM.ADDRESS; minw, minh, maxw, maxh: SYSTEM.INT32);
 PROCEDURE ["C", "ofl_window_set_modal"] CSetModal(w: SYSTEM.ADDRESS);
 PROCEDURE ["C", "ofl_window_set_non_modal"] CSetNonModal(w: SYSTEM.ADDRESS);
@@ -971,6 +972,14 @@ END Callback;
 PROCEDURE (w: Window) Shown*(): BOOLEAN;
 BEGIN RETURN CShown(Live(w)) # 0
 END Shown;
+
+(* Waits until a window just shown is on the screen, handling events
+   meanwhile; returns at once if it is there, or not shown. Under Wayland
+   a menu popped up over a window not yet on the screen kills the program
+   (doc/fltk-issues.md, 28), so MenuButton.Popup waits first. *)
+PROCEDURE (w: Window) WaitForExpose*;
+BEGIN CWaitForExpose(Live(w))
+END WaitForExpose;
 
 (* The sizes the user may give the window; 0 for a maximum is no limit. *)
 PROCEDURE (w: Window) SizeRange*(minw, minh, maxw, maxh: INTEGER);

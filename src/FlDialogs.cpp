@@ -1,0 +1,115 @@
+// The C++ part of FlDialogs: FLTK's common dialogs. See ofltk.h for the
+// conventions.
+//
+// fl_message and the rest take a printf format, so the text is always an
+// argument of "%s", never the format: an Oberon string may hold a "%".
+
+#include "ofltk.h"
+
+#include <FL/Fl_Color_Chooser.H>
+#include <FL/Fl_File_Chooser.H>
+#include <FL/fl_ask.H>
+#include <FL/fl_show_colormap.H>
+#include <string.h>
+
+namespace {
+
+// "" is no button.
+const char *button(const char *s) { return s && *s ? s : 0; }
+
+// fl_file_chooser and fl_dir_chooser keep one chooser window for the
+// program, and set its title with Fl_File_Chooser::label, which keeps the
+// pointer (doc/fltk-issues.md, 30). So the title is copied here, where it
+// outlives the call; a longer one is cut short.
+char chooser_title[1024];
+
+const char *keep_title(const char *s) {
+  strncpy(chooser_title, s, sizeof chooser_title - 1);
+  chooser_title[sizeof chooser_title - 1] = 0;
+  return chooser_title;
+}
+
+}  // namespace
+
+extern "C" {
+
+void ofl_dialog_message(int32_t alert, const char *text) {
+  if (alert) {
+    fl_alert("%s", text);
+  } else {
+    fl_message("%s", text);
+  }
+}
+
+// The button pushed, 0 to 2; -1 if Escape closed the dialog, -2 its
+// window's close button.
+int32_t ofl_dialog_choice(const char *text, const char *b0, const char *b1,
+                          const char *b2) {
+  return fl_choice_n("%s", button(b0), button(b1), button(b2), text);
+}
+
+// 1 and the text typed in buf, which also holds the text to start with; 0
+// if the dialog was cancelled. FLTK returns its own copy, and copies buf
+// before the dialog starts.
+int32_t ofl_dialog_input(int32_t password, const char *label, char *buf,
+                         int32_t n) {
+  const char *r = password ? fl_password("%s", buf, label)
+                           : fl_input("%s", buf, label);
+  if (r == 0) return 0;
+  ofl::copy_out(r, buf, n);
+  return 1;
+}
+
+// fl_message_title copies; the title is for the next dialog only, or with
+// dflt for every dialog given none.
+void ofl_dialog_title(int32_t dflt, const char *title) {
+  if (dflt) {
+    fl_message_title_default(title);
+  } else {
+    fl_message_title(title);
+  }
+}
+
+int32_t ofl_dialog_hotspot(void) { return fl_message_hotspot(); }
+void ofl_dialog_set_hotspot(int32_t on) { fl_message_hotspot(on); }
+
+void ofl_dialog_font(int32_t *font, int32_t *size) {
+  *font = fl_message_font_;
+  *size = fl_message_size_;
+}
+
+void ofl_dialog_set_font(int32_t font, int32_t size) {
+  fl_message_font(font, size);
+}
+
+void ofl_beep(int32_t kind) { fl_beep(kind); }
+
+// 1, and the color chosen in r, g, b (0 to 255), if the user chose one.
+int32_t ofl_color_chooser(const char *title, int32_t *r, int32_t *g,
+                          int32_t *b, int32_t mode) {
+  uchar R = static_cast<uchar>(*r), G = static_cast<uchar>(*g),
+        B = static_cast<uchar>(*b);
+  if (!fl_color_chooser(title, R, G, B, mode)) return 0;
+  *r = R;
+  *g = G;
+  *b = B;
+  return 1;
+}
+
+int32_t ofl_show_colormap(int32_t old) {
+  return static_cast<int32_t>(fl_show_colormap(static_cast<Fl_Color>(old)));
+}
+
+// 1 and the path chosen in buf, which also holds the one to start with; 0
+// if cancelled. FLTK returns its own copy.
+int32_t ofl_file_chooser(int32_t dir, const char *title, const char *pattern,
+                         char *buf, int32_t n, int32_t relative) {
+  const char *r = dir ? fl_dir_chooser(keep_title(title), buf, relative)
+                      : fl_file_chooser(keep_title(title), pattern, buf,
+                                        relative);
+  if (r == 0) return 0;
+  ofl::copy_out(r, buf, n);
+  return 1;
+}
+
+}  // extern "C"

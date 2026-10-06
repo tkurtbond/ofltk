@@ -110,6 +110,24 @@ Unless an entry says otherwise, the version is FLTK 1.4.5 (Fedora's
   after the block `layout(2, 2)` allocated, and a non-NULL result.
   `test/HaltGridRange.Mod` checks the halt.
 
+### 28. A menu popped up over a window not yet on the screen is fatal (Wayland)
+
+- **What happens**: `Fl_Menu_Button::popup()` just after the window's
+  `show()`, before the compositor has put the window on the screen,
+  ends the program: FLTK prints "Fatal error no 1 in Wayland protocol:
+  xdg_surface" and exits 1. Found 2026-10-06.
+- **Cause**: the pop-up's `xdg_popup` is made against a parent surface
+  not yet configured, a protocol error the compositor answers by
+  disconnecting. FLTK waits for the menu window itself to be exposed
+  (`Fl_Wayland_Window_Driver::makeWindow`), but not for its parent.
+- **Effect on ofltk**: `MenuButton.Popup` calls `wait_for_expose()` on
+  the button's window first, which returns at once once the window is
+  there, and on X11; `Window.WaitForExpose` binds it for programs.
+- **Confirmed**: a C++ program that shows a window and pops up a menu
+  died this way every time; with `wait_for_expose()` between them, three
+  runs of three worked. On X11 it works either way. `TestMenus` can't
+  check it, since under Wayland the pop-up is closed at once (29).
+
 ## Pitfalls
 
 ### 5. FLTK keeps the label pointer it is given
@@ -297,4 +315,84 @@ Unless an entry says otherwise, the version is FLTK 1.4.5 (Fedora's
   first drawn isn't the size it will have, and an image of it made at
   its old size doesn't match it.
 - **ofltk**: nothing to change; `TestLayout` allows for it.
+
+### 26. Inserting or removing menu items moves the item chosen
+
+- `Fl_Menu_` keeps the item chosen (`value()`, `mvalue()`) as a pointer
+  into its array, and `insert` and `remove` move the items after the
+  change along the array without moving it. So inserting an item before
+  it makes another item the one chosen, which a choice then shows, and
+  removing it leaves it naming the item that took its place. A C++
+  program: a choice with "A" and "B", "B" chosen, then "Z" inserted at
+  0, had value 1, "A".
+- **ofltk**: `ofl_menu_insert`, `ofl_menu_remove` and
+  `ofl_menu_clear_submenu` (`src/FlMenus.cpp`) find the item chosen
+  again afterwards by its text pointer, each item's own copy, which
+  neither moves nor is freed by the change unless it is the item
+  removed; then the menu has none chosen. `TestMenus` inserts and
+  removes around a choice's value, and fails without it.
+
+### 27. A deleted `global()` menu is used by the next shortcut
+
+- `Fl_Menu_::global()` keeps the menu in a static pointer that nothing
+  clears, and adds a handler that uses it for every shortcut no window
+  takes. FLTK's documentation says not to destroy the menu. Deleted, it
+  is used anyway: valgrind showed invalid reads in the handler
+  (`src/Fl_Menu_global.cxx`), in a C++ program.
+- **ofltk**: `Menu.Global` uses ofltk's own handler and pointer
+  (`src/FlMenus.cpp`), which the menu's class clears in its destructor.
+  `TestMenus` deletes a global menu and types its shortcut; without the
+  clearing it crashes.
+
+### 29. Under Wayland a pop-up menu of a window without the focus closes at once
+
+- A menu popped up in a window the user hasn't clicked or typed in (so
+  without the keyboard focus) is closed by the compositor
+  (`popup_done`, in `Fl_Wayland_Window_Driver.cxx`) before it can be
+  used, and `popup()` returns NULL. FLTK's own comment there notes that
+  sway does the same when an application loses the focus.
+- **ofltk**: nothing to change; a real program pops up a menu in answer
+  to the user. `TestMenus` checks `Popup` only on X11 (`Probe.Wayland`),
+  where `make test-headless` runs it.
+- **Confirmed**: a C++ program, after `wait_for_expose()`: under
+  Wayland the pop-up returned at once, before the timer that would have
+  answered it; on X11 the timer's keys picked an item.
+
+### 30. `fl_file_chooser` keeps its title pointer
+
+- `fl_file_chooser` and `fl_dir_chooser` make one `Fl_File_Chooser` for
+  the program, and set its title with `Fl_File_Chooser::label`, which is
+  `Fl_Window::label`: it keeps the pointer, so the title outlives the
+  call in the hidden window (`src/fl_file_dir.cxx`,
+  `src/Fl_File_Chooser.cxx`). The pattern and file name are copied.
+- **ofltk**: `ofl_file_chooser` (`src/FlDialogs.cpp`) copies the title
+  into a static buffer first. Found in the source; no failure seen.
+
+### 31. The common dialogs take a printf format
+
+- `fl_message`, `fl_alert`, `fl_choice`, `fl_input` and `fl_password`
+  take a printf format and arguments, so a message holding a `%` would
+  be read as one.
+- **ofltk**: `src/FlDialogs.cpp` passes every text as the argument of
+  `"%s"`. Found in the header (`__printf__` attributes); `TestDialogs`
+  shows "100% done", but doesn't read the text back.
+
+### 32. A key sent from a timer doesn't end a dialog until another event
+
+- `Fl::wait` runs the timers due, then waits for an event. A key sent
+  to a dialog from a timer (as the tests answer them) ends its loop only
+  when the next event comes, and under Xvfb, with no window manager, none
+  does: `fl_show_colormap` handled the Escape but never returned.
+  Wayland's compositor sends events that wake it, and a real key is an
+  event, so only programs answering their own dialogs meet this.
+- **ofltk**: nothing to change. `TestDialogs` fires its timer once more
+  after its keys.
+
+### 33. `Fl_Choice::value(int)` hides `Fl_Menu_::value(int)`
+
+- It isn't virtual, and the choice's also redraws, since a choice shows
+  its value. Through an `Fl_Menu_ *` a choice shows its old value until
+  something else redraws it.
+- **ofltk**: `set_value` (`src/FlMenus.cpp`) calls a choice as a
+  choice. `TestMenus` checks the damage, and fails without it.
 

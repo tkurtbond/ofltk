@@ -322,6 +322,10 @@ int32_t ofl_window_shown(intptr_t w) {
   return ofl::as<Fl_Window>(w)->shown() ? 1 : 0;
 }
 
+void ofl_window_wait_for_expose(intptr_t w) {
+  ofl::as<Fl_Window>(w)->wait_for_expose();
+}
+
 void ofl_window_size_range(intptr_t w, int32_t minw, int32_t minh,
                            int32_t maxw, int32_t maxh) {
   ofl::as<Fl_Window>(w)->size_range(minw, minh, maxw, maxh);

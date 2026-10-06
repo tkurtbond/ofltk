@@ -3,6 +3,7 @@
 // events as if from the user (PLAN.md, "Build and test").
 
 #include <FL/Fl.H>
+#include <FL/platform.H>
 #include <FL/Fl_Image_Surface.H>
 #include <FL/Fl_RGB_Image.H>
 #include <FL/Fl_Widget.H>
@@ -129,6 +130,56 @@ int32_t ofltest_shortcut(intptr_t win, int32_t key, int32_t state,
   Fl::e_text = old_text;
   Fl::e_length = old_length;
   return r;
+}
+
+// A key event (FL_KEYDOWN or FL_SHORTCUT) of key, typing s, sent by
+// Fl::handle to win, as from the window system: to the grab (a pop-up
+// menu) if there is one, else for a shortcut to win's widgets and then
+// the event handlers (a global menu). Never send a key no widget uses
+// while the mouse is over a widget of a window never shown
+// (doc/fltk-issues.md, 3).
+int32_t ofltest_handle_key(intptr_t win, int32_t event, int32_t key,
+                           int32_t state, const char *s) {
+  char *old_text = Fl::e_text;
+  int old_length = Fl::e_length;
+  strncpy(text, s, sizeof text - 1);
+  Fl::e_keysym = Fl::e_original_keysym = key;
+  Fl::e_state = state;
+  Fl::e_text = text;
+  Fl::e_length = static_cast<int>(strlen(text));
+  int32_t r = send(win, event);
+  Fl::e_text = old_text;
+  Fl::e_length = old_length;
+  return r;
+}
+
+// A key, typing s, sent by Fl::handle to the modal window (a dialog) as
+// from the window system, so to its focus widget first; 0 if no modal
+// window is shown.
+int32_t ofltest_modal_key(int32_t key, int32_t state, const char *s) {
+  Fl_Window *modal = Fl::modal();
+  if (modal == 0) return 0;
+  return ofltest_handle_key(reinterpret_cast<intptr_t>(modal), FL_KEYDOWN,
+                            key, state, s);
+}
+
+// 1 if a modal window (a dialog) is shown, with its title in buf; 0 if
+// none is.
+int32_t ofltest_modal(char *buf, int32_t n) {
+  Fl_Window *modal = Fl::modal();
+  buf[0] = 0;
+  if (modal == 0 || !modal->shown()) return 0;
+  const char *t = modal->label() ? modal->label() : "";
+  int32_t i = 0;
+  for (; i < n - 1 && t[i]; i++) buf[i] = t[i];
+  buf[i] = 0;
+  return 1;
+}
+
+// 1 if FLTK draws with Wayland, 0 with X11; opens the display.
+int32_t ofltest_wayland(void) {
+  fl_open_display();
+  return fl_wl_display() != 0;
 }
 
 }  // extern "C"

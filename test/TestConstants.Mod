@@ -4,7 +4,7 @@ MODULE TestConstants; (* ofltk's constants are FLTK's *)
    value the installed FLTK's headers give (CConstants). A failure means
    FLTK's headers changed: run the script again, and see what moved. *)
 
-IMPORT SYSTEM, Out, Fl, FlDraw, FlButtons, FlValuators, FlLayout, Check, CConstants;
+IMPORT SYSTEM, Out, Fl, FlDraw, FlButtons, FlValuators, FlLayout, FlMenus, FlDialogs, Check, CConstants;
 
 VAR checked, wrong: INTEGER;
 
@@ -370,6 +370,26 @@ BEGIN
   Same(FlLayout.OverflowClip, "Fl_Tabs::OVERFLOW_CLIP");
   Same(FlLayout.OverflowPulldown, "Fl_Tabs::OVERFLOW_PULLDOWN");
   Same(FlLayout.OverflowDrag, "Fl_Tabs::OVERFLOW_DRAG");
+  Same(SYSTEM.VAL(INTEGER, FlMenus.MenuInactive), "FL_MENU_INACTIVE");
+  Same(SYSTEM.VAL(INTEGER, FlMenus.MenuToggle), "FL_MENU_TOGGLE");
+  Same(SYSTEM.VAL(INTEGER, FlMenus.MenuValue), "FL_MENU_VALUE");
+  Same(SYSTEM.VAL(INTEGER, FlMenus.MenuRadio), "FL_MENU_RADIO");
+  Same(SYSTEM.VAL(INTEGER, FlMenus.MenuInvisible), "FL_MENU_INVISIBLE");
+  Same(SYSTEM.VAL(INTEGER, FlMenus.Submenu), "FL_SUBMENU");
+  Same(SYSTEM.VAL(INTEGER, FlMenus.MenuDivider), "FL_MENU_DIVIDER");
+  Same(FlMenus.Popup1, "Fl_Menu_Button::POPUP1");
+  Same(FlMenus.Popup2, "Fl_Menu_Button::POPUP2");
+  Same(FlMenus.Popup12, "Fl_Menu_Button::POPUP12");
+  Same(FlMenus.Popup3, "Fl_Menu_Button::POPUP3");
+  Same(FlMenus.Popup13, "Fl_Menu_Button::POPUP13");
+  Same(FlMenus.Popup23, "Fl_Menu_Button::POPUP23");
+  Same(FlMenus.Popup123, "Fl_Menu_Button::POPUP123");
+  Same(FlDialogs.BeepDefault, "FL_BEEP_DEFAULT");
+  Same(FlDialogs.BeepMessage, "FL_BEEP_MESSAGE");
+  Same(FlDialogs.BeepError, "FL_BEEP_ERROR");
+  Same(FlDialogs.BeepQuestion, "FL_BEEP_QUESTION");
+  Same(FlDialogs.BeepPassword, "FL_BEEP_PASSWORD");
+  Same(FlDialogs.BeepNotification, "FL_BEEP_NOTIFICATION");
   Same(Fl.GrayRamp(0), "fl_gray_ramp(0)");
   Same(Fl.GrayRamp(23), "fl_gray_ramp(23)");
   Same(Fl.ColorCube(0, 0, 0), "fl_color_cube(0, 0, 0)");
@@ -378,6 +398,6 @@ BEGIN
   Same(Fl.RGB(255, 0, 0), "fl_rgb_color(255, 0, 0)");
   Same(Fl.RGB(1, 2, 3), "fl_rgb_color(1, 2, 3)");
   Same(Fl.RGB(0, 0, 255), "fl_rgb_color(0, 0, 255)");
-  Check.Check((wrong = 0) & (checked = 359), "each of 359 constants and values is FLTK's");
+  Check.Check((wrong = 0) & (checked = 379), "each of 379 constants and values is FLTK's");
   Check.Summary
 END TestConstants.

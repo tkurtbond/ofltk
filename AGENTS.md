@@ -21,9 +21,10 @@ anything:
 
 ## Status
 
-As of 2026-10-06, Phases 0 to 4 of PLAN.md are done, and Phase 5
-(menus and dialogs) is next. `src/` has the `Fl`, `FlDraw`, `FlButtons`,
-`FlInputs`, `FlValuators` and `FlLayout` modules, and the tests pass. Also kept:
+As of 2026-10-06, Phases 0 to 5 of PLAN.md are done, and Phase 6
+(text and browsers) is next. `src/` has the `Fl`, `FlDraw`, `FlButtons`,
+`FlInputs`, `FlValuators`, `FlLayout`, `FlMenus` and `FlDialogs`
+modules, and the tests pass. Also kept:
 
 - `doc/design.md`: the feasibility analysis.
 - `doc/fltk-issues.md`: every FLTK bug and pitfall found, with its
@@ -50,12 +51,14 @@ As of 2026-10-06, Phases 0 to 4 of PLAN.md are done, and Phase 5
   only" procedures (`BeginOpen`, `EndOpen`) are how another module
   opens a widget of its own class. Keep application code off them.
 - `src/FlDraw.Mod`, `src/FlDraw.cpp`: `fl_draw.H`, for `Draw` methods.
-- `src/FlButtons`, `src/FlInputs`, `src/FlValuators`, `src/FlLayout`
-  (`.Mod` and `.cpp`): the widget families of PLAN.md's module table. Each C++ part
+- `src/FlButtons`, `src/FlInputs`, `src/FlValuators`, `src/FlLayout`,
+  `src/FlMenus` (`.Mod` and `.cpp`): the widget families of PLAN.md's module table. Each C++ part
   has one `ofl_<family>_new(kind, ...)` that makes the class `kind`
   numbers as `ofl::W<class>`, copies the label and calls `ofl::open`;
   each Oberon `Open<Type>` passes it `Fl.BeginOpen(w)` and gives the
   result to `Fl.EndOpen`. Methods get the handle with `Fl.Live(w)`.
+- `src/FlDialogs.Mod`, `src/FlDialogs.cpp`: FLTK's common dialogs,
+  procedures with no widget of their own.
 - `test/`:
   - one main module per concern, `Test*.Mod`, using `Check.Mod`;
   - halt tests, `Halt*.Mod`, one per code;
@@ -64,12 +67,14 @@ As of 2026-10-06, Phases 0 to 4 of PLAN.md are done, and Phase 5
     by `tools/gen-constants.py`. `CConstants` is a test module with a C++
     part;
   - `Probe.Mod` and `Probe.cpp`, a test module with a C++ part: a
-    widget's pixels, captured into an `Fl_Image_Surface`, and mouse,
-    wheel and key events sent as the window system would.
+    widget's pixels, captured into an `Fl_Image_Surface`; mouse, wheel
+    and key events sent as the window system would; the modal window (a
+    dialog) and keys sent to it; and whether FLTK uses Wayland.
 - `tools/gen-constants.py`: writes each module's constants and their
   test, from FLTK's headers (constants, below).
 - `examples/`: example programs (`Hello`, FLTK's hello; `Scribble`,
-  drawing with the mouse; `Swatch`, the prototype's demo). `make` builds them; they wait for the user,
+  drawing with the mouse; `Swatch`, the prototype's demo; `Menus`, a
+  menu bar, a choice and the dialogs). `make` builds them; they wait for the user,
   so `make test` doesn't run them.
 - `GNUmakefile`: build and test (Build, below).
 - `build/`: poc and clang output (ignored by git).
@@ -185,7 +190,16 @@ widgets never shown; `make test` stops with a message without one.
   - `Probe.Shortcut` offers a key to a window's widgets as a shortcut,
     for return buttons and shortcuts;
   - waits on timers allow for valgrind's slowness: loop until the
-    condition holds, up to a generous limit.
+    condition holds, up to a generous limit;
+  - `Probe.HandleKey` sends a key through `Fl::handle`: to a pop-up
+    menu's grab, or as a shortcut to a window's widgets and then the
+    event handlers (a global menu);
+  - a dialog is answered by a timer that waits for `Probe.Modal`, then
+    sends keys with `Probe.ModalKey`, then fires once more: FLTK runs
+    timers and then waits for an event, and under Xvfb none comes to end
+    the dialog's loop (`doc/fltk-issues.md`, 32);
+  - under Wayland the compositor closes a pop-up menu of a window no
+    user clicked, so `Popup` is tested on X11 alone (`Probe.Wayland`).
 - **`xdotool` is installed** (2026-10-06), for trying an example by hand
   under Xvfb: run it in `xvfb-run -a -s '-screen 0 640x480x24' sh -c
   '...'` with `WAYLAND_DISPLAY` unset, move and click with `xdotool`, and
@@ -307,6 +321,20 @@ held only in C++ memory**.
   so a range set later makes the next move put the children back.
   `Tile.SizeRange` saves them first (`doc/fltk-issues.md`, 24).
 - **`Fl_Pack` resizes itself as it draws**, to fit its children.
+- **Menus** (`doc/fltk-issues.md`, 26 to 29, 33):
+  - inserting or removing items moves `value()` to another item, so
+    `FlMenus` finds it again by its text pointer;
+  - a deleted `global()` menu is used by the next shortcut, so `FlMenus`
+    keeps its own;
+  - under Wayland a menu popped up over a window not yet exposed kills
+    the program (`Popup` waits with `wait_for_expose`), and a pop-up of
+    a window without the focus is closed at once;
+  - `Fl_Choice::value(int)` hides `Fl_Menu_`'s;
+  - clearing a menu in its own callback is safe in 1.4.5, despite
+    FLTK's documentation.
+- **Dialogs**: `fl_message` and the rest take a printf format, so pass
+  text as `"%s"`; `fl_file_chooser` keeps its title pointer
+  (`doc/fltk-issues.md`, 30, 31).
 - **Name clashes with FLTK's keys**: the key constants take the prefix
   `Key`, since `FL_End` would be the keyword `END`. So `Fl::get_key` is
   `GetKey`, because `KeyDown` is the down arrow.

@@ -15,6 +15,9 @@
 #include <FL/Fl_Pack.H>
 #include <FL/Fl_Scroll.H>
 #include <FL/Fl_Tabs.H>
+#include <FL/Fl_Menu_Item.H>
+#include <FL/Fl_Menu_Button.H>
+#include <FL/fl_ask.H>
 #include <stdint.h>
 #include <stdio.h>
 #include <string.h>
@@ -378,6 +381,26 @@ const Entry entries[] = {
   {"Fl_Tabs::OVERFLOW_CLIP", (int32_t)(Fl_Tabs::OVERFLOW_CLIP)},
   {"Fl_Tabs::OVERFLOW_PULLDOWN", (int32_t)(Fl_Tabs::OVERFLOW_PULLDOWN)},
   {"Fl_Tabs::OVERFLOW_DRAG", (int32_t)(Fl_Tabs::OVERFLOW_DRAG)},
+  {"FL_MENU_INACTIVE", (int32_t)(FL_MENU_INACTIVE)},
+  {"FL_MENU_TOGGLE", (int32_t)(FL_MENU_TOGGLE)},
+  {"FL_MENU_VALUE", (int32_t)(FL_MENU_VALUE)},
+  {"FL_MENU_RADIO", (int32_t)(FL_MENU_RADIO)},
+  {"FL_MENU_INVISIBLE", (int32_t)(FL_MENU_INVISIBLE)},
+  {"FL_SUBMENU", (int32_t)(FL_SUBMENU)},
+  {"FL_MENU_DIVIDER", (int32_t)(FL_MENU_DIVIDER)},
+  {"Fl_Menu_Button::POPUP1", (int32_t)(Fl_Menu_Button::POPUP1)},
+  {"Fl_Menu_Button::POPUP2", (int32_t)(Fl_Menu_Button::POPUP2)},
+  {"Fl_Menu_Button::POPUP12", (int32_t)(Fl_Menu_Button::POPUP12)},
+  {"Fl_Menu_Button::POPUP3", (int32_t)(Fl_Menu_Button::POPUP3)},
+  {"Fl_Menu_Button::POPUP13", (int32_t)(Fl_Menu_Button::POPUP13)},
+  {"Fl_Menu_Button::POPUP23", (int32_t)(Fl_Menu_Button::POPUP23)},
+  {"Fl_Menu_Button::POPUP123", (int32_t)(Fl_Menu_Button::POPUP123)},
+  {"FL_BEEP_DEFAULT", (int32_t)(FL_BEEP_DEFAULT)},
+  {"FL_BEEP_MESSAGE", (int32_t)(FL_BEEP_MESSAGE)},
+  {"FL_BEEP_ERROR", (int32_t)(FL_BEEP_ERROR)},
+  {"FL_BEEP_QUESTION", (int32_t)(FL_BEEP_QUESTION)},
+  {"FL_BEEP_PASSWORD", (int32_t)(FL_BEEP_PASSWORD)},
+  {"FL_BEEP_NOTIFICATION", (int32_t)(FL_BEEP_NOTIFICATION)},
   {"fl_gray_ramp(0)", (int32_t)(fl_gray_ramp(0))},
   {"fl_gray_ramp(23)", (int32_t)(fl_gray_ramp(23))},
   {"fl_color_cube(0, 0, 0)", (int32_t)(fl_color_cube(0, 0, 0))},

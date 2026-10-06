@@ -191,6 +191,21 @@ section("what tabs do when there are too many to fit (Tabs.HandleOverflow)")
 add("int", [("Overflow" + camel(k), "Fl_Tabs::OVERFLOW_" + k) for k in
             "COMPRESS CLIP PULLDOWN DRAG".split()])
 
+module("FlMenus")
+section("a menu item's flags (Menu.Add, Menu.ItemFlags); not FL_SUBMENU_POINTER")
+add("set", [("MenuInactive", "FL_MENU_INACTIVE"), ("MenuToggle", "FL_MENU_TOGGLE"),
+            ("MenuValue", "FL_MENU_VALUE"), ("MenuRadio", "FL_MENU_RADIO"),
+            ("MenuInvisible", "FL_MENU_INVISIBLE"), ("Submenu", "FL_SUBMENU"),
+            ("MenuDivider", "FL_MENU_DIVIDER")])
+section("kinds of menu button (MenuButton.SetKind): the mouse buttons that pop it up")
+add("int", [("Popup" + k, "Fl_Menu_Button::POPUP" + k) for k in
+            "1 2 12 3 13 23 123".split()])
+
+module("FlDialogs")
+section("kinds of beep (Beep)")
+add("int", [("Beep" + camel(k), "FL_BEEP_" + k) for k in
+            "DEFAULT MESSAGE ERROR QUESTION PASSWORD NOTIFICATION".split()])
+
 # Not constants of Fl, but values the test also checks against C: what Fl's
 # procedures compute in Oberon.
 CHECKS = [
@@ -208,6 +223,7 @@ HEADERS = ("#include <FL/Fl.H>\n#include <FL/Enumerations.H>\n#include <FL/fl_dr
            "#include <FL/Fl_Input_.H>\n#include <FL/Fl_Slider.H>\n#include <FL/Fl_Valuator.H>\n"
            "#include <FL/Fl_Flex.H>\n#include <FL/Fl_Grid.H>\n#include <FL/Fl_Pack.H>\n"
            "#include <FL/Fl_Scroll.H>\n#include <FL/Fl_Tabs.H>\n"
+           "#include <FL/Fl_Menu_Item.H>\n#include <FL/Fl_Menu_Button.H>\n#include <FL/fl_ask.H>\n"
            "#include <stdint.h>\n#include <stdio.h>\n")
 
 def oberon_set(v):

@@ -10,6 +10,10 @@ PROCEDURE ["C", "ofltest_release"] CRelease;
 PROCEDURE ["C", "ofltest_mouse"] CMouse(win: SYSTEM.ADDRESS; event, x, y, button, state, clicks: SYSTEM.INT32): SYSTEM.INT32;
 PROCEDURE ["C", "ofltest_wheel"] CWheel(win: SYSTEM.ADDRESS; x, y, dx, dy: SYSTEM.INT32): SYSTEM.INT32;
 PROCEDURE ["C", "ofltest_shortcut"] CShortcut(win: SYSTEM.ADDRESS; key, state: SYSTEM.INT32; s: ARRAY OF CHAR): SYSTEM.INT32;
+PROCEDURE ["C", "ofltest_handle_key"] CHandleKey(win: SYSTEM.ADDRESS; event, key, state: SYSTEM.INT32; s: ARRAY OF CHAR): SYSTEM.INT32;
+PROCEDURE ["C", "ofltest_wayland"] CWayland(): SYSTEM.INT32;
+PROCEDURE ["C", "ofltest_modal_key"] CModalKey(key, state: SYSTEM.INT32; s: ARRAY OF CHAR): SYSTEM.INT32;
+PROCEDURE ["C", "ofltest_modal"] CModal(VAR buf: ARRAY OF CHAR; n: SYSTEM.INT32): SYSTEM.INT32;
 PROCEDURE ["C", "ofltest_key"] CKey(event, key, state: SYSTEM.INT32; s: ARRAY OF CHAR): SYSTEM.INT32;
 
 (* Draws w, as FLTK would in its window, on white, for Pixel; TRUE if
@@ -55,5 +59,29 @@ END Key;
 PROCEDURE Shortcut*(win: Fl.Window; key: INTEGER; state: SET; text-: ARRAY OF CHAR): BOOLEAN;
 BEGIN RETURN CShortcut(win.h, key, SYSTEM.VAL(SYSTEM.INT32, state), text) # 0
 END Shortcut;
+
+(* A key event, EvKeyDown or EvShortcut, sent by FLTK's route, as
+   from the window system: to a pop-up menu if one is up, else a shortcut
+   goes to win's widgets and then to a global menu. Not a key no widget
+   uses after mouse events, in a window never shown, which crashes FLTK. *)
+PROCEDURE HandleKey*(win: Fl.Window; event, key: INTEGER; state: SET; text-: ARRAY OF CHAR): BOOLEAN;
+BEGIN RETURN CHandleKey(win.h, event, key, SYSTEM.VAL(SYSTEM.INT32, state), text) # 0
+END HandleKey;
+
+(* TRUE if a modal window, a dialog, is shown, with its title in title. *)
+PROCEDURE Modal*(VAR title: ARRAY OF CHAR): BOOLEAN;
+BEGIN RETURN CModal(title, SHORT(LEN(title))) # 0
+END Modal;
+
+(* A key sent to the modal window, a dialog, as from the window system;
+   FALSE if no modal window is shown. *)
+PROCEDURE ModalKey*(key: INTEGER; state: SET; text-: ARRAY OF CHAR): BOOLEAN;
+BEGIN RETURN CModalKey(key, SYSTEM.VAL(SYSTEM.INT32, state), text) # 0
+END ModalKey;
+
+(* TRUE if FLTK uses Wayland, FALSE if X11. *)
+PROCEDURE Wayland*(): BOOLEAN;
+BEGIN RETURN CWayland() # 0
+END Wayland;
 
 END Probe.
