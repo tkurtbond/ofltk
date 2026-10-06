@@ -2,7 +2,9 @@ MODULE Fl; (* ofltk's core: widgets, groups, windows, boxes, timers, the event l
 
 (* Each widget type extends Widget, and a program extends those in turn:
    NEW(b); Fl.OpenBox(b, ...) makes the FLTK widget for b, whatever
-   extension of Box b is. FLTK then calls b's Draw, Handle and Callback.
+   extension of Box b is. FLTK then calls b's Draw, Handle, Resize and
+   Callback; while Handle runs, the Event procedures below say what the
+   event was. Draw draws with FlDraw.
 
    FLTK owns its widgets: one lives until it is deleted, by Delete or
    with its parent group, and its Oberon object lives at least as long,
@@ -239,6 +241,121 @@ CONST
   NumRed* = 5;
   NumGreen* = 8;
   NumBlue* = 5;
+
+  (* keys (Fl::event_key): a character's code for most; KeyF + n is F<n>, KeyKP + c keypad c *)
+  KeyButton* = 65256;
+  KeyBackSpace* = 65288;
+  KeyTab* = 65289;
+  KeyIsoKey* = 65292;
+  KeyEnter* = 65293;
+  KeyPause* = 65299;
+  KeyScrollLock* = 65300;
+  KeyEscape* = 65307;
+  KeyKana* = 65326;
+  KeyEisu* = 65327;
+  KeyYen* = 65328;
+  KeyJISUnderscore* = 65329;
+  KeyHome* = 65360;
+  KeyLeft* = 65361;
+  KeyUp* = 65362;
+  KeyRight* = 65363;
+  KeyDown* = 65364;
+  KeyPageUp* = 65365;
+  KeyPageDown* = 65366;
+  KeyEnd* = 65367;
+  KeyPrint* = 65377;
+  KeyInsert* = 65379;
+  KeyMenu* = 65383;
+  KeyHelp* = 65384;
+  KeyNumLock* = 65407;
+  KeyKP* = 65408;
+  KeyKPEnter* = 65421;
+  KeyKPLast* = 65469;
+  KeyF* = 65469;
+  KeyFLast* = 65504;
+  KeyShiftL* = 65505;
+  KeyShiftR* = 65506;
+  KeyControlL* = 65507;
+  KeyControlR* = 65508;
+  KeyCapsLock* = 65509;
+  KeyMetaL* = 65511;
+  KeyMetaR* = 65512;
+  KeyAltL* = 65513;
+  KeyAltR* = 65514;
+  KeyDelete* = 65535;
+  KeyAltGr* = 65027;
+  KeyVolumeDown* = 61201;
+  KeyVolumeMute* = 61202;
+  KeyVolumeUp* = 61203;
+  KeyMediaPlay* = 61204;
+  KeyMediaStop* = 61205;
+  KeyMediaPrev* = 61206;
+  KeyMediaNext* = 61207;
+  KeyHomePage* = 61208;
+  KeyMail* = 61209;
+  KeySearch* = 61211;
+  KeyBack* = 61222;
+  KeyForward* = 61223;
+  KeyStop* = 61224;
+  KeyRefresh* = 61225;
+  KeySleep* = 61231;
+  KeyFavorites* = 61232;
+
+  (* mouse buttons (Fl::event_button) *)
+  LeftMouse* = 1;
+  MiddleMouse* = 2;
+  RightMouse* = 3;
+  BackMouse* = 4;
+  ForwardMouse* = 5;
+
+  (* the shift keys and mouse buttons held (Fl::event_state); Command is Ctrl, but Meta on macOS *)
+  Shift* = {16};
+  CapsLock* = {17};
+  Ctrl* = {18};
+  Alt* = {19};
+  NumLock* = {20};
+  Meta* = {22};
+  ScrollLock* = {23};
+  Button1* = {24};
+  Button2* = {25};
+  Button3* = {26};
+  Button4* = {27};
+  Button5* = {28};
+  Buttons* = {24, 25, 26, 27, 28};
+  Command* = {18};
+  Control* = {22};
+
+  (* what needs redrawing (Fl_Damage), Widget.Damage *)
+  DamageChild* = {0};
+  DamageExpose* = {1};
+  DamageScroll* = {2};
+  DamageOverlay* = {3};
+  DamageUser1* = {4};
+  DamageUser2* = {5};
+  DamageAll* = {7};
+
+  (* mouse cursors (Fl_Cursor), Window.SetCursor *)
+  CursorDefault* = 0;
+  CursorArrow* = 35;
+  CursorCross* = 66;
+  CursorWait* = 76;
+  CursorInsert* = 77;
+  CursorHand* = 31;
+  CursorHelp* = 47;
+  CursorMove* = 27;
+  CursorNs* = 78;
+  CursorWe* = 79;
+  CursorNwse* = 80;
+  CursorNesw* = 81;
+  CursorN* = 70;
+  CursorNe* = 69;
+  CursorE* = 49;
+  CursorSe* = 8;
+  CursorS* = 9;
+  CursorSw* = 7;
+  CursorW* = 36;
+  CursorNw* = 68;
+  CursorNone* = 255;
 (* END generated constants *)
 
 TYPE
@@ -273,6 +390,7 @@ TYPE
 
   SelfProc = PROCEDURE (self: SYSTEM.ADDRESS);
   HandleProc = PROCEDURE (self: SYSTEM.ADDRESS; event: SYSTEM.INT32): SYSTEM.INT32;
+  ResizeProc = PROCEDURE (self: SYSTEM.ADDRESS; x, y, w, h: SYSTEM.INT32);
 
 VAR
   widgets: Widget;  (* every open widget: the registry *)
@@ -280,7 +398,7 @@ VAR
   openCount, pendingCount: LONGINT;
   firing: Timer;    (* the timer whose Fire is running, or NIL *)
 
-PROCEDURE ["C", "ofl_register"] CRegister(callback, draw: SelfProc; handle: HandleProc; deleted, timeout: SelfProc);
+PROCEDURE ["C", "ofl_register"] CRegister(callback, draw: SelfProc; handle: HandleProc; resize: ResizeProc; deleted, timeout: SelfProc);
 PROCEDURE ["C", "ofl_group_new"] CGroupNew(x, y, w, h: SYSTEM.INT32; self: SYSTEM.ADDRESS): SYSTEM.ADDRESS;
 PROCEDURE ["C", "ofl_window_new"] CWindowNew(placed, x, y, w, h: SYSTEM.INT32; self: SYSTEM.ADDRESS): SYSTEM.ADDRESS;
 PROCEDURE ["C", "ofl_double_window_new"] CDoubleWindowNew(placed, x, y, w, h: SYSTEM.INT32; self: SYSTEM.ADDRESS): SYSTEM.ADDRESS;
@@ -301,7 +419,41 @@ PROCEDURE ["C", "ofl_widget_x"] CX(w: SYSTEM.ADDRESS): SYSTEM.INT32;
 PROCEDURE ["C", "ofl_widget_y"] CY(w: SYSTEM.ADDRESS): SYSTEM.INT32;
 PROCEDURE ["C", "ofl_widget_w"] CW(w: SYSTEM.ADDRESS): SYSTEM.INT32;
 PROCEDURE ["C", "ofl_widget_h"] CH(w: SYSTEM.ADDRESS): SYSTEM.INT32;
-PROCEDURE ["C", "ofl_widget_resize"] CResize(w: SYSTEM.ADDRESS; x, y, width, height: SYSTEM.INT32);
+PROCEDURE ["C", "ofl_widget_base_resize"] CBaseResize(w: SYSTEM.ADDRESS; x, y, width, height: SYSTEM.INT32);
+PROCEDURE ["C", "ofl_widget_draw_box"] CDrawBox(w: SYSTEM.ADDRESS);
+PROCEDURE ["C", "ofl_widget_draw_label"] CDrawLabel(w: SYSTEM.ADDRESS);
+PROCEDURE ["C", "ofl_widget_draw_focus"] CDrawFocus(w: SYSTEM.ADDRESS);
+PROCEDURE ["C", "ofl_widget_damage"] CDamage(w: SYSTEM.ADDRESS): SYSTEM.INT32;
+PROCEDURE ["C", "ofl_widget_set_damage"] CSetDamage(w: SYSTEM.ADDRESS; d: SYSTEM.INT32);
+PROCEDURE ["C", "ofl_widget_take_focus"] CTakeFocus(w: SYSTEM.ADDRESS): SYSTEM.INT32;
+PROCEDURE ["C", "ofl_widget_visible_focus"] CVisibleFocus(w: SYSTEM.ADDRESS): SYSTEM.INT32;
+PROCEDURE ["C", "ofl_widget_set_visible_focus"] CSetVisibleFocus(w: SYSTEM.ADDRESS; v: SYSTEM.INT32);
+PROCEDURE ["C", "ofl_widget_event_inside"] CWidgetEventInside(w: SYSTEM.ADDRESS): SYSTEM.INT32;
+PROCEDURE ["C", "ofl_window_cursor"] CCursor(w: SYSTEM.ADDRESS; c: SYSTEM.INT32);
+PROCEDURE ["C", "ofl_event"] CEvent(): SYSTEM.INT32;
+PROCEDURE ["C", "ofl_event_x"] CEventX(): SYSTEM.INT32;
+PROCEDURE ["C", "ofl_event_y"] CEventY(): SYSTEM.INT32;
+PROCEDURE ["C", "ofl_event_x_root"] CEventXRoot(): SYSTEM.INT32;
+PROCEDURE ["C", "ofl_event_y_root"] CEventYRoot(): SYSTEM.INT32;
+PROCEDURE ["C", "ofl_event_dx"] CEventDx(): SYSTEM.INT32;
+PROCEDURE ["C", "ofl_event_dy"] CEventDy(): SYSTEM.INT32;
+PROCEDURE ["C", "ofl_event_button"] CEventButton(): SYSTEM.INT32;
+PROCEDURE ["C", "ofl_event_clicks"] CEventClicks(): SYSTEM.INT32;
+PROCEDURE ["C", "ofl_set_event_clicks"] CSetEventClicks(n: SYSTEM.INT32);
+PROCEDURE ["C", "ofl_event_is_click"] CEventIsClick(): SYSTEM.INT32;
+PROCEDURE ["C", "ofl_event_is_click_off"] CEventIsClickOff;
+PROCEDURE ["C", "ofl_event_key"] CEventKey(): SYSTEM.INT32;
+PROCEDURE ["C", "ofl_event_original_key"] CEventOriginalKey(): SYSTEM.INT32;
+PROCEDURE ["C", "ofl_event_key_down"] CEventKeyDown(k: SYSTEM.INT32): SYSTEM.INT32;
+PROCEDURE ["C", "ofl_get_key"] CGetKey(k: SYSTEM.INT32): SYSTEM.INT32;
+PROCEDURE ["C", "ofl_event_state"] CEventState(): SYSTEM.INT32;
+PROCEDURE ["C", "ofl_event_text"] CEventText(): SYSTEM.ADDRESS;
+PROCEDURE ["C", "ofl_event_length"] CEventLength(): SYSTEM.INT32;
+PROCEDURE ["C", "ofl_event_inside"] CEventInside(x, y, w, h: SYSTEM.INT32): SYSTEM.INT32;
+PROCEDURE ["C", "ofl_focus"] CFocus(): SYSTEM.ADDRESS;
+PROCEDURE ["C", "ofl_belowmouse"] CBelowmouse(): SYSTEM.ADDRESS;
+PROCEDURE ["C", "ofl_pushed"] CPushed(): SYSTEM.ADDRESS;
+PROCEDURE ["C", "ofl_set_focus"] CSetFocus(w: SYSTEM.ADDRESS);
 PROCEDURE ["C", "ofl_group_begin"] CBegin(g: SYSTEM.ADDRESS);
 PROCEDURE ["C", "ofl_group_end"] CEnd(g: SYSTEM.ADDRESS);
 PROCEDURE ["C", "ofl_group_children"] CChildren(g: SYSTEM.ADDRESS): SYSTEM.INT32;
@@ -655,10 +807,14 @@ PROCEDURE (w: Widget) H*(): INTEGER;
 BEGIN RETURN CH(Live(w))
 END H;
 
+(* Moves and sizes w: FLTK's resizing, which an extension's Resize may
+   call. FLTK calls Resize whenever w moves or changes size: by Position
+   or Size, or as its group is resized. *)
 PROCEDURE (w: Widget) Resize*(x, y, width, height: INTEGER);
-BEGIN CResize(Live(w), x, y, width, height)
+BEGIN CBaseResize(Live(w), x, y, width, height)
 END Resize;
 
+(* Each calls Resize. *)
 PROCEDURE (w: Widget) Position*(x, y: INTEGER);
 BEGIN CPosition(Live(w), x, y)
 END Position;
@@ -666,6 +822,53 @@ END Position;
 PROCEDURE (w: Widget) Size*(width, height: INTEGER);
 BEGIN CSize(Live(w), width, height)
 END Size;
+
+(* For an extension's Draw: FLTK's drawing of w's box, in its box type
+   and color; of its label, as aligned; and of the dotted box showing it
+   has the keyboard focus, if it has. *)
+PROCEDURE (w: Widget) DrawBox*;
+BEGIN CDrawBox(Live(w))
+END DrawBox;
+
+PROCEDURE (w: Widget) DrawLabel*;
+BEGIN CDrawLabel(Live(w))
+END DrawLabel;
+
+PROCEDURE (w: Widget) DrawFocus*;
+BEGIN CDrawFocus(Live(w))
+END DrawFocus;
+
+(* What needs redrawing: a set of the Damage constants, {} for nothing.
+   Redraw sets DamageAll. *)
+PROCEDURE (w: Widget) Damage*(): SET;
+BEGIN RETURN SYSTEM.VAL(SET, CDamage(Live(w)))
+END Damage;
+
+(* Adds d to what needs redrawing, and has FLTK redraw w soon. *)
+PROCEDURE (w: Widget) SetDamage*(d: SET);
+BEGIN CSetDamage(Live(w), SYSTEM.VAL(SYSTEM.INT32, d))
+END SetDamage;
+
+(* Gives w the keyboard focus, if it takes it: TRUE if it did. *)
+PROCEDURE (w: Widget) TakeFocus*(): BOOLEAN;
+BEGIN RETURN CTakeFocus(Live(w)) # 0
+END TakeFocus;
+
+(* Whether w may take the focus by the keyboard and shows it has it;
+   TRUE to start with. *)
+PROCEDURE (w: Widget) VisibleFocus*(): BOOLEAN;
+BEGIN RETURN CVisibleFocus(Live(w)) # 0
+END VisibleFocus;
+
+PROCEDURE (w: Widget) SetVisibleFocus*(v: BOOLEAN);
+BEGIN
+  IF v THEN CSetVisibleFocus(Live(w), 1) ELSE CSetVisibleFocus(Live(w), 0) END
+END SetVisibleFocus;
+
+(* TRUE if the event's position is inside w. *)
+PROCEDURE (w: Widget) EventInside*(): BOOLEAN;
+BEGIN RETURN CWidgetEventInside(Live(w)) # 0
+END EventInside;
 
 (* Group *)
 
@@ -776,6 +979,12 @@ PROCEDURE (w: Window) FullscreenActive*(): BOOLEAN;
 BEGIN RETURN CFullscreenActive(Live(w)) # 0
 END FullscreenActive;
 
+(* The mouse pointer's shape over the window: CursorDefault, or another
+   cursor constant. *)
+PROCEDURE (w: Window) SetCursor*(c: INTEGER);
+BEGIN CCursor(Live(w), c)
+END SetCursor;
+
 (* Colors. A color is an index into FLTK's colormap (the color constants,
    GrayRamp, ColorCube), or an RGB color, which is never one. *)
 
@@ -865,6 +1074,134 @@ PROCEDURE GetScheme*(VAR name: ARRAY OF CHAR);
 BEGIN FromC(CScheme(), name)
 END GetScheme;
 
+(* Events. While a widget's Handle runs, these say what the event was:
+   where, which key or button, what text. A position is in the window's
+   coordinates, as a widget's X and Y are, unless it is Root. *)
+
+(* The event being handled: EvPush, or another event constant. *)
+PROCEDURE Event*(): INTEGER;
+BEGIN RETURN CEvent()
+END Event;
+
+PROCEDURE EventX*(): INTEGER;
+BEGIN RETURN CEventX()
+END EventX;
+
+PROCEDURE EventY*(): INTEGER;
+BEGIN RETURN CEventY()
+END EventY;
+
+(* The position on the screen. *)
+PROCEDURE EventXRoot*(): INTEGER;
+BEGIN RETURN CEventXRoot()
+END EventXRoot;
+
+PROCEDURE EventYRoot*(): INTEGER;
+BEGIN RETURN CEventYRoot()
+END EventYRoot;
+
+(* How far an EvMouseWheel turned: across, and down (positive) or up. *)
+PROCEDURE EventDx*(): INTEGER;
+BEGIN RETURN CEventDx()
+END EventDx;
+
+PROCEDURE EventDy*(): INTEGER;
+BEGIN RETURN CEventDy()
+END EventDy;
+
+(* The button of an EvPush or EvRelease: LeftMouse, MiddleMouse, ... *)
+PROCEDURE EventButton*(): INTEGER;
+BEGIN RETURN CEventButton()
+END EventButton;
+
+(* For an EvPush: 0 for a single click, 1 for a double, and so on. *)
+PROCEDURE EventClicks*(): INTEGER;
+BEGIN RETURN CEventClicks()
+END EventClicks;
+
+(* Sets EventClicks: 0 makes the next click a single one. *)
+PROCEDURE SetEventClicks*(n: INTEGER);
+BEGIN CSetEventClicks(n)
+END SetEventClicks;
+
+(* TRUE if the mouse hasn't moved far, or for long, since the EvPush, so
+   that it is still a click. *)
+PROCEDURE EventIsClick*(): BOOLEAN;
+BEGIN RETURN CEventIsClick() # 0
+END EventIsClick;
+
+(* Makes EventIsClick FALSE until the next EvPush. *)
+PROCEDURE EventIsClickOff*;
+BEGIN CEventIsClickOff
+END EventIsClickOff;
+
+(* The key of an EvKeyDown or EvKeyUp: a character's code, unshifted
+   ("a" for "A"), or a Key constant; for a mouse button, KeyButton plus
+   the button. *)
+PROCEDURE EventKey*(): INTEGER;
+BEGIN RETURN CEventKey()
+END EventKey;
+
+(* EventKey, before FLTK's keypad translation (NumLock off). *)
+PROCEDURE EventOriginalKey*(): INTEGER;
+BEGIN RETURN CEventOriginalKey()
+END EventOriginalKey;
+
+(* TRUE if key was held down when the event happened. *)
+PROCEDURE EventKeyDown*(key: INTEGER): BOOLEAN;
+BEGIN RETURN CEventKeyDown(key) # 0
+END EventKeyDown;
+
+(* TRUE if key is held down now, whatever the event. (FLTK's name: KeyDown
+   is the down arrow.) *)
+PROCEDURE GetKey*(key: INTEGER): BOOLEAN;
+BEGIN RETURN CGetKey(key) # 0
+END GetKey;
+
+(* The shift keys and buttons held during the event: a set of Shift,
+   Ctrl, Button1 and the other state constants. *)
+PROCEDURE EventState*(): SET;
+BEGIN RETURN SYSTEM.VAL(SET, CEventState())
+END EventState;
+
+(* The text of an EvKeyDown (what the key types, UTF-8) or an EvPaste,
+   truncated to fit text; "" for none. *)
+PROCEDURE EventText*(VAR text: ARRAY OF CHAR);
+BEGIN FromC(CEventText(), text)
+END EventText;
+
+(* The length of EventText's text, in bytes, untruncated. *)
+PROCEDURE EventLength*(): INTEGER;
+BEGIN RETURN CEventLength()
+END EventLength;
+
+(* TRUE if the event's position is inside the rectangle x, y, w, h. *)
+PROCEDURE EventInside*(x, y, w, h: INTEGER): BOOLEAN;
+BEGIN RETURN CEventInside(x, y, w, h) # 0
+END EventInside;
+
+(* The widget with the keyboard focus, or NIL: none, or one FLTK made. *)
+PROCEDURE Focus*(): Widget;
+BEGIN RETURN SYSTEM.VAL(Widget, CFocus())
+END Focus;
+
+(* Gives w the focus without asking it, as TakeFocus does; NIL for none. *)
+PROCEDURE SetFocus*(w: Widget);
+BEGIN
+  IF w = NIL THEN CSetFocus(0) ELSE CSetFocus(Live(w)) END
+END SetFocus;
+
+(* The widget under the mouse, which gets EvMove and EvMouseWheel, and the
+   one that took the last EvPush, which gets EvDrag and EvRelease; NIL
+   for none, or one FLTK made. *)
+PROCEDURE BelowMouse*(): Widget;
+BEGIN RETURN SYSTEM.VAL(Widget, CBelowmouse())
+END BelowMouse;
+
+PROCEDURE Pushed*(): Widget;
+BEGIN RETURN SYSTEM.VAL(Widget, CPushed())
+END Pushed;
+
 (* Timer *)
 
 (* What a timer does when it fires: its action, if set. *)
@@ -951,6 +1288,11 @@ PROCEDURE DrawD(self: SYSTEM.ADDRESS);
 BEGIN w := SYSTEM.VAL(Widget, self); w.Draw
 END DrawD;
 
+PROCEDURE ResizeD(self: SYSTEM.ADDRESS; x, y, w, h: SYSTEM.INT32);
+  VAR wd: Widget;
+BEGIN wd := SYSTEM.VAL(Widget, self); wd.Resize(x, y, w, h)
+END ResizeD;
+
 PROCEDURE HandleD(self: SYSTEM.ADDRESS; event: SYSTEM.INT32): SYSTEM.INT32;
   VAR w: Widget;
 BEGIN
@@ -974,5 +1316,5 @@ BEGIN
 END TimeoutD;
 
 BEGIN
-  CRegister(CallbackD, DrawD, HandleD, DeletedD, TimeoutD)
+  CRegister(CallbackD, DrawD, HandleD, ResizeD, DeletedD, TimeoutD)
 END Fl.

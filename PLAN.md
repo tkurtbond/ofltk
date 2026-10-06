@@ -70,7 +70,7 @@ application modules           (Oberon-2; extend Fl types, override methods)
         |
 ofltk modules  Fl, FlDraw, ...      (Oberon-2: objects, registry, policy)
         |      ["C"] procedures, unexported
-C++ parts      Fl.c, FlDraw.c, ...  (extern "C" shim, My_X subclasses)
+C++ parts      Fl.cpp, FlDraw.cpp, ...  (extern "C" shim, ofl::W<B>)
         |
 FLTK 1.4 (C++)
 ```
@@ -84,7 +84,7 @@ together with their methods and their part of the shim:
 | Module | Contents |
 |---|---|
 | `Fl` | `Widget`, `Group`, `Window`, `DoubleWindow`, `Box`; the registry; the event loop, timeouts, idle and fd callbacks; colors, fonts, box and label types; event queries (`Fl::event_x` and friends); schemes |
-| `FlDraw` | the `fl_draw.H` API: colors, lines, shapes, text, fonts, clipping, measuring, offscreen |
+| `FlDraw` | the `fl_draw.H` API: colors, lines, shapes, paths and transformations, text, fonts, clipping, measuring, boxes and symbols; offscreen drawing with images (Phase 7) |
 | `FlButtons` | `Button`, `CheckButton`, `LightButton`, `RoundButton`, `RadioButton`, `ReturnButton`, `RepeatButton`, `ToggleButton` |
 | `FlInputs` | `Input`, `IntInput`, `FloatInput`, `MultilineInput`, `SecretInput`, `Output`, `MultilineOutput` |
 | `FlValuators` | `Slider` (and its kinds), `Counter`, `Dial`, `Roller`, `Spinner`, `Adjuster`, `ValueInput`, `ValueOutput`, `Scrollbar`, `Progress` |
@@ -396,12 +396,101 @@ findings written into this file and AGENTS.md.
      - multi, icon and image labels, which come with images in Phase 7;
      - the prototype's demo, which needs Phase 2's drawing and Phase 3's
        buttons.
-2. **Custom widgets and drawing** (`Fl`, `FlDraw`):
-   - `Draw`/`Handle`/`Resize` overrides, through a C++ template that
-     makes `My_X` for any class;
-   - event queries; the `fl_draw.H` API.
+2. **`[done]` Custom widgets and drawing** (`Fl`, `FlDraw`; 2026-10-06,
+   poc 0.4.0, FLTK 1.4.5):
+   - **`Resize` is overridable**, like `Draw` and `Handle`: `ofl::W<B>`
+     overrides `resize()` too. The default `Resize` calls `B::resize`
+     directly, not the virtual one, so an override's `Resize^` doesn't
+     recurse. `Position` and `Size` go through the virtual `resize()`, so
+     they reach an override, as FLTK's group resizing does.
+   - **Widget**, for an override's `Draw`: `DrawBox`, `DrawLabel` and
+     `DrawFocus`, FLTK's protected `draw_box()` and friends, reached
+     through `ofl::Hooks`. Also `Damage`/`SetDamage` (a `SET`),
+     `TakeFocus`, `VisibleFocus`/`SetVisibleFocus`, `EventInside`; and
+     `Window.SetCursor`.
+   - **Event queries** in `Fl`: `Event`, `EventX`/`Y`, `EventXRoot`/
+     `YRoot`, `EventDx`/`Dy`, `EventButton`, `EventClicks` (and
+     `SetEventClicks`), `EventIsClick` (and `EventIsClickOff`),
+     `EventKey`, `EventOriginalKey`, `EventKeyDown(key)`, `GetKey(key)`,
+     `EventState` (a `SET`), `EventText`, `EventLength`, `EventInside`;
+     `Focus`/`SetFocus`, `BelowMouse`, `Pushed`.
+   - **Constants**, 116 more: keys (prefix `Key`, so `FL_End` isn't the
+     keyword `END`, and `KeyF + n` is F*n*), mouse buttons, event state
+     bits (`SET`s), damage bits (`SET`s), cursors; and in `FlDraw`, line
+     styles. `tools/gen-constants.py` now writes a block into each
+     module it names, and `TestConstants` checks all 312 values.
+   - **`FlDraw`**, the common calls of `fl_draw.H` (the open question
+     below, decided):
+     - colors and line styles;
+     - integer shapes: `Point`, `Line`, `Rect`, `RectF`, `Loop3`/`4`,
+       `Polygon3`/`4`, `XYLine`, `YXLine`, `Arc`, `Pie`;
+     - the transformation and paths: `PushMatrix`, `Translate`, `Scale`,
+       `Rotate`, the `Begin`/`End` pairs, `Vertex`, `Curve`, `ArcPath`,
+       `Circle`, `Gap`;
+     - text: `SetFont`, `Font`, `Size`, `Height`, `Descent`, `Width`,
+       `Text`, `TextAligned`, `Measure`. Each sets FLTK's normal font
+       first if no font is set, the crash `doc/design.md` records;
+     - clipping: `PushClip`, `PushNoClip`, `PopClip`, `NotClipped`,
+       `ClipBox`;
+     - `DrawBox`, `FocusRect`, `DrawSymbol`.
+   - **Tests**:
+     - `test/Probe` (Oberon and C++), for tests only: captures a widget
+       into an `Fl_Image_Surface` and reads its pixels, and sends mouse,
+       wheel and key events as the window system would, by setting
+       `Fl::e_x` and the rest and calling `Fl::handle`;
+     - `TestDraw` (24 checks): pixels of `Draw` overrides (fills, lines,
+       clipping, a transformed path, text, `DrawBox`/`DrawLabel`) and of
+       a box's own `Draw`;
+     - `TestEvents` (23 checks): pushes, drags, releases, a shifted
+       double click, the wheel, keys and focus reaching `Handle` with the
+       right event queries; `Resize` overrides through `Size`,
+       `Position` and a window's resizing, and one that refuses.
 
-   Tests: pixels of a custom `Draw`; synthesized events reaching `Handle`.
+     All pass on Wayland and on Xvfb, `make valgrind` and
+     `make valgrind-headless` show 0 errors and no ofltk leak, and
+     `make install` (tried in a scratch directory) installs both
+     modules, with a client built from `-library-path` alone.
+   - **The tests catch what they're for**: with `resize()` not sent to
+     Oberon, 4 `TestEvents` checks failed; with `ofl_draw_rectf` drawing
+     nothing, 5 `TestDraw` checks did.
+   - **Example**: `examples/Scribble.Mod`, drawing with the mouse: a
+     custom widget's `Handle` keeps the strokes, and its `Draw` draws
+     them as paths. Run under Xvfb and driven by `xdotool` (installed
+     later that day): a drag drew a stroke, a right click cleared it, and
+     Escape ended the program with status 0, each seen in a screenshot.
+
+   Findings, confirmed live:
+   - **`fl_clip_box` returns the reverse of what its documentation
+     says**: 0 when the box was clipped, 1 when it wasn't, on both back
+     ends. The Cairo driver (`Fl_Cairo_Graphics_Driver::clip_box`, which
+     the image surface uses) compares the result with the clip, not with
+     the box. For a box wholly clipped it sets `W` to 0 and returns
+     without setting `H`. So `FlDraw.ClipBox` is a proper procedure, and
+     the shim zeroes its outputs first.
+   - **A push no widget uses shows the window**: `Fl::handle_` makes the
+     window `Fl::pushed()` before offering the push to its widgets, and
+     if none uses it, raises the window with `show()`. So a never-shown
+     window is shown, and its widgets get `EvShow`.
+   - **A key no widget uses, sent by `Fl::handle` to a window never
+     shown, crashes FLTK 1.4.5** in `send_event`, as it tries the key as
+     a shortcut: with `belowmouse()` set and no window shown, it sends
+     the shortcut to `first_window()`, which is 0
+     (`doc/fltk-issues.md`, 3). Real keys can't reach such a window, so this binds only
+     tests: `Probe.Key` sends a key to the focus widget, as FLTK does
+     first.
+   - **Synthesized mouse events reach widgets of a window never shown**:
+     `Fl::handle` routes them to the widget under the mouse, then to
+     `Fl::pushed()`, as for real ones, so `Pushed`, `BelowMouse` and
+     `Focus` can be tested without a window on the screen.
+   - **`KeyDown` is FLTK's down arrow**, so `Fl::get_key` is `GetKey`,
+     its own name.
+
+   Not done, and why:
+   - Offscreen drawing (`Fl_Offscreen`), images, and `fl_read_image`
+     come with images in Phase 7.
+   - `fl_line_style`'s dash arrays, `fl_frame` strings, the 3-point
+     `fl_line`, and `fl_text_extents` wait until a program needs them.
+   - `prototype/` stays until Phase 3 gives it buttons.
 3. **Buttons, inputs and valuators** (`FlButtons`, `FlInputs`,
    `FlValuators`). Values in and out, `when` flags, radio groups.
 4. **Layout** (`FlLayout`): `Flex` and `Grid` first, then `Pack`,
@@ -415,8 +504,9 @@ findings written into this file and AGENTS.md.
      `TextEditor`, style buffers;
    - the browser family; `Tree`, following FLTKAda's
      `experimental/fl-tree-binding` scope.
-7. **Images and the rest** (`FlImages`, `Fl`):
-   - shared and RGB images (data copied);
+7. **Images and the rest** (`FlImages`, `Fl`, `FlDraw`):
+   - shared and RGB images (data copied); offscreen drawing and
+     `fl_read_image`;
    - the clipboard, drag and drop, `Preferences`, `NativeFileChooser`,
      `Table`.
 8. **Release.** README, and the examples complete. `make install` as a
@@ -473,7 +563,6 @@ written:
 - ~~**Halt code range.**~~ Decided: 70–79 (see "Halt codes"), clear of
   polibfyaml's 61–64 so a program using both can tell them apart.
 
-Still open:
-
-- **How much of `fl_draw.H` to bind before it's needed**: all of the
-  common calls in Phase 2, or only what the examples use.
+- ~~**How much of `fl_draw.H` to bind before it's needed**~~. Decided
+  in Phase 2: all of the common calls, so a custom widget seldom has to
+  wait for one; offscreen drawing comes with images.

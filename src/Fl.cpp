@@ -12,6 +12,7 @@ namespace ofl {
 
 SelfFn on_callback, on_draw, on_deleted;
 HandleFn on_handle;
+ResizeFn on_resize;
 int depth;
 
 void callback_trampoline(Fl_Widget *, void *data) {
@@ -37,11 +38,12 @@ void timeout_trampoline(void *self) {
 extern "C" {
 
 void ofl_register(ofl::SelfFn callback, ofl::SelfFn draw,
-                  ofl::HandleFn handle, ofl::SelfFn deleted,
-                  ofl::SelfFn timeout) {
+                  ofl::HandleFn handle, ofl::ResizeFn resize,
+                  ofl::SelfFn deleted, ofl::SelfFn timeout) {
   ofl::on_callback = callback;
   ofl::on_draw = draw;
   ofl::on_handle = handle;
+  ofl::on_resize = resize;
   ofl::on_deleted = deleted;
   on_timeout = timeout;
   // The box and label types FLTK's headers name by macros that define
@@ -145,9 +147,46 @@ int32_t ofl_widget_y(intptr_t w) { return ofl::widget(w)->y(); }
 int32_t ofl_widget_w(intptr_t w) { return ofl::widget(w)->w(); }
 int32_t ofl_widget_h(intptr_t w) { return ofl::widget(w)->h(); }
 
-void ofl_widget_resize(intptr_t w, int32_t x, int32_t y, int32_t width,
-                       int32_t height) {
-  ofl::widget(w)->resize(x, y, width, height);
+// FLTK's own resize(), not the virtual one, which reaches Oberon's
+// Resize: this is that method's default.
+void ofl_widget_base_resize(intptr_t w, int32_t x, int32_t y, int32_t width,
+                            int32_t height) {
+  dynamic_cast<ofl::Hooks *>(ofl::widget(w))->base_resize(x, y, width, height);
+}
+
+void ofl_widget_draw_box(intptr_t w) {
+  dynamic_cast<ofl::Hooks *>(ofl::widget(w))->hook_draw_box();
+}
+
+void ofl_widget_draw_label(intptr_t w) {
+  dynamic_cast<ofl::Hooks *>(ofl::widget(w))->hook_draw_label();
+}
+
+void ofl_widget_draw_focus(intptr_t w) {
+  dynamic_cast<ofl::Hooks *>(ofl::widget(w))->hook_draw_focus();
+}
+
+int32_t ofl_widget_damage(intptr_t w) { return ofl::widget(w)->damage(); }
+
+void ofl_widget_set_damage(intptr_t w, int32_t d) {
+  ofl::widget(w)->damage(static_cast<uchar>(d));
+}
+
+int32_t ofl_widget_take_focus(intptr_t w) {
+  return ofl::widget(w)->take_focus();
+}
+
+int32_t ofl_widget_visible_focus(intptr_t w) {
+  return ofl::widget(w)->visible_focus() ? 1 : 0;
+}
+
+void ofl_widget_set_visible_focus(intptr_t w, int32_t v) {
+  ofl::widget(w)->visible_focus(v);
+}
+
+// 1 if the event's position is inside w.
+int32_t ofl_widget_event_inside(intptr_t w) {
+  return Fl::event_inside(ofl::widget(w));
 }
 
 void ofl_widget_position(intptr_t w, int32_t x, int32_t y) {
@@ -287,6 +326,10 @@ int32_t ofl_window_fullscreen_active(intptr_t w) {
   return ofl::as<Fl_Window>(w)->fullscreen_active() ? 1 : 0;
 }
 
+void ofl_window_cursor(intptr_t w, int32_t c) {
+  ofl::as<Fl_Window>(w)->cursor(static_cast<Fl_Cursor>(c));
+}
+
 // Colors, fonts and schemes
 
 void ofl_set_color(int32_t i, int32_t c) {
@@ -386,6 +429,47 @@ void ofl_group_set_resizable(intptr_t g, intptr_t w) {
 intptr_t ofl_group_resizable(intptr_t g) {
   return ofl::object_of(ofl::as<Fl_Group>(g)->resizable());
 }
+
+// Events: the one being handled (Fl::event_x and friends), and the
+// widgets that have the focus, the mouse, and the button held.
+
+int32_t ofl_event(void) { return Fl::event(); }
+int32_t ofl_event_x(void) { return Fl::event_x(); }
+int32_t ofl_event_y(void) { return Fl::event_y(); }
+int32_t ofl_event_x_root(void) { return Fl::event_x_root(); }
+int32_t ofl_event_y_root(void) { return Fl::event_y_root(); }
+int32_t ofl_event_dx(void) { return Fl::event_dx(); }
+int32_t ofl_event_dy(void) { return Fl::event_dy(); }
+int32_t ofl_event_button(void) { return Fl::event_button(); }
+int32_t ofl_event_clicks(void) { return Fl::event_clicks(); }
+void ofl_set_event_clicks(int32_t n) { Fl::event_clicks(n); }
+int32_t ofl_event_is_click(void) { return Fl::event_is_click(); }
+void ofl_event_is_click_off(void) { Fl::event_is_click(0); }
+int32_t ofl_event_key(void) { return Fl::event_key(); }
+int32_t ofl_event_original_key(void) { return Fl::event_original_key(); }
+int32_t ofl_event_key_down(int32_t k) { return Fl::event_key(k); }
+int32_t ofl_get_key(int32_t k) { return Fl::get_key(k); }
+int32_t ofl_event_state(void) { return Fl::event_state(); }
+
+// The text of a key or paste event, a const char * (never 0), of
+// ofl_event_length() bytes.
+intptr_t ofl_event_text(void) {
+  return reinterpret_cast<intptr_t>(Fl::event_text());
+}
+
+int32_t ofl_event_length(void) { return Fl::event_length(); }
+
+int32_t ofl_event_inside(int32_t x, int32_t y, int32_t w, int32_t h) {
+  return Fl::event_inside(x, y, w, h);
+}
+
+// Each the Oberon object, or 0 (ofl::object_of).
+intptr_t ofl_focus(void) { return ofl::object_of(Fl::focus()); }
+intptr_t ofl_belowmouse(void) { return ofl::object_of(Fl::belowmouse()); }
+intptr_t ofl_pushed(void) { return ofl::object_of(Fl::pushed()); }
+
+// w is 0 for none.
+void ofl_set_focus(intptr_t w) { Fl::focus(ofl::widget(w)); }
 
 // The event loop
 

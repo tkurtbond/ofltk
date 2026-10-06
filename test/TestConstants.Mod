@@ -1,10 +1,10 @@
-MODULE TestConstants; (* Fl's constants are FLTK's *)
+MODULE TestConstants; (* ofltk's constants are FLTK's *)
 
 (* Written by tools/gen-constants.py: one check per constant, against the
    value the installed FLTK's headers give (CConstants). A failure means
    FLTK's headers changed: run the script again, and see what moved. *)
 
-IMPORT SYSTEM, Out, Fl, Check, CConstants;
+IMPORT SYSTEM, Out, Fl, FlDraw, Check, CConstants;
 
 VAR checked, wrong: INTEGER;
 
@@ -207,6 +207,122 @@ BEGIN
   Same(Fl.NumRed, "FL_NUM_RED");
   Same(Fl.NumGreen, "FL_NUM_GREEN");
   Same(Fl.NumBlue, "FL_NUM_BLUE");
+  Same(Fl.KeyButton, "FL_Button");
+  Same(Fl.KeyBackSpace, "FL_BackSpace");
+  Same(Fl.KeyTab, "FL_Tab");
+  Same(Fl.KeyIsoKey, "FL_Iso_Key");
+  Same(Fl.KeyEnter, "FL_Enter");
+  Same(Fl.KeyPause, "FL_Pause");
+  Same(Fl.KeyScrollLock, "FL_Scroll_Lock");
+  Same(Fl.KeyEscape, "FL_Escape");
+  Same(Fl.KeyKana, "FL_Kana");
+  Same(Fl.KeyEisu, "FL_Eisu");
+  Same(Fl.KeyYen, "FL_Yen");
+  Same(Fl.KeyJISUnderscore, "FL_JIS_Underscore");
+  Same(Fl.KeyHome, "FL_Home");
+  Same(Fl.KeyLeft, "FL_Left");
+  Same(Fl.KeyUp, "FL_Up");
+  Same(Fl.KeyRight, "FL_Right");
+  Same(Fl.KeyDown, "FL_Down");
+  Same(Fl.KeyPageUp, "FL_Page_Up");
+  Same(Fl.KeyPageDown, "FL_Page_Down");
+  Same(Fl.KeyEnd, "FL_End");
+  Same(Fl.KeyPrint, "FL_Print");
+  Same(Fl.KeyInsert, "FL_Insert");
+  Same(Fl.KeyMenu, "FL_Menu");
+  Same(Fl.KeyHelp, "FL_Help");
+  Same(Fl.KeyNumLock, "FL_Num_Lock");
+  Same(Fl.KeyKP, "FL_KP");
+  Same(Fl.KeyKPEnter, "FL_KP_Enter");
+  Same(Fl.KeyKPLast, "FL_KP_Last");
+  Same(Fl.KeyF, "FL_F");
+  Same(Fl.KeyFLast, "FL_F_Last");
+  Same(Fl.KeyShiftL, "FL_Shift_L");
+  Same(Fl.KeyShiftR, "FL_Shift_R");
+  Same(Fl.KeyControlL, "FL_Control_L");
+  Same(Fl.KeyControlR, "FL_Control_R");
+  Same(Fl.KeyCapsLock, "FL_Caps_Lock");
+  Same(Fl.KeyMetaL, "FL_Meta_L");
+  Same(Fl.KeyMetaR, "FL_Meta_R");
+  Same(Fl.KeyAltL, "FL_Alt_L");
+  Same(Fl.KeyAltR, "FL_Alt_R");
+  Same(Fl.KeyDelete, "FL_Delete");
+  Same(Fl.KeyAltGr, "FL_Alt_Gr");
+  Same(Fl.KeyVolumeDown, "FL_Volume_Down");
+  Same(Fl.KeyVolumeMute, "FL_Volume_Mute");
+  Same(Fl.KeyVolumeUp, "FL_Volume_Up");
+  Same(Fl.KeyMediaPlay, "FL_Media_Play");
+  Same(Fl.KeyMediaStop, "FL_Media_Stop");
+  Same(Fl.KeyMediaPrev, "FL_Media_Prev");
+  Same(Fl.KeyMediaNext, "FL_Media_Next");
+  Same(Fl.KeyHomePage, "FL_Home_Page");
+  Same(Fl.KeyMail, "FL_Mail");
+  Same(Fl.KeySearch, "FL_Search");
+  Same(Fl.KeyBack, "FL_Back");
+  Same(Fl.KeyForward, "FL_Forward");
+  Same(Fl.KeyStop, "FL_Stop");
+  Same(Fl.KeyRefresh, "FL_Refresh");
+  Same(Fl.KeySleep, "FL_Sleep");
+  Same(Fl.KeyFavorites, "FL_Favorites");
+  Same(Fl.LeftMouse, "FL_LEFT_MOUSE");
+  Same(Fl.MiddleMouse, "FL_MIDDLE_MOUSE");
+  Same(Fl.RightMouse, "FL_RIGHT_MOUSE");
+  Same(Fl.BackMouse, "FL_BACK_MOUSE");
+  Same(Fl.ForwardMouse, "FL_FORWARD_MOUSE");
+  Same(SYSTEM.VAL(INTEGER, Fl.Shift), "FL_SHIFT");
+  Same(SYSTEM.VAL(INTEGER, Fl.CapsLock), "FL_CAPS_LOCK");
+  Same(SYSTEM.VAL(INTEGER, Fl.Ctrl), "FL_CTRL");
+  Same(SYSTEM.VAL(INTEGER, Fl.Alt), "FL_ALT");
+  Same(SYSTEM.VAL(INTEGER, Fl.NumLock), "FL_NUM_LOCK");
+  Same(SYSTEM.VAL(INTEGER, Fl.Meta), "FL_META");
+  Same(SYSTEM.VAL(INTEGER, Fl.ScrollLock), "FL_SCROLL_LOCK");
+  Same(SYSTEM.VAL(INTEGER, Fl.Button1), "FL_BUTTON1");
+  Same(SYSTEM.VAL(INTEGER, Fl.Button2), "FL_BUTTON2");
+  Same(SYSTEM.VAL(INTEGER, Fl.Button3), "FL_BUTTON3");
+  Same(SYSTEM.VAL(INTEGER, Fl.Button4), "FL_BUTTON4");
+  Same(SYSTEM.VAL(INTEGER, Fl.Button5), "FL_BUTTON5");
+  Same(SYSTEM.VAL(INTEGER, Fl.Buttons), "FL_BUTTONS");
+  Same(SYSTEM.VAL(INTEGER, Fl.Command), "FL_COMMAND");
+  Same(SYSTEM.VAL(INTEGER, Fl.Control), "FL_CONTROL");
+  Same(SYSTEM.VAL(INTEGER, Fl.DamageChild), "FL_DAMAGE_CHILD");
+  Same(SYSTEM.VAL(INTEGER, Fl.DamageExpose), "FL_DAMAGE_EXPOSE");
+  Same(SYSTEM.VAL(INTEGER, Fl.DamageScroll), "FL_DAMAGE_SCROLL");
+  Same(SYSTEM.VAL(INTEGER, Fl.DamageOverlay), "FL_DAMAGE_OVERLAY");
+  Same(SYSTEM.VAL(INTEGER, Fl.DamageUser1), "FL_DAMAGE_USER1");
+  Same(SYSTEM.VAL(INTEGER, Fl.DamageUser2), "FL_DAMAGE_USER2");
+  Same(SYSTEM.VAL(INTEGER, Fl.DamageAll), "FL_DAMAGE_ALL");
+  Same(Fl.CursorDefault, "FL_CURSOR_DEFAULT");
+  Same(Fl.CursorArrow, "FL_CURSOR_ARROW");
+  Same(Fl.CursorCross, "FL_CURSOR_CROSS");
+  Same(Fl.CursorWait, "FL_CURSOR_WAIT");
+  Same(Fl.CursorInsert, "FL_CURSOR_INSERT");
+  Same(Fl.CursorHand, "FL_CURSOR_HAND");
+  Same(Fl.CursorHelp, "FL_CURSOR_HELP");
+  Same(Fl.CursorMove, "FL_CURSOR_MOVE");
+  Same(Fl.CursorNs, "FL_CURSOR_NS");
+  Same(Fl.CursorWe, "FL_CURSOR_WE");
+  Same(Fl.CursorNwse, "FL_CURSOR_NWSE");
+  Same(Fl.CursorNesw, "FL_CURSOR_NESW");
+  Same(Fl.CursorN, "FL_CURSOR_N");
+  Same(Fl.CursorNe, "FL_CURSOR_NE");
+  Same(Fl.CursorE, "FL_CURSOR_E");
+  Same(Fl.CursorSe, "FL_CURSOR_SE");
+  Same(Fl.CursorS, "FL_CURSOR_S");
+  Same(Fl.CursorSw, "FL_CURSOR_SW");
+  Same(Fl.CursorW, "FL_CURSOR_W");
+  Same(Fl.CursorNw, "FL_CURSOR_NW");
+  Same(Fl.CursorNone, "FL_CURSOR_NONE");
+  Same(FlDraw.Solid, "FL_SOLID");
+  Same(FlDraw.Dash, "FL_DASH");
+  Same(FlDraw.Dot, "FL_DOT");
+  Same(FlDraw.DashDot, "FL_DASHDOT");
+  Same(FlDraw.DashDotDot, "FL_DASHDOTDOT");
+  Same(FlDraw.CapFlat, "FL_CAP_FLAT");
+  Same(FlDraw.CapRound, "FL_CAP_ROUND");
+  Same(FlDraw.CapSquare, "FL_CAP_SQUARE");
+  Same(FlDraw.JoinMiter, "FL_JOIN_MITER");
+  Same(FlDraw.JoinRound, "FL_JOIN_ROUND");
+  Same(FlDraw.JoinBevel, "FL_JOIN_BEVEL");
   Same(Fl.GrayRamp(0), "fl_gray_ramp(0)");
   Same(Fl.GrayRamp(23), "fl_gray_ramp(23)");
   Same(Fl.ColorCube(0, 0, 0), "fl_color_cube(0, 0, 0)");
@@ -215,6 +331,6 @@ BEGIN
   Same(Fl.RGB(255, 0, 0), "fl_rgb_color(255, 0, 0)");
   Same(Fl.RGB(1, 2, 3), "fl_rgb_color(1, 2, 3)");
   Same(Fl.RGB(0, 0, 255), "fl_rgb_color(0, 0, 255)");
-  Check.Check((wrong = 0) & (checked = 196), "each of 196 constants and values is FLTK's");
+  Check.Check((wrong = 0) & (checked = 312), "each of 312 constants and values is FLTK's");
   Check.Summary
 END TestConstants.

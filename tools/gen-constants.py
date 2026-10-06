@@ -1,10 +1,11 @@
 #!/usr/bin/env python3
-"""gen-constants.py: FLTK's constants for module Fl, and the test of them.
+"""gen-constants.py: FLTK's constants for ofltk's modules, and the test of them.
 
 Writes, from the SPEC below:
-  - the block of Fl.Mod between "(* BEGIN generated constants" and
-    "(* END generated constants *)", each value taken from FLTK's headers
-    by compiling and running a C++ program, so it is right when written;
+  - in each module's src/<Module>.Mod, the block between
+    "(* BEGIN generated constants" and "(* END generated constants *)",
+    each value taken from FLTK's headers by compiling and running a C++
+    program, so it is right when written;
   - test/CConstants.cpp, a table of the same C expressions, and
     test/TestConstants.Mod, which checks each Oberon constant against it,
     so a later FLTK whose headers differ fails `make test`.
@@ -12,21 +13,32 @@ Writes, from the SPEC below:
 Run from the repository root after changing SPEC or upgrading FLTK:
   python3 tools/gen-constants.py
 It needs clang++ and fltk-config. The Oberon names are PLAN.md's: events
-take the prefix Ev, so FL_FOCUS can't clash with a procedure Focus.
+take the prefix Ev, so FL_FOCUS can't clash with a procedure Focus, and
+keys the prefix Key, so FL_End can't be the keyword END.
 """
 
 import os, re, subprocess, sys, tempfile
 
-# (Oberon name, C++ expression, kind): kind "int" is an INTEGER constant,
-# "set" a SET constant (a bit-flag type, every bit below 32).
+# (Oberon name, C++ expression, kind, module): kind "int" is an INTEGER
+# constant, "set" a SET constant (a bit-flag type, every bit below 32).
 SPEC = []
+MODULES = []  # in the order SPEC first names them
+current = None
+
+def module(name):
+    global current
+    current = name
+    if name not in MODULES:
+        MODULES.append(name)
 
 def add(kind, pairs):
     for name, expr in pairs:
-        SPEC.append((name, expr, kind))
+        SPEC.append((name, expr, kind, current))
 
 def section(title):
-    SPEC.append((title, None, "comment"))
+    SPEC.append((title, None, "comment", current))
+
+module("Fl")
 
 section("events (Fl_Event), the argument of Handle")
 add("int", [
@@ -108,6 +120,41 @@ DARK_MAGENTA DARK_CYAN WHITE FREE_COLOR NUM_FREE_COLOR NUM_GRAY NUM_RED
 NUM_GREEN NUM_BLUE""".split()
 add("int", [(camel(c), "FL_" + c) for c in COLORS])
 
+section("keys (Fl::event_key): a character's code for most; KeyF + n is F<n>, KeyKP + c keypad c")
+KEYS = """Button BackSpace Tab Iso_Key Enter Pause Scroll_Lock Escape Kana Eisu Yen
+JIS_Underscore Home Left Up Right Down Page_Up Page_Down End Print Insert Menu
+Help Num_Lock KP KP_Enter KP_Last F F_Last Shift_L Shift_R Control_L Control_R
+Caps_Lock Meta_L Meta_R Alt_L Alt_R Delete Alt_Gr Volume_Down Volume_Mute
+Volume_Up Media_Play Media_Stop Media_Prev Media_Next Home_Page Mail Search
+Back Forward Stop Refresh Sleep Favorites""".split()
+WORDS.update({"KP": "KP", "JIS": "JIS", "BACKSPACE": "BackSpace"})
+add("int", [("Key" + camel(k.upper()), "FL_" + k) for k in KEYS])
+
+section("mouse buttons (Fl::event_button)")
+add("int", [(camel(b), "FL_" + b) for b in
+            "LEFT_MOUSE MIDDLE_MOUSE RIGHT_MOUSE BACK_MOUSE FORWARD_MOUSE".split()])
+
+section("the shift keys and mouse buttons held (Fl::event_state); Command is Ctrl, but Meta on macOS")
+add("set", [(camel(b), "FL_" + b) for b in
+            """SHIFT CAPS_LOCK CTRL ALT NUM_LOCK META SCROLL_LOCK BUTTON1 BUTTON2
+            BUTTON3 BUTTON4 BUTTON5 BUTTONS COMMAND CONTROL""".split()])
+
+section("what needs redrawing (Fl_Damage), Widget.Damage")
+add("set", [("Damage" + camel(d), "FL_DAMAGE_" + d) for d in
+            "CHILD EXPOSE SCROLL OVERLAY USER1 USER2 ALL".split()])
+
+section("mouse cursors (Fl_Cursor), Window.SetCursor")
+add("int", [("Cursor" + camel(c), "FL_CURSOR_" + c) for c in
+            """DEFAULT ARROW CROSS WAIT INSERT HAND HELP MOVE NS WE NWSE NESW N NE
+            E SE S SW W NW NONE""".split()])
+
+module("FlDraw")
+WORDS.update({"DASHDOT": "DashDot", "DASHDOTDOT": "DashDotDot"})
+section("line styles (LineStyle): a dash pattern, plus a cap and a join")
+add("int", [(camel(c), "FL_" + c) for c in
+            """SOLID DASH DOT DASHDOT DASHDOTDOT CAP_FLAT CAP_ROUND CAP_SQUARE
+            JOIN_MITER JOIN_ROUND JOIN_BEVEL""".split()])
+
 # Not constants of Fl, but values the test also checks against C: what Fl's
 # procedures compute in Oberon.
 CHECKS = [
@@ -120,7 +167,8 @@ CHECKS = [
     ("Fl.RGB(0, 0, 255)", "fl_rgb_color(0, 0, 255)"),
 ]
 
-HEADERS = "#include <FL/Fl.H>\n#include <FL/Enumerations.H>\n#include <stdint.h>\n#include <stdio.h>\n"
+HEADERS = ("#include <FL/Fl.H>\n#include <FL/Enumerations.H>\n#include <FL/fl_draw.H>\n"
+           "#include <stdint.h>\n#include <stdio.h>\n")
 
 def oberon_set(v):
     bits = [str(i) for i in range(32) if v >> i & 1]
@@ -130,7 +178,7 @@ def oberon_set(v):
 def values():
     """Each SPEC expression's value, from a C++ program compiled against
     the installed FLTK."""
-    exprs = [e for _, e, k in SPEC if k != "comment"]
+    exprs = [e for _, e, k, _ in SPEC if k != "comment"]
     prog = HEADERS + "int main() {\n" + "".join(
         '  printf("%%lld\\n", (long long)(int32_t)(%s));\n' % e for e in exprs) + "}\n"
     flags = subprocess.check_output(["fltk-config", "--cxxflags"], text=True).split()
@@ -143,10 +191,12 @@ def values():
         out = subprocess.check_output([exe], text=True).split()
     return dict(zip(exprs, (int(v) for v in out)))
 
-def oberon_block(vals):
+def oberon_block(vals, mod):
     lines = ["(* BEGIN generated constants: tools/gen-constants.py writes this block,",
              "   from FLTK's headers; edit the script, not the block. *)"]
-    for name, expr, kind in SPEC:
+    for name, expr, kind, m in SPEC:
+        if m != mod:
+            continue
         if kind == "comment":
             lines += ["", "  (* %s *)" % name]
             continue
@@ -156,18 +206,19 @@ def oberon_block(vals):
     lines.append("(* END generated constants *)")
     return "\n".join(lines)
 
-def write_fl(vals):
-    path = "src/Fl.Mod"
-    s = open(path).read()
+def write_modules(vals):
     pat = re.compile(r"\(\* BEGIN generated constants.*?\(\* END generated constants \*\)", re.S)
-    if not pat.search(s):
-        sys.exit("gen-constants.py: no generated-constants block in " + path)
-    s = pat.sub(lambda m: oberon_block(vals), s)
-    open(path, "w").write(s)
+    for mod in MODULES:
+        path = "src/%s.Mod" % mod
+        s = open(path).read()
+        if not pat.search(s):
+            sys.exit("gen-constants.py: no generated-constants block in " + path)
+        s = pat.sub(lambda m: oberon_block(vals, mod), s)
+        open(path, "w").write(s)
 
 def write_test():
-    entries = [(n, e, k) for n, e, k in SPEC if k != "comment"]
-    table = ",\n".join('  {"%s", (int32_t)(%s)}' % (e, e) for _, e, _ in entries)
+    entries = [(n, e, k, m) for n, e, k, m in SPEC if k != "comment"]
+    table = ",\n".join('  {"%s", (int32_t)(%s)}' % (e, e) for _, e, _, _ in entries)
     table += ",\n" + ",\n".join('  {"%s", (int32_t)(%s)}' % (c, c) for _, c in CHECKS)
     open("test/CConstants.cpp", "w").write(
         "// Written by tools/gen-constants.py: FLTK's values of the constants\n"
@@ -192,19 +243,20 @@ def write_test():
         "BEGIN\n  v := 0;\n  IF CConstant(name, v) # 0 THEN value := v; RETURN TRUE END;\n"
         "  RETURN FALSE\nEND Value;\n\nEND CConstants.\n")
     checks = []
-    for name, expr, kind in entries:
+    for name, expr, kind, mod in entries:
         # A SET's bits by SYSTEM.VAL: poc can't compile ORD of a SET under
         # -OC (AGENTS.md, "poc problems").
-        o = "SYSTEM.VAL(INTEGER, Fl.%s)" % name if kind == "set" else "Fl.%s" % name
+        q = "%s.%s" % (mod, name)
+        o = "SYSTEM.VAL(INTEGER, %s)" % q if kind == "set" else q
         checks.append('  Same(%s, "%s");' % (o, expr))
     for o, c in CHECKS:
         checks.append('  Same(%s, "%s");' % (o, c))
     open("test/TestConstants.Mod", "w").write(
-        "MODULE TestConstants; (* Fl's constants are FLTK's *)\n\n"
+        "MODULE TestConstants; (* ofltk's constants are FLTK's *)\n\n"
         "(* Written by tools/gen-constants.py: one check per constant, against the\n"
         "   value the installed FLTK's headers give (CConstants). A failure means\n"
         "   FLTK's headers changed: run the script again, and see what moved. *)\n\n"
-        "IMPORT SYSTEM, Out, Fl, Check, CConstants;\n\n"
+        "IMPORT SYSTEM, Out, " + ", ".join(MODULES) + ", Check, CConstants;\n\n"
         "VAR checked, wrong: INTEGER;\n\n"
         "PROCEDURE Same(oberon: INTEGER; c-: ARRAY OF CHAR);\n"
         "  VAR v: INTEGER;\nBEGIN\n  INC(checked);\n"
@@ -218,7 +270,7 @@ def write_test():
 
 def main():
     vals = values()
-    write_fl(vals)
+    write_modules(vals)
     write_test()
     print("gen-constants.py: %d constants, %d other values" %
           (sum(1 for s in SPEC if s[2] != "comment"), len(CHECKS)))

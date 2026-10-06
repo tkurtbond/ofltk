@@ -3,8 +3,9 @@
 //
 // A module's C++ part makes each widget as ofl::W<its FLTK class> and
 // hands it to ofl::open with its Oberon object's address. From then on
-// FLTK's draw(), handle() and callback reach the Oberon object's Draw,
-// Handle and Callback, and FLTK tells Fl when the widget is destroyed.
+// FLTK's draw(), handle(), resize() and callback reach the Oberon object's
+// Draw, Handle, Resize and Callback, and FLTK tells Fl when the widget is
+// destroyed.
 // The Oberon side sees only extern "C" functions taking and returning
 // int32_t, intptr_t and double; a widget is its Fl_Widget * as an
 // intptr_t.
@@ -20,11 +21,14 @@ namespace ofl {
 
 typedef void (*SelfFn)(intptr_t self);
 typedef int32_t (*HandleFn)(intptr_t self, int32_t event);
+typedef void (*ResizeFn)(intptr_t self, int32_t x, int32_t y, int32_t w,
+                         int32_t h);
 
 // The Oberon dispatchers, which Fl's body registers (ofl_register in
 // Fl.cpp): each recovers the object from self and calls its method.
 extern SelfFn on_callback, on_draw, on_deleted;
 extern HandleFn on_handle;
+extern ResizeFn on_resize;
 
 // How many Oberon dispatches are running. A widget deleted inside one is
 // deleted later, by Fl::delete_widget, since FLTK may still be using it.
@@ -66,17 +70,24 @@ inline intptr_t object_of(Fl_Widget *w) {
   return self_of(w);
 }
 
-// The FLTK class's own draw() and handle(), for the Oberon Draw and
-// Handle defaults to call (FLTKAda's fl_box_draw, for every class).
+// The FLTK class's own draw(), handle() and resize(), for the Oberon
+// Draw, Handle and Resize defaults to call (FLTKAda's fl_box_draw, for
+// every class); and Fl_Widget's protected drawing of the box, label and
+// focus box, for an Oberon Draw.
 class Hooks {
 public:
   virtual ~Hooks() {}
   virtual void base_draw() = 0;
   virtual int base_handle(int event) = 0;
+  virtual void base_resize(int x, int y, int w, int h) = 0;
+  virtual void hook_draw_box() = 0;
+  virtual void hook_draw_label() = 0;
+  virtual void hook_draw_focus() = 0;
 };
 
-// FLTK class B, with draw() and handle() sent to the Oberon object. Until
-// open has set the user data there is no object, and B's own run.
+// FLTK class B, with draw(), handle() and resize() sent to the Oberon
+// object. Until open has set the user data there is no object, and B's
+// own run.
 template <class B> class W : public B, public Hooks {
 public:
   using B::B;
@@ -95,8 +106,22 @@ public:
     }
     return B::handle(event);
   }
+  void resize(int x, int y, int w, int h) override {
+    if (this->user_data()) {
+      Dispatch d;
+      on_resize(self_of(this), x, y, w, h);
+    } else {
+      B::resize(x, y, w, h);
+    }
+  }
   void base_draw() override { B::draw(); }
   int base_handle(int event) override { return B::handle(event); }
+  void base_resize(int x, int y, int w, int h) override {
+    B::resize(x, y, w, h);
+  }
+  void hook_draw_box() override { this->draw_box(); }
+  void hook_draw_label() override { this->draw_label(); }
+  void hook_draw_focus() override { this->draw_focus(); }
 };
 
 // Makes w, just made, the widget of the Oberon object at self.

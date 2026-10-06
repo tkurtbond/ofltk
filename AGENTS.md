@@ -2,7 +2,8 @@
 
 ofltk is an Oberon-2 binding to FLTK 1.4, the Fast Light Toolkit, compiled
 with poc, the Peaseblossom Oberon Compiler. PLAN.md is the design and
-roadmap; `doc/design.md` is the feasibility analysis that started it. This
+roadmap; `doc/design.md` is the feasibility analysis that started it;
+`doc/fltk-issues.md` lists the FLTK bugs and pitfalls found so far. This
 file is operational notes for an agent working in this repo, not a design
 doc.
 
@@ -20,14 +21,16 @@ anything:
 
 ## Status
 
-As of 2026-10-06, Phases 0 and 1 of PLAN.md are done, and Phase 2 is
-next. `src/` has the `Fl` module (Phase 1's scope), and the tests pass.
-Also kept:
+As of 2026-10-06, Phases 0, 1 and 2 of PLAN.md are done, and Phase 3
+(buttons, inputs, valuators) is next. `src/` has the `Fl` and `FlDraw`
+modules, and the tests pass. Also kept:
 
 - `doc/design.md`: the feasibility analysis.
+- `doc/fltk-issues.md`: every FLTK bug and pitfall found, with its
+  cause in FLTK's source and ofltk's workaround.
 - `prototype/`: the object-style sketch `FL.Mod`, its C++ part `FL.cpp`,
-  and `Demo.Mod`. It stays until `src/` has its custom drawing (Phase 2)
-  and buttons (Phase 3).
+  and `Demo.Mod`. It stays until `src/` has buttons (Phase 3); its
+  custom drawing is in `src/` now.
 - `probes/callback/`: C calling an Oberon procedure value.
 - `probes/gc-hazard/`: a flat binding (`Fltk.Mod`, `Fltk.cpp`). `Hazard.Mod`
   shows a callback's `user_data` being collected; `Hello.Mod` is a
@@ -36,25 +39,33 @@ Also kept:
 ## Layout
 
 - `src/ofltk.h`: what every module's C++ part shares:
-  - `ofl::W<B>`, the FLTK class `B` with `draw()`/`handle()` sent to
-    Oberon;
+  - `ofl::W<B>`, the FLTK class `B` with `draw()`, `handle()` and
+    `resize()` sent to Oberon;
+  - `ofl::Hooks`, through which Oberon reaches `B`'s own `draw()`,
+    `handle()` and `resize()`, and `Fl_Widget`'s protected `draw_box()`,
+    `draw_label()` and `draw_focus()`;
   - `ofl::open`, which attaches a widget to its Oberon object;
   - the `Ref` user data, whose destructor is the deletion hook;
   - the dispatch depth.
 - `src/Fl.Mod`, `src/Fl.cpp`: the core module. Its "For ofltk's modules
   only" procedures (`BeginOpen`, `EndOpen`) are how another module
   opens a widget of its own class. Keep application code off them.
+- `src/FlDraw.Mod`, `src/FlDraw.cpp`: `fl_draw.H`, for `Draw` methods.
 - `test/`:
   - one main module per concern, `Test*.Mod`, using `Check.Mod`;
   - halt tests, `Halt*.Mod`, one per code;
   - `poc-gc.supp`, and `vg-check.sh` (Valgrind, below);
   - `TestConstants.Mod`, `CConstants.Mod` and `CConstants.cpp`, written
     by `tools/gen-constants.py`. `CConstants` is a test module with a C++
-    part.
-- `tools/gen-constants.py`: writes Fl's constants and their test, from
-  FLTK's headers (constants, below).
-- `examples/`: example programs, such as FLTK's hello. `make` builds
-  them; they wait for the user, so `make test` doesn't run them.
+    part;
+  - `Probe.Mod` and `Probe.cpp`, a test module with a C++ part: a
+    widget's pixels, captured into an `Fl_Image_Surface`, and mouse,
+    wheel and key events sent as the window system would.
+- `tools/gen-constants.py`: writes each module's constants and their
+  test, from FLTK's headers (constants, below).
+- `examples/`: example programs (`Hello`, FLTK's hello; `Scribble`,
+  drawing with the mouse). `make` builds them; they wait for the user,
+  so `make test` doesn't run them.
 - `GNUmakefile`: build and test (Build, below).
 - `build/`: poc and clang output (ignored by git).
 - `PLAN.md`: design, decisions and findings, by section and phase.
@@ -96,9 +107,11 @@ make clean      # rm -rf build
 - **A new module** needs its name added to `MODULES`, and a new header to
   `HEADERS`. A test module with a C++ part goes in `TESTCXX`, an example
   in `EXAMPLES`.
-- **Constants**: never edit the block of `src/Fl.Mod` between
+- **Constants**: never edit the block of a module between
   `BEGIN generated constants` and `END generated constants`. Add the
-  name and C expression to `SPEC` in `tools/gen-constants.py`, then run
+  name and C expression to `SPEC` in `tools/gen-constants.py`, after
+  the `module(...)` line naming the module (whose source must already
+  have the empty block), then run
   `python3 tools/gen-constants.py` from the repository root (it needs
   `clang++` and `fltk-config`). After an FLTK upgrade, run it again, and
   read the diff: `TestConstants` fails until you do if a value moved.
@@ -146,13 +159,26 @@ widgets never shown; `make test` stops with a message without one.
   appear on the desktop. It unsets `WAYLAND_DISPLAY`: a plain `xvfb-run`
   in a Wayland session leaves it set, and FLTK then uses the real desktop
   (confirmed).
-- No input-automation tool is installed (no `xdotool`), so a test drives
-  itself:
+- A test drives itself, with no input tool:
   - `DoCallback`;
+  - events from `test/Probe`, sent to a window never shown;
   - `Fl.AddTimeout`, or `Fl.Wait`/`Fl.Check` in a loop;
   - deleting its windows before it ends.
 
   `make test` runs each test under `timeout`.
+- **`Probe` drives FLTK's own routing, so mind what FLTK does**:
+  - a mouse event goes through `Fl::handle`, to the widget under the
+    mouse, then to `Fl::pushed()`;
+  - a push no widget uses shows the window (FLTK raises it), so put
+    such a check last;
+  - a key goes to the focus widget alone. Through `Fl::handle`, a key no
+    widget uses crashes FLTK 1.4.5 when no window is shown and
+    `BelowMouse` is set (`doc/fltk-issues.md`, 3).
+- **`xdotool` is installed** (2026-10-06), for trying an example by hand
+  under Xvfb: run it in `xvfb-run -a -s '-screen 0 640x480x24' sh -c
+  '...'` with `WAYLAND_DISPLAY` unset, move and click with `xdotool`, and
+  look with `import -window root shot.png` (ImageMagick). Tests use
+  `Probe`, not `xdotool`, so they need no window manager or timing.
 
 ### Valgrind
 
@@ -244,6 +270,20 @@ held only in C++ memory**.
   `DISPLAY` names an Xvfb server. With it unset, FLTK uses X11 by itself.
 - **`Fl_Image_Surface` draws a widget that was never shown**, and its
   pixels read back exactly (`FL_RED` is 255,0,0), on both back ends.
+  `Fl_Widget_Surface::draw(w, 0, 0)` puts a child widget's top left at
+  0, 0, although it draws in its window's coordinates.
+- **`fl_clip_box`'s result is backwards** (0 if clipped, 1 if not),
+  against its documentation, and for a box wholly clipped it leaves `H`
+  unset (source: `Fl_Cairo_Graphics_Driver::clip_box`). `FlDraw.ClipBox`
+  drops the result.
+- **A push no widget uses makes the window `Fl::pushed()` and shows
+  it** (`Fl::handle_`, "raise windows that are clicked on").
+- **Synthesized events work in a window never shown**: set `Fl::e_x`
+  and the rest (public statics), then call `Fl::handle(event, window)`.
+  Except keys no widget uses (above).
+- **Name clashes with FLTK's keys**: the key constants take the prefix
+  `Key`, since `FL_End` would be the keyword `END`. So `Fl::get_key` is
+  `GetKey`, because `KeyDown` is the down arrow.
 - **`fltk-config --cxxflags`** includes `-I/usr/include` and Fedora's
   build flags (`-specs=...`). Pass only its `-I`/`-D` flags, without
   `-I/usr/include`.
@@ -315,6 +355,12 @@ workaround.
   Bad outside data never halts; it comes back as a `BOOLEAN` result.
 - **Comments explain why.** Match the surrounding code's comment density
   and naming.
+- **Record every FLTK problem in `doc/fltk-issues.md`** as it is found:
+  a bug (a crash, or behaviour against FLTK's documentation) or a
+  pitfall a binding must allow for. Use the form the file gives: what
+  happens, the cause in FLTK's source, the effect on ofltk and its
+  workaround, and how it was confirmed. Keep the shorter note under
+  "FLTK's behaviour" below too.
 - **Record decisions and findings in PLAN.md as they happen**: append to
   the relevant section, mark finished phases `[done]`, and strike through
   decided open questions.
