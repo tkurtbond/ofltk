@@ -264,7 +264,7 @@ BEGIN
   h := Fl.Live(g);
   ASSERT((row >= 0) & (rows >= 1) & (row + rows <= CRows(h))
     & (col >= 0) & (cols >= 1) & (col + cols <= CCols(h)), Fl.IndexOutOfRange);
-  ASSERT(CPlace(h, Child(g, w), row, col, rows, cols, SYSTEM.VAL(SYSTEM.INT32, align)) # 0, Fl.NotAChild)
+  ASSERT(CPlace(h, Child(g, w), row, col, rows, cols, ORD(align)) # 0, Fl.NotAChild)
 END PlaceSpan;
 
 PROCEDURE (g: Grid) Place*(w: Fl.Widget; row, col: INTEGER; align: SET);
@@ -457,7 +457,7 @@ BEGIN RETURN SYSTEM.VAL(SET, CTabAlign(Fl.Live(t)))
 END TabAlign;
 
 PROCEDURE (t: Tabs) SetTabAlign*(a: SET);
-BEGIN CSetTabAlign(Fl.Live(t), SYSTEM.VAL(SYSTEM.INT32, a))
+BEGIN CSetTabAlign(Fl.Live(t), ORD(a))
 END SetTabAlign;
 
 (* What to do with tabs too many to fit: OverflowCompress, to start with,

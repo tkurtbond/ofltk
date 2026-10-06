@@ -41,7 +41,7 @@ END Release;
    TRUE if a widget used it. x, y are in win's coordinates. An EvPush no
    widget uses shows win, as FLTK raises a window clicked in. *)
 PROCEDURE Mouse*(win: Fl.Window; event, x, y, button: INTEGER; state: SET; clicks: INTEGER): BOOLEAN;
-BEGIN RETURN CMouse(win.h, event, x, y, button, SYSTEM.VAL(SYSTEM.INT32, state), clicks) # 0
+BEGIN RETURN CMouse(win.h, event, x, y, button, ORD(state), clicks) # 0
 END Mouse;
 
 PROCEDURE Wheel*(win: Fl.Window; x, y, dx, dy: INTEGER): BOOLEAN;
@@ -51,13 +51,13 @@ END Wheel;
 (* A key event, EvKeyDown or EvKeyUp, sent to the focus widget alone,
    which FLTK offers it first; FALSE if there is none. *)
 PROCEDURE Key*(event, key: INTEGER; state: SET; text-: ARRAY OF CHAR): BOOLEAN;
-BEGIN RETURN CKey(event, key, SYSTEM.VAL(SYSTEM.INT32, state), text) # 0
+BEGIN RETURN CKey(event, key, ORD(state), text) # 0
 END Key;
 
 (* A key offered to win's widgets as a shortcut, as FLTK offers one the
    focus doesn't use; TRUE if one used it. *)
 PROCEDURE Shortcut*(win: Fl.Window; key: INTEGER; state: SET; text-: ARRAY OF CHAR): BOOLEAN;
-BEGIN RETURN CShortcut(win.h, key, SYSTEM.VAL(SYSTEM.INT32, state), text) # 0
+BEGIN RETURN CShortcut(win.h, key, ORD(state), text) # 0
 END Shortcut;
 
 (* A key event, EvKeyDown or EvShortcut, sent by FLTK's route, as
@@ -65,7 +65,7 @@ END Shortcut;
    goes to win's widgets and then to a global menu. Not a key no widget
    uses after mouse events, in a window never shown, which crashes FLTK. *)
 PROCEDURE HandleKey*(win: Fl.Window; event, key: INTEGER; state: SET; text-: ARRAY OF CHAR): BOOLEAN;
-BEGIN RETURN CHandleKey(win.h, event, key, SYSTEM.VAL(SYSTEM.INT32, state), text) # 0
+BEGIN RETURN CHandleKey(win.h, event, key, ORD(state), text) # 0
 END HandleKey;
 
 (* TRUE if a modal window, a dialog, is shown, with its title in title. *)
@@ -76,7 +76,7 @@ END Modal;
 (* A key sent to the modal window, a dialog, as from the window system;
    FALSE if no modal window is shown. *)
 PROCEDURE ModalKey*(key: INTEGER; state: SET; text-: ARRAY OF CHAR): BOOLEAN;
-BEGIN RETURN CModalKey(key, SYSTEM.VAL(SYSTEM.INT32, state), text) # 0
+BEGIN RETURN CModalKey(key, ORD(state), text) # 0
 END ModalKey;
 
 (* TRUE if FLTK uses Wayland, FALSE if X11. *)

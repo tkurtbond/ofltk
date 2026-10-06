@@ -252,7 +252,7 @@ BEGIN
 END Shortcut;
 
 PROCEDURE (i: Input) SetShortcut*(key: INTEGER; state: SET);
-BEGIN CSetShortcut(Fl.Live(i), key + SYSTEM.VAL(INTEGER, state))
+BEGIN CSetShortcut(Fl.Live(i), key + ORD(state))
 END SetShortcut;
 
 (* The text's font, size and color, and the cursor's color. *)

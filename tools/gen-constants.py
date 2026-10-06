@@ -206,6 +206,41 @@ section("kinds of beep (Beep)")
 add("int", [("Beep" + camel(k), "FL_BEEP_" + k) for k in
             "DEFAULT MESSAGE ERROR QUESTION PASSWORD NOTIFICATION".split()])
 
+module("FlText")
+section("how a display wraps lines (TextDisplay.SetWrapMode)")
+add("int", [("Wrap" + camel(k), "Fl_Text_Display::WRAP_" + k) for k in
+            "NONE AT_COLUMN AT_PIXEL AT_BOUNDS".split()])
+section("the cursor's look (TextDisplay.SetCursorStyle)")
+add("int", [(camel(k) + "Cursor", "Fl_Text_Display::" + k + "_CURSOR") for k in
+            "NORMAL CARET DIM BLOCK HEAVY SIMPLE".split()])
+section("a style's attributes (TextDisplay.AddStyle): a line kind, plus a background")
+add("int", [("Attr" + camel(k), "Fl_Text_Display::ATTR_" + k) for k in
+            "BGCOLOR BGCOLOR_EXT UNDERLINE GRAMMAR SPELLING STRIKE_THROUGH".split()])
+module("FlBrowsers")
+section("which scrollbars a browser shows (BrowserBase.SetScrollbars)")
+add("int", [("Scrollbar" + camel(k), "Fl_Browser_::" + k) for k in
+            "HORIZONTAL VERTICAL BOTH ALWAYS_ON HORIZONTAL_ALWAYS VERTICAL_ALWAYS BOTH_ALWAYS".split()])
+section("how BrowserBase.Sort sorts")
+add("int", [("SortAscending", "FL_SORT_ASCENDING"), ("SortDescending", "FL_SORT_DESCENDING"),
+            ("SortCaseInsensitive", "FL_SORT_CASEINSENSITIVE")])
+section("what a file browser lists (FileBrowser.SetFileType)")
+add("int", [("Files", "Fl_File_Browser::FILES"), ("Directories", "Fl_File_Browser::DIRECTORIES")])
+section("how a tree's items are selected (Tree.SetSelectMode)")
+add("int", [("TreeSelect" + camel(k), "FL_TREE_SELECT_" + k) for k in
+            "NONE SINGLE MULTI SINGLE_DRAGGABLE".split()])
+section("where a tree adds an item among its siblings (Tree.SetSortOrder)")
+add("int", [("TreeSort" + camel(k), "FL_TREE_SORT_" + k) for k in
+            "NONE ASCENDING DESCENDING".split()])
+section("the lines between a tree's items (Tree.SetConnectorStyle)")
+add("int", [("Connector" + camel(k), "FL_TREE_CONNECTOR_" + k) for k in
+            "NONE DOTTED SOLID".split()])
+section("whether clicking a selected item calls back (Tree.SetReselectMode)")
+add("int", [("SelectableOnce", "FL_TREE_SELECTABLE_ONCE"),
+            ("SelectableAlways", "FL_TREE_SELECTABLE_ALWAYS")])
+section("why a tree called back (Tree.CallbackReason)")
+add("int", [("Reason" + camel(k), "FL_TREE_REASON_" + k) for k in
+            "NONE SELECTED DESELECTED RESELECTED OPENED CLOSED DRAGGED".split()])
+
 # Not constants of Fl, but values the test also checks against C: what Fl's
 # procedures compute in Oberon.
 CHECKS = [
@@ -224,6 +259,7 @@ HEADERS = ("#include <FL/Fl.H>\n#include <FL/Enumerations.H>\n#include <FL/fl_dr
            "#include <FL/Fl_Flex.H>\n#include <FL/Fl_Grid.H>\n#include <FL/Fl_Pack.H>\n"
            "#include <FL/Fl_Scroll.H>\n#include <FL/Fl_Tabs.H>\n"
            "#include <FL/Fl_Menu_Item.H>\n#include <FL/Fl_Menu_Button.H>\n#include <FL/fl_ask.H>\n"
+           "#include <FL/Fl_Text_Display.H>\n#include <FL/Fl_File_Browser.H>\n#include <FL/Fl_Tree.H>\n"
            "#include <stdint.h>\n#include <stdio.h>\n")
 
 def oberon_set(v):
@@ -300,10 +336,9 @@ def write_test():
         "  RETURN FALSE\nEND Value;\n\nEND CConstants.\n")
     checks = []
     for name, expr, kind, mod in entries:
-        # A SET's bits by SYSTEM.VAL: poc can't compile ORD of a SET under
-        # -OC (AGENTS.md, "poc problems").
+        # A SET's bits by ORD, which needs poc 0.4.1 under -OC.
         q = "%s.%s" % (mod, name)
-        o = "SYSTEM.VAL(INTEGER, %s)" % q if kind == "set" else q
+        o = "ORD(%s)" % q if kind == "set" else q
         checks.append('  Same(%s, "%s");' % (o, expr))
     for o, c in CHECKS:
         checks.append('  Same(%s, "%s");' % (o, c))

@@ -168,7 +168,7 @@ BEGIN
 END Shortcut;
 
 PROCEDURE (b: Button) SetShortcut*(key: INTEGER; state: SET);
-BEGIN CSetShortcut(Fl.Live(b), key + SYSTEM.VAL(INTEGER, state))
+BEGIN CSetShortcut(Fl.Live(b), key + ORD(state))
 END SetShortcut;
 
 (* The box drawn while b is on: a box type of Fl's. *)

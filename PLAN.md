@@ -240,7 +240,7 @@ Programmer errors halt, as in polibfyaml. poc's `ASSERT(x, n)` prints
 | 70 | a method of a widget that isn't open: never opened, or deleted (`Fl.NotOpen`) |
 | 71 | a widget opened twice (`Fl.OpenedTwice`) |
 | 72 | a NIL argument where a widget or timer is required (`Fl.NilArgument`) |
-| 73 | a closed resource used |
+| 73 | a closed resource used, or one missing where it is needed: a closed `TextBuffer`, a display with no buffer, a removed `TreeItem` (`Fl.ClosedResource`) |
 | 74 | an index out of range: group child, grid row or column, browser line, menu item (`Fl.IndexOutOfRange`) |
 | 75 | `RepeatTimeout` outside its own timer's `Fire` (`Fl.NotFiring`) |
 | 76 | a widget that must be a group's child isn't: a grid's cell, a flex's fixed size, a tab or wizard page, a tile's size range (`Fl.NotAChild`) |
@@ -391,7 +391,7 @@ findings written into this file and AGENTS.md.
    - **Found**: poc 0.3.1 can't compile `ORD` of a `SET` under `-OC`. Any
      use emits LLVM `trunc i32 to i32`, which clang rejects; `-O2` is
      fine. `SYSTEM.VAL(SYSTEM.INT32, s)` gives the same bits, and is used
-     instead (AGENTS.md, "poc problems"). poc 0.4.0 still has it.
+     instead (AGENTS.md, "poc problems"). poc 0.4.0 still has it; 0.4.1 fixed it ("poc 0.4.1" below).
    - **Left for later**:
      - `Fl_Window` icons, `xclass`, and border control;
      - `Fl::readqueue`;
@@ -717,11 +717,126 @@ findings written into this file and AGENTS.md.
    - `fl_yes`, `fl_no` and the other button labels are pointers FLTK
      keeps; `fl_message_icon` returns an FLTK-made widget. Not bound
      until a program needs them.
-6. **Text and browsers** (`FlText`, `FlBrowsers`):
-   - `TextBuffer` as an Oberon-owned resource; `TextDisplay`,
-     `TextEditor`, style buffers;
-   - the browser family; `Tree`, following FLTKAda's
-     `experimental/fl-tree-binding` scope.
+6. **`[done]` Text and browsers** (`FlText`, `FlBrowsers`; 2026-10-06,
+   poc 0.4.1, FLTK 1.4.5):
+   - **`FlText`**: `TextBuffer`, a resource the program owns, as planned
+     ("Lifetime and the collector"): `OpenBuffer`, `Close` (idempotent),
+     a collector finalizer as the backstop, `IsOpen`, and `openBuffers`,
+     the count made and not closed, for tests.
+     - Text by byte position from 0: `SetText`, `GetText`, `TextRange`,
+       `CharAt`, `ByteAt`, `Insert`, `Append`, `Remove`, `Replace`;
+       undo and redo; files (load, append, insert, save, save a range);
+       the selection; lines and words (`LineStart`, `WordEnd`,
+       `CountLines`, `SkipLines` and the rest); `SearchForward`,
+       `SearchBackward`.
+     - `Modified`, a method an extension overrides, runs after every
+       change, from FLTK's modify callback.
+     - `TextDisplay` and `TextEditor`: `SetBuffer`, `SetStyleBuffer`,
+       `AddStyle` (returns the style's character, "A" on), the cursor,
+       moving and scrolling, wrapping, line numbers, fonts and colors,
+       the editor's insert mode and tab navigation.
+     - **A buffer lives while a display shows it**, whatever the
+       program does: the C++ buffer is reference counted, `Close` gives
+       up the program's hold only, and a display lets go only after
+       FLTK's display is destroyed (`Holds`, a base class destroyed
+       after it). The display also keeps the Oberon buffer, so the
+       collector leaves it.
+     - Halts: a closed buffer used, and a display's text methods with
+       no buffer, are `ClosedResource` (73).
+   - **`FlBrowsers`**: `BrowserBase` (`Fl_Browser_`, never opened),
+     `Browser`, `HoldBrowser`, `MultiBrowser`, `SelectBrowser`,
+     `FileBrowser`, `CheckBrowser`, `Tree`.
+     - Lines from 1, as FLTK numbers them: `Add`, `Insert`, `Remove`,
+       `Move`, `Swap`, `Clear`, `Load`, `GetText`, `SetText`, `Select`,
+       `Selected`, `Value`, `Deselect`, `Sort`; hiding, showing and
+       scrolling to lines; the format and column characters, and column
+       widths. `Count`, not `Size`, which is `Fl.Widget`'s.
+     - `FileBrowser`: `LoadDirectory`, `SetFilter`, `SetFileType`,
+       the icon size. `CheckBrowser`: items checked and unchecked, and
+       their counts.
+     - Halts: a line or item outside 1 to the count (`Insert`, to the
+       count plus 1) is `IndexOutOfRange` (74).
+   - **`Tree`**, about FLTKAda's scope (its `progress.txt`): items added
+       by path or under an item, inserted at a position or above an
+       item, removed, cleared; finding, paths, walking (`Next`, `Prev`,
+       `Parent`, `Child`, the visible and selected items); open and
+       close; selection; activation; each item's label font, size and
+       colors; the tree's modes, spacing and colors; `CallbackItem` and
+       `CallbackReason`. Not bound: embedded widgets and icons, which
+       wait for images (Phase 7), moving items, and items made outside
+       a tree.
+     - **A `TreeItem` is a reference the program can't misuse.** FLTK
+       makes and deletes items itself, some without ofltk seeing (a
+       path's parents). So a `TreeItem` holds the item's pointer and a
+       serial; the C++ tree maps the items it has handed out to their
+       serials, and drops an item and its descendants from the map
+       before it removes them. Only the program removes items, so an
+       item is live exactly when its pointer is in the map with its
+       serial. A pointer the allocator reuses gets a new serial: the
+       test sees this happen. A dead item halts, `ClosedResource` (73).
+     - What the program does never calls back (`docallback` 0), as
+       elsewhere.
+   - **Constants**, 39 more (text wrap and cursor, style attributes,
+     scrollbars, sorting, file types, tree modes and reasons), for 418
+     in `TestConstants`.
+   - **Tests**:
+     - `TestText` (45 checks): the buffer's operations, files, undo,
+       search, a display's buffer and styles (a styled pixel read
+       back), the buffer kept alive by its display, and a lost buffer
+       finalized.
+     - `TestBrowsers` (53): lines and selection by the program, clicks
+       on a hold and a multi browser, column widths read back as
+       pixels, loading a file, a file browser's directory and filter,
+       a check browser's items and clicks.
+     - `TestTree` (33): items and paths, removal and liveness, open and
+       close, selection by the program and by clicks, Shift-click after
+       a removal, an item removed in its own callback, `Clear`.
+     - `HaltClosedBuffer`, `HaltNoBuffer`, `HaltBrowserLine`,
+       `HaltTreeItem`. All pass on Wayland, X11 (XWayland) and Xvfb,
+       and under valgrind on Wayland and Xvfb with 0 errors and no
+       ofltk leak.
+   - **The tests catch what they're for**, each checked by breaking the
+     shim:
+     - `FlText`: `Holds` as the last base class, `Close` deleting a
+       buffer still shown, and no style guard: valgrind errors.
+     - `FlBrowsers`: the column widths or the filter passed to FLTK
+       uncopied (the test sets them from a frame since written over),
+       `textsize` called as `Fl_Browser_`'s, no top-line update, the
+       tree removing as FLTK does, the callback item kept, and no
+       serial: each fails a check.
+
+   Findings, confirmed live or in FLTK's source (`doc/fltk-issues.md`,
+   34 to 43):
+   - **A text buffer deleted before its displays is used after it is
+     freed**: neither detaches from the other.
+   - **A style buffer with no styles** makes FLTK read before the style
+     table.
+   - **`search_forward` and `search_backward` read past the text when
+     matching case** (a bug; valgrind, in plain C++). The shim
+     searches itself.
+   - **Browsers keep the column widths, filter and directory pointers**
+     they are given; the shim keeps copies.
+   - **A browser finds its top line only when it draws**, so `TopLine`
+     and `Displayed` read stale values and a browser never drawn takes
+     no click; the shim updates it through the protected `find_item`.
+   - **`Fl_Browser::textsize` and `Fl_File_Browser::textsize` hide
+     `Fl_Browser_`'s.**
+   - **`Fl_Browser::load` adds an empty last line** after a final
+     newline, and **`Fl_File_Browser::load` returns the directory's
+     entries**, not the lines listed.
+   - **`Fl_Tree` keeps a removed item's descendant as the last one
+     clicked**, and **its callback item after removal**; **`clear`
+     deletes the root**.
+   - **A check browser starts with `FL_WHEN_NEVER`**, and a browser
+     calls back on every release (`FL_WHEN_RELEASE_ALWAYS`), changed
+     or not: documented in `FlBrowsers`.
+
+   Not done, and why:
+   - No editor example yet; `examples/Menus.Mod` shows the dialogs a
+     text editor would use. It can come with Phase 8's examples.
+   - `Fl_Text_Editor` key bindings, and the buffer's
+     `Fl_Text_Selection` beyond the primary selection: not needed by
+     anything yet.
 7. **Images and the rest** (`FlImages`, `Fl`, `FlDraw`):
    - shared and RGB images (data copied); offscreen drawing and
      `fl_read_image`;
@@ -754,6 +869,15 @@ When poc 0.4.0 was installed (2026-10-06), the 0.3.1 workarounds came out:
   `-link -lfltk` alone, and still behave as recorded.
 - **Still worked around**: `ORD` of a `SET` under `-OC` fails in 0.4.0 as
   in 0.3.1.
+
+### poc 0.4.1 `[done]`
+
+poc 0.4.1 was installed during Phase 6 (2026-10-06):
+- **`ORD` of a `SET` compiles under `-OC`**, and gives the right value
+  (`ORD({0, 2, 31})` assigned to an `INTEGER`, a `SYSTEM.INT32` and a
+  `HUGEINT`). The 16 `SYSTEM.VAL(SYSTEM.INT32, s)` workarounds became
+  `ORD(s)`; `tools/gen-constants.py` checks set constants with `ORD`.
+- **The makefile now requires poc 0.4.1 or later.**
 
 ## Open questions
 

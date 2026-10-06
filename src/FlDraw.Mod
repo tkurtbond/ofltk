@@ -300,7 +300,7 @@ END Text;
    constants, its lines split at each 0AX and, with Fl.AlignWrap, wrapped.
    "@" starts a symbol's name, as in a label; "@@" draws "@". *)
 PROCEDURE TextAligned*(s-: ARRAY OF CHAR; x, y, w, h: INTEGER; align: SET);
-BEGIN CTextAligned(s, x, y, w, h, SYSTEM.VAL(SYSTEM.INT32, align))
+BEGIN CTextAligned(s, x, y, w, h, ORD(align))
 END TextAligned;
 
 (* The width and height TextAligned would take for s. On entry w is the

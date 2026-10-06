@@ -128,6 +128,23 @@ Unless an entry says otherwise, the version is FLTK 1.4.5 (Fedora's
   runs of three worked. On X11 it works either way. `TestMenus` can't
   check it, since under Wayland the pop-up is closed at once (29).
 
+### 36. `Fl_Text_Buffer::search_forward` and `search_backward` read past the text when matching case
+
+- **What happens**: with `matchCase` set, a search for a string not in
+  the buffer, or found only near its end, compares the string with
+  bytes after the end of the text. Found 2026-10-06.
+- **Cause**: `Fl_Text_Buffer::search_forward` (`src/Fl_Text_Buffer.cxx`)
+  loops while `startPos < length()`, but compares the whole needle with
+  `memcmp(sp, address(bp), l)`, `bp` running on past `length()`;
+  `search_backward` does the same. The case-insensitive path reads
+  through `char_at`, which checks.
+- **Effect on ofltk**: `ofl_buffer_search` (`src/FlText.cpp`) does its
+  own byte search, through `byte_at`, when matching case, and calls
+  FLTK's otherwise.
+- **Confirmed**: valgrind reported invalid reads in `TestText`'s search
+  checks, and in a plain C++ program searching with `matchCase` set;
+  none with the shim's search.
+
 ## Pitfalls
 
 ### 5. FLTK keeps the label pointer it is given
@@ -396,3 +413,131 @@ Unless an entry says otherwise, the version is FLTK 1.4.5 (Fedora's
 - **ofltk**: `set_value` (`src/FlMenus.cpp`) calls a choice as a
   choice. `TestMenus` checks the damage, and fails without it.
 
+### 34. A text buffer deleted before its displays is used after it is freed
+
+- `~Fl_Text_Buffer` doesn't tell the displays using it, and
+  `~Fl_Text_Display` removes its callbacks from its buffer, so a
+  display destroyed after its buffer writes to freed memory, as does a
+  display drawn after it.
+- **Cause**: `Fl_Text_Buffer::~Fl_Text_Buffer` frees its callback
+  arrays without calling them (`src/Fl_Text_Buffer.cxx`);
+  `Fl_Text_Display::~Fl_Text_Display` calls `mBuffer->remove_modify_callback`
+  (`src/Fl_Text_Display.cxx`).
+- **Effect on ofltk**: a buffer is reference counted
+  (`src/FlText.cpp`): `TextBuffer.Close` (or its finalizer) only marks
+  it, and it is deleted when the last display holding it lets it go.
+  A display lets go in the destructor of `Holds`, a base class
+  destroyed after FLTK's display.
+- **Confirmed**: in the source; and by mutation: with `Holds` as the
+  last base class, or `close` deleting a buffer still held, valgrind
+  reports invalid reads and writes in `TestText`.
+
+### 35. A style buffer with no styles makes FLTK read before its style table
+
+- A display given a style buffer by `highlight_data` with an empty
+  style table reads entry -1 of the table as it draws or measures text.
+- **Cause**: `Fl_Text_Display` indexes `mStyleTable[style - 'A']` after
+  clamping the style to `mNStyles - 1`, which is -1
+  (`src/Fl_Text_Display.cxx`, near lines 2373, 2528 and 2687).
+- **Effect on ofltk**: `set_highlight` (`src/FlText.cpp`) gives FLTK
+  the style buffer only once there is at least one style.
+- **Confirmed**: by mutation: without the guard, valgrind reports
+  invalid reads in `TestText`.
+
+### 37. Browsers keep the column widths, filter and directory they are given
+
+- `Fl_Browser::column_widths`, `Fl_File_Browser::filter` and
+  `Fl_File_Browser::load` keep the pointer, not a copy, and read it as
+  they draw or load again.
+- **Cause**: they assign the pointer to `column_widths_`, `pattern_` and
+  `directory_` (`FL/Fl_Browser.H`, `src/Fl_File_Browser.cxx`).
+- **Effect on ofltk**: every browser keeps its own copies, in the base
+  class `Keeps` (`src/FlBrowsers.cpp`), freed after FLTK's browser.
+  `Fl_File_Browser` has no `directory()` accessor in 1.4.5, so FlBrowsers
+  has none either.
+- **Confirmed**: in the source; `TestBrowsers` sets the widths and the
+  filter from arrays in a frame since written over, and fails when the
+  shim passes FLTK the Oberon array.
+
+### 38. A browser finds its top line only when it draws
+
+- `Fl_Browser_` turns its scroll position into its top line in
+  `update_top` (private), which only `draw` and `find_item` call. Until
+  then `topline()` and `displayed()` read the old top line, and a browser
+  never drawn has none, so a push on it selects nothing (`handle`
+  checks `top_`).
+- **Cause**: `src/Fl_Browser_.cxx`, `update_top`, `handle` (`FL_PUSH`).
+- **Effect on ofltk**: `ofl_browser_topline` and the `displayed` case of
+  `ofl_browser_line` (`src/FlBrowsers.cpp`) call the protected
+  `find_item` first, which updates it. Clicks need nothing: a user can
+  only click a browser that has been drawn. A test sending clicks draws
+  the browser first (`Probe.Capture`).
+- **Confirmed**: `TestBrowsers`: without the update, its checks of
+  `TopLine` after `SetTopLine`, and of `Displayed` after `MakeVisible`,
+  fail; and a click on a hold browser never drawn selects nothing.
+
+### 39. `Fl_Browser::textsize` and `Fl_File_Browser::textsize` hide `Fl_Browser_`'s
+
+- None is virtual. `Fl_Browser`'s also measures its lines again;
+  `Fl_File_Browser`'s also sets the icon size to one and a half times
+  the text size. Through an `Fl_Browser_ *`, neither happens.
+- **Effect on ofltk**: `ofl_browser_set` (`src/FlBrowsers.cpp`) calls a
+  file browser, then any `Fl_Browser`, as itself.
+- **Confirmed**: `TestBrowsers` checks the icon size after
+  `SetTextSize`, and fails when the shim calls `Fl_Browser_`'s.
+
+### 40. What `Fl_Browser::load` and `Fl_File_Browser::load` return
+
+- `Fl_Browser::load` adds a line for each newline and one after the
+  last, so a file ending with a newline ends with an empty line, and
+  splits lines longer than 1023 bytes; given "" it clears the browser
+  and returns 1. `Fl_File_Browser::load` returns the number of the
+  directory's entries (with `./` and the files the filter hides), not of
+  the lines it lists.
+- **Cause**: `src/Fl_Browser_load.cxx`, `src/Fl_File_Browser.cxx`.
+- **Effect on ofltk**: `Browser.Load` returns FALSE for "", and
+  documents the empty last line; `FileBrowser.LoadDirectory` returns a
+  `BOOLEAN`, the lines being `Count()`.
+- **Confirmed**: `TestBrowsers` loads `test/Check.Mod` (35 lines, 36 in
+  the browser).
+
+### 41. `Fl_Tree` keeps a removed item as the last one clicked
+
+- `Fl_Tree::remove(item)` forgets `item` as the last item clicked
+  (`_lastselect`), but not its descendants. When the last item clicked
+  is removed with its parent, a Shift-click in a multi-select tree then
+  extends the selection from an item no longer there: from the item
+  clicked to the end of the tree.
+- **Cause**: `Fl_Tree::remove` (`src/Fl_Tree.cxx`) compares only `item`
+  with `_lastselect`; `Fl_Tree_Item::~Fl_Tree_Item` clears the tree's
+  focus item, but not `_lastselect`. `extend_selection` only compares
+  the pointer, so it reads no freed memory, unless the pointer is
+  reused.
+- **Effect on ofltk**: `remove` (`src/FlBrowsers.cpp`) removes an
+  item's descendants one by one through `Fl_Tree::remove`, last first,
+  before the item.
+- **Confirmed**: a C++ program (a multi-select tree a/b, c, d, e; click
+  b, remove a, Shift-click c) selected c, d and e; with b removed before
+  a, c alone. `TestTree` checks it, and fails when the shim removes as
+  FLTK does.
+
+### 42. `Fl_Tree::callback_item()` outlives the item
+
+- An item removed in the tree's callback stays `callback_item()`, a
+  pointer to a deleted item.
+- **Cause**: nothing in `Fl_Tree::remove` or `~Fl_Tree_Item` clears
+  `_callback_item` (`src/Fl_Tree.cxx`, `src/Fl_Tree_Item.cxx`).
+- **Effect on ofltk**: `remove` clears it when it removes that item, so
+  `CallbackItem` returns NIL.
+- **Confirmed**: in the source; `TestTree` removes the item in its
+  callback, and fails without the clearing.
+
+### 43. `Fl_Tree::clear` deletes the root
+
+- A tree starts with a root item, "ROOT"; `clear()` deletes it with the
+  rest, and `root()` is then NULL until `add(path)` makes a new one.
+- **Cause**: `Fl_Tree::clear` (`src/Fl_Tree.cxx`); `remove(root())`
+  calls it.
+- **Effect on ofltk**: `Tree.Root` may return NIL, as documented; an
+  old root's `TreeItem` is no longer live.
+- **Confirmed**: `TestTree`.

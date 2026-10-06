@@ -27,6 +27,7 @@ CONST
   NotOpen* = 70;        (* a method of a widget never opened, or deleted *)
   OpenedTwice* = 71;    (* an Open of a widget opened before *)
   NilArgument* = 72;    (* NIL where a widget or timer is required *)
+  ClosedResource* = 73; (* a resource used after Close, or missing where needed *)
   IndexOutOfRange* = 74; (* a child index outside the group *)
   NotFiring* = 75;      (* RepeatTimeout outside its timer's Fire *)
   NotAChild* = 76;      (* a widget that must be a group's child isn't *)
@@ -727,7 +728,7 @@ BEGIN RETURN SYSTEM.VAL(SET, CAlign(Live(w)))
 END Align;
 
 PROCEDURE (w: Widget) SetAlign*(a: SET);
-BEGIN CSetAlign(Live(w), SYSTEM.VAL(SYSTEM.INT32, a))
+BEGIN CSetAlign(Live(w), ORD(a))
 END SetAlign;
 
 (* The box drawn around w: NoBox, UpBox or another box type. Named so as
@@ -762,7 +763,7 @@ BEGIN RETURN SYSTEM.VAL(SET, CWhen(Live(w)))
 END When;
 
 PROCEDURE (w: Widget) SetWhen*(when: SET);
-BEGIN CSetWhen(Live(w), SYSTEM.VAL(SYSTEM.INT32, when))
+BEGIN CSetWhen(Live(w), ORD(when))
 END SetWhen;
 
 PROCEDURE (w: Widget) Activate*;
@@ -865,7 +866,7 @@ END Damage;
 
 (* Adds d to what needs redrawing, and has FLTK redraw w soon. *)
 PROCEDURE (w: Widget) SetDamage*(d: SET);
-BEGIN CSetDamage(Live(w), SYSTEM.VAL(SYSTEM.INT32, d))
+BEGIN CSetDamage(Live(w), ORD(d))
 END SetDamage;
 
 (* Sets what needs redrawing to {}, without redrawing: FLTK does this

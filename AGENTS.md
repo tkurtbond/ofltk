@@ -21,10 +21,10 @@ anything:
 
 ## Status
 
-As of 2026-10-06, Phases 0 to 5 of PLAN.md are done, and Phase 6
-(text and browsers) is next. `src/` has the `Fl`, `FlDraw`, `FlButtons`,
-`FlInputs`, `FlValuators`, `FlLayout`, `FlMenus` and `FlDialogs`
-modules, and the tests pass. Also kept:
+As of 2026-10-06, Phases 0 to 6 of PLAN.md are done, and Phase 7
+(images and the rest) is next. `src/` has the `Fl`, `FlDraw`,
+`FlButtons`, `FlInputs`, `FlValuators`, `FlLayout`, `FlMenus`,
+`FlDialogs`, `FlText` and `FlBrowsers` modules, and the tests pass. Also kept:
 
 - `doc/design.md`: the feasibility analysis.
 - `doc/fltk-issues.md`: every FLTK bug and pitfall found, with its
@@ -52,13 +52,21 @@ modules, and the tests pass. Also kept:
   opens a widget of its own class. Keep application code off them.
 - `src/FlDraw.Mod`, `src/FlDraw.cpp`: `fl_draw.H`, for `Draw` methods.
 - `src/FlButtons`, `src/FlInputs`, `src/FlValuators`, `src/FlLayout`,
-  `src/FlMenus` (`.Mod` and `.cpp`): the widget families of PLAN.md's module table. Each C++ part
+  `src/FlMenus`, `src/FlText`, `src/FlBrowsers` (`.Mod` and `.cpp`):
+  the widget families of PLAN.md's module table. Each C++ part
   has one `ofl_<family>_new(kind, ...)` that makes the class `kind`
   numbers as `ofl::W<class>`, copies the label and calls `ofl::open`;
   each Oberon `Open<Type>` passes it `Fl.BeginOpen(w)` and gives the
   result to `Fl.EndOpen`. Methods get the handle with `Fl.Live(w)`.
 - `src/FlDialogs.Mod`, `src/FlDialogs.cpp`: FLTK's common dialogs,
   procedures with no widget of their own.
+- **What a widget's C++ part keeps beside FLTK's object** goes in a base
+  class listed before `ofl::W<B>`, so it is destroyed after FLTK's
+  object, and is reached by `dynamic_cast`: `Holds` (`FlText`: the
+  buffers a display shows), `Keeps` (`FlBrowsers`: copies of pointers
+  FLTK keeps), `Items` (`FlBrowsers`: a tree's live items). Never
+  `static_cast` an `ofl::widget` to a template class: the kind decides
+  which instance it is.
 - `test/`:
   - one main module per concern, `Test*.Mod`, using `Check.Mod`;
   - halt tests, `Halt*.Mod`, one per code;
@@ -89,7 +97,7 @@ modules, and the tests pass. Also kept:
 | FLTK docs (HTML) | `/usr/share/doc/fltk-devel/html/` |
 | FLTK 1.3 | also installed (`fltk1.3`, runtime only); never build against it |
 | FLUID | `fltk-fluid-1.4.5` |
-| poc | `/usr/bin/poc` (Peaseblossom RPM 0.4.0); `poc(1)`; `/usr/share/doc/peaseblossom/users-guide.md` (§9, "Calling C") and `reference-guide.md` |
+| poc | `/usr/bin/poc` (Peaseblossom RPM 0.4.1); `poc(1)`; `/usr/share/doc/peaseblossom/users-guide.md` (§9, "Calling C") and `reference-guide.md` |
 | poc source | `~/Repos/Oberon/Peaseblossom` |
 | FLTKAda | `/usr/local/sw/src/tkb/fltkada` (`AGENTS.md`, `doc/binding_architecture.md`, `progress.txt`, `test/`) |
 | polibfyaml | `~/Repos/Oberon/polibfyaml` (`AGENTS.md`, `GNUmakefile`, `test/Check.Mod`, `test/poc-gc.supp`) |
@@ -126,8 +134,8 @@ make clean      # rm -rf build
   `clang++` and `fltk-config`). After an FLTK upgrade, run it again, and
   read the diff: `TestConstants` fails until you do if a value moved.
 - **C++ parts are `src/<Module>.cpp`**, compiled by clang++, which also
-  links any program that has one. That needs poc 0.4.0, which the makefile
-  requires.
+  links any program that has one. That needs poc 0.4.0, and `ORD` of a
+  `SET` needs 0.4.1, which the makefile requires.
 - The C++ parts are compiled `-std=c++11 -Wall -Wextra -Werror`, as
   FLTKAda's shim is, so code can move between them.
 - `-verbose` on a poc command shows the clang commands it runs.
@@ -165,6 +173,10 @@ widgets never shown; `make test` stops with a message without one.
 
 - The user's desktop is Wayland, and FLTK 1.4 uses its Wayland back end
   there. `FLTK_BACKEND=x11 make test` runs the tests on X11 (XWayland).
+- Under Wayland a test's windows and dialogs appear on the real
+  desktop, where the user's typing or clicking can reach them: a
+  `TestDialogs` run failed its `Choice` checks this way once
+  (2026-10-06), and passed when run again.
 - **`make test-headless`** runs them on Xvfb instead, so no windows
   appear on the desktop. It unsets `WAYLAND_DISPLAY`: a plain `xvfb-run`
   in a Wayland session leaves it set, and FLTK then uses the real desktop
@@ -226,7 +238,7 @@ widgets never shown; `make test` stops with a message without one.
     that the script still catches a deliberate leak whenever you change
     it.
 
-## Confirmed facts (poc 0.3.1 and 0.4.0, FLTK 1.4.5)
+## Confirmed facts (poc 0.3.1 to 0.4.1, FLTK 1.4.5)
 
 Each was confirmed by a program that ran, in the session of 2026-10-06
 unless it says otherwise.
@@ -335,6 +347,35 @@ held only in C++ memory**.
 - **Dialogs**: `fl_message` and the rest take a printf format, so pass
   text as `"%s"`; `fl_file_chooser` keeps its title pointer
   (`doc/fltk-issues.md`, 30, 31).
+- **Text** (`doc/fltk-issues.md`, 34 to 36):
+  - a text buffer and its displays don't detach from each other, so a
+    buffer deleted first is used after it is freed: `FlText` reference
+    counts buffers;
+  - a style buffer with no styles makes FLTK read before the style
+    table;
+  - `search_forward` and `search_backward` with `matchCase` read past
+    the end of the text (a bug): the shim searches itself.
+- **Browsers** (`doc/fltk-issues.md`, 37 to 40):
+  - `column_widths`, `Fl_File_Browser::filter` and `load` keep their
+    pointers: the shim keeps copies;
+  - a browser finds its top line only as it draws, so `topline()` and
+    `displayed()` are stale until then, and a browser never drawn takes
+    no click: draw it first in a test (`Probe.Capture`);
+  - `Fl_Browser::textsize` and `Fl_File_Browser::textsize` hide
+    `Fl_Browser_`'s;
+  - `Fl_Browser::load` adds an empty last line after a final newline;
+    `Fl_File_Browser::load` returns the directory's entries;
+  - a browser calls back on every release, changed or not, and a check
+    browser not at all, to start with.
+- **Trees** (`doc/fltk-issues.md`, 41 to 43):
+  - FLTK makes and deletes items itself, so a `TreeItem` is checked
+    against the tree's map of live items before every use;
+  - `Fl_Tree::remove` leaves a descendant of the item as the last one
+    clicked, and the callback item after removal: the shim removes
+    descendants one by one, and clears the callback item;
+  - `clear()` deletes the root;
+  - `Fl_Tree_Item::is_visible()` is the item's own flag;
+    `is_visible_r()` is whether its parents are open.
 - **Name clashes with FLTK's keys**: the key constants take the prefix
   `Key`, since `FL_End` would be the keyword `END`. So `Fl::get_key` is
   `GetKey`, because `KeyDown` is the down arrow.
@@ -349,15 +390,14 @@ held only in C++ memory**.
 Worked around here. Check whether each new poc fixes them, then remove the
 workaround.
 
-- **`ORD` of a `SET` doesn't compile under `-OC`**: found in 0.3.1, and
-  still in 0.4.0 (2026-10-06). Any use
-  fails: `n := ORD(s)`, passing `ORD(s)` to a `SYSTEM.INT32`, and even
-  assigning it to a `HUGEINT`. poc emits `trunc i32 %x to i32`, which
-  clang rejects ("invalid cast opcode for cast from 'i32' to 'i32'").
-  Under `-O2` all three compile and give the right value. Use
-  `SYSTEM.VAL(SYSTEM.INT32, s)` or `SYSTEM.VAL(INTEGER, s)`, which give
-  the same bits. Reproduction: `MODULE M; VAR s: SET; n: INTEGER; BEGIN
-  s := {0, 2}; n := ORD(s) END M.`, built `poc -OC`.
+None at present.
+
+- **Fixed in 0.4.1: `ORD` of a `SET` under `-OC`** (2026-10-06). In
+  0.3.1 and 0.4.0 any use failed to compile, poc emitting
+  `trunc i32 %x to i32`, which clang rejects. 0.4.1 compiles
+  `ORD({0, 2, 31})` into an `INTEGER`, a `SYSTEM.INT32` and a `HUGEINT`
+  with the right value, and the `SYSTEM.VAL(SYSTEM.INT32, s)`
+  workarounds are gone.
 
 ### Carried from polibfyaml, re-checked or documented for 0.3.1
 

@@ -129,7 +129,7 @@ BEGIN
 END Item;
 
 PROCEDURE Shortcut(key: INTEGER; state: SET): INTEGER;
-BEGIN RETURN key + SYSTEM.VAL(INTEGER, state)
+BEGIN RETURN key + ORD(state)
 END Shortcut;
 
 (* Items *)
@@ -146,7 +146,7 @@ PROCEDURE (m: Menu) Insert*(index: INTEGER; label-: ARRAY OF CHAR; key: INTEGER;
 BEGIN
   h := Fl.Live(m); n := CSize(h);
   ASSERT((index = -1) OR (index >= 0) & ((index = 0) OR (index < n)), Fl.IndexOutOfRange);
-  RETURN CInsert(h, index, label, Shortcut(key, state), SYSTEM.VAL(SYSTEM.ADDRESS, action), SYSTEM.VAL(SYSTEM.INT32, flags))
+  RETURN CInsert(h, index, label, Shortcut(key, state), SYSTEM.VAL(SYSTEM.ADDRESS, action), ORD(flags))
 END Insert;
 
 (* Insert at the end. *)
@@ -236,7 +236,7 @@ BEGIN RETURN SYSTEM.VAL(SET, CFlags(Item(m, i), i))
 END ItemFlags;
 
 PROCEDURE (m: Menu) SetItemFlags*(i: INTEGER; flags: SET);
-BEGIN CSetFlags(Item(m, i), i, SYSTEM.VAL(SYSTEM.INT32, flags))
+BEGIN CSetFlags(Item(m, i), i, ORD(flags))
 END SetItemFlags;
 
 (* Turns radio item i on, and the other radio items next to it off: a
