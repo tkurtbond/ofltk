@@ -60,8 +60,10 @@ BEGIN
     "a deactivated group's child is active, but not active_r");
   g.Activate;
   Check.Check(a.ActiveR(), "and active_r again once the group is activated");
+  Check.Check(~Fl.WindowShown(), "WindowShown: none yet");
   win.Show; shown := Fl.Check();
   Check.Check(win.Shown() & a.VisibleR(), "a shown window's box is visible_r");
+  Check.Check(Fl.WindowShown(), "WindowShown");
   g.Hide;
   Check.Check(a.Visible() & ~a.VisibleR(), "a hidden group's child: visible, not visible_r");
   g.Show;

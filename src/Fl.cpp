@@ -71,6 +71,16 @@ int dispatch_trampoline(int event, Fl_Window *w) {
   return r;
 }
 
+// The event handlers: Fl's, which calls those added, newest first, with
+// an event no widget used. Called as a dispatch, as the event dispatch
+// is.
+int32_t (*on_handler)(int32_t);
+
+int handler_trampoline(int event) {
+  ofl::Dispatch d;
+  return on_handler(event);
+}
+
 // The text an event is given (ofl_set_event_text): FLTK keeps the
 // pointer until the next event.
 std::vector<char> event_text;
@@ -80,11 +90,27 @@ std::vector<char> event_text;
 extern "C" {
 
 void ofl_register_loop(ofl::SelfFn idle, ofl::SelfFn fd,
-                       int32_t (*dispatch)(int32_t, intptr_t)) {
+                       int32_t (*dispatch)(int32_t, intptr_t),
+                       int32_t (*handler)(int32_t)) {
   on_idle = idle;
   on_fd = fd;
   on_dispatch = dispatch;
+  on_handler = handler;
 }
+
+// Fl's handlers are FLTK's while there are any (on 1), none of FLTK's
+// otherwise.
+void ofl_event_handlers(int32_t on) {
+  if (on) {
+    Fl::add_handler(handler_trampoline);
+  } else {
+    Fl::remove_handler(handler_trampoline);
+  }
+}
+
+void ofl_redraw_all() { Fl::redraw(); }
+
+int32_t ofl_window_shown_any() { return Fl::first_window() != 0; }
 
 void ofl_add_idle(intptr_t self) {
   Fl::add_idle(idle_trampoline, reinterpret_cast<void *>(self));

@@ -376,12 +376,13 @@ int32_t ofl_browser_column_widths(intptr_t b, const int32_t *widths,
 
 // 1 if the directory was read. Fl_File_Browser::load returns the number
 // of the directory's entries, not of the lines it lists, and 0 if it
-// couldn't read it.
+// couldn't read it. The sort is fl_numericsort, corrected
+// (doc/fltk-issues.md, 63).
 int32_t ofl_file_browser_load(intptr_t b, const char *dir) {
   Keeps *k = keeps(b);
   char *d = strdup(dir);
   if (d == 0) return 0;
-  int n = files(b)->load(d);
+  int n = files(b)->load(d, ofl::numericsort);
   ofl::drop_icons(files(b));
   free(k->dir);
   k->dir = d;

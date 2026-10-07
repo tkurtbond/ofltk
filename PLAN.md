@@ -243,11 +243,11 @@ Programmer errors halt, as in polibfyaml. poc's `ASSERT(x, n)` prints
 | 71 | a widget opened twice, or a tree item added twice (`Fl.OpenedTwice`) |
 | 72 | a NIL argument where a widget or timer is required (`Fl.NilArgument`) |
 | 73 | a closed resource used, or one missing where it is needed: a closed `TextBuffer`, a display with no buffer, a removed `TreeItem`, a closed `Image` or `Surface`, a closed or deleted `Preferences` (`Fl.ClosedResource`) |
-| 74 | an index out of range: group child, grid row or column, browser line, menu item (`Fl.IndexOutOfRange`) |
+| 74 | an index out of range: group child, grid row or column, browser line, menu item, chart entry (`Fl.IndexOutOfRange`) |
 | 75 | `RepeatTimeout` outside its own timer's `Fire`, `HandleDefault` outside the event dispatch (`Fl.NotFiring`) |
 | 76 | a widget that must be a group's child isn't: a grid's cell, a flex's fixed size, a tab or wizard page, a tile's size range (`Fl.NotAChild`) |
 | 77 | a `Begin` and `End` out of order: an image surface's `End` that doesn't match the last `Begin` (`Fl.OutOfOrder`) |
-| 78 | an argument a call can't take: a multi-label for a window, a multi-label put in itself, a label type that needs an image, a file descriptor's conditions empty or unknown; a tree's root replaced (`Fl.Unsupported`) |
+| 78 | an argument a call can't take: a multi-label for a window, a multi-label put in itself, a label type that needs an image, a file descriptor's conditions empty or unknown; a tree's root replaced; a window shaped by an image with no pixels to read (a tiled one); an `AnimGIF` opened as another image, or another image as one; an animation's frame set while it plays (`Fl.Unsupported`) |
 
 Bad data from outside the program is never a halt: an image that fails
 to load, a file chooser cancelled. Those come back as `BOOLEAN` results.
@@ -1358,7 +1358,7 @@ against FLTK's own build under Xvfb, as Phase 9's were.
   `Callback` calls FLTK's (protected) unless an action is set.
   `TestMenus` checks its items, its value, and the scheme it sets.
 
-### Phase 13: New widgets and images
+### Phase 13: New widgets and images `[done]`
 
 Six ports, and the widgets and images they need:
 
@@ -1378,6 +1378,64 @@ Six ports, and the widgets and images they need:
 - `animgifimage` lists a directory (`fl_filename_list`,
   `fl_alphasort`), which `FlDialogs` can bind, with the names copied
   and FLTK's list freed (`fl_filename_free_list`).
+
+Done 2026-10-07, with poc 0.4.1 and FLTK 1.4.5: six ports, charts,
+window shapes, tiled and animated images, global event handlers, and
+directory listings. Each port was checked against FLTK's own build
+under Xvfb, as Phase 9's were.
+
+- Ported: `ChartSimple`, `ShapedWindow`, `AnimGifImageSimple`,
+  `AnimGifImageResize`, `AnimGifImagePlay` and `AnimGifImage`; each
+  matched pixel for pixel as drawn.
+  - The animgifimage ports were given FLTK's own
+    `test/images/fltk_animated*.gif`, and pofltk's
+    `test/images/anim.gif` (three frames of 4 by 2, made for
+    `TestAnimGIF`), which is `AnimGifImageSimple`'s default, FLTK's
+    file not being in this repository. `AnimGifImage` matched in each
+    of its modes (`-T` tiled, `-f` a second canvas, `-r1.5`, `-D`,
+    `-A`, `-m`, `-ddd` a window per frame, `-t` a directory, and the
+    file chooser), with the same titles and output as FLTK's; its
+    chooser loop, a window deleted and the chooser shown again, ran
+    under valgrind. `AnimGifImagePlay`'s titles matched FLTK's after
+    each of its keys; `AnimGifImageResize` matched before and after
+    the window was resized.
+  - FLTK's examples keep an animation in a window's user data, or
+    find it as a widget's `image()`; the ports keep it in the window's
+    or canvas's record. `AnimGifImagePlay` opens an `AnimGIF` for each
+    file, where FLTK's loads each into one.
+  - **`EXAMPLEARGS`** in the makefile gives an example its command
+    line under `make test`: `AnimGifImagePlay` and
+    `AnimGifImageResize` need a file.
+- **`FlValuators.Chart`** (`Fl_Chart`), in `FlValuators` as it
+  stays alone. `SetMaxCount(0)` sets no limit, where FLTK's
+  `maxsize(0)` drops every entry (`doc/fltk-issues.md`, 60); a label
+  is cut before a UTF-8 character crossing its 18th byte, where FLTK
+  cuts in the middle (65).
+- **`FlImages.SetShape`** and **`OpenTiled`**. The Wayland back end
+  supports shapes (a Cairo mask, `Fl_Wayland_Window_Driver::shape`).
+  X11's reads past an image drawn larger than its data (61), so FLTK is
+  given a copy at the drawn size, which the window holds. A tiled image
+  can't shape a window (`Fl.Unsupported`, `HaltShapeTiled`).
+- **`FlImages.AnimGIF`** (`Fl_Anim_GIF_Image`), opened from a file or
+  from contents, with `AnimMinDelay`, `ScalingAlgorithm` and
+  `SetAnimateGIFs`. Its timer redraws its canvas, so it watches the
+  canvas and forgets it as it dies (62); `TestAnimGIF` deletes a
+  playing animation's canvas, and closes one with its timer pending,
+  under valgrind. `SetFrame` while it plays halts (`Fl.Unsupported`,
+  `HaltAnimFrame`). FLTK's copy plays whenever the original has a
+  frame shown (64).
+- **`Fl.AddHandler`, `RemoveHandler`, `Redraw`** (`Fl::redraw`) and
+  **`WindowShown`** (`Fl::first_window`), for the ports' keys and
+  forced redraws; tested in `TestLoop` and `TestWidget`.
+- **`FlDialogs.ListDirectory`** (`fl_filename_list`), the names
+  copied and FLTK's list freed. **`fl_numericsort` is wrong**: it
+  never compares the character after a run of digits, and reads past
+  a name's end after one (63), found by valgrind in FLTK's file
+  chooser as `AnimGifImage` ran. pofltk's own sort (`src/pofltk.h`)
+  serves `ListDirectory`, `FileBrowser.LoadDirectory` and FLTK's file
+  chooser (`Fl_File_Chooser::sort`). `test/names/` holds empty files
+  whose names each sort orders differently, which `TestDialogs` and
+  `TestBrowsers` list.
 
 ### poc 0.4.0 `[done]`
 

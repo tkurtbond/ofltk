@@ -21,9 +21,9 @@ anything:
 
 ## Status
 
-As of 2026-10-07, Phases 0 to 12 of PLAN.md are done, and `README.md`
-is the user's guide. Phases 9 to 13 (planned 2026-10-07) port the rest
-of FLTK's `examples/` and bind what they need; 13 remains. `src/` has the `Fl`, `FlDraw`, `FlButtons`,
+As of 2026-10-07, Phases 0 to 13 of PLAN.md are done, and `README.md`
+is the user's guide. Phases 9 to 13 (planned 2026-10-07) ported the rest
+of FLTK's `examples/` and bound what they needed. `src/` has the `Fl`, `FlDraw`, `FlButtons`,
 `FlInputs`, `FlValuators`, `FlLayout`, `FlMenus`, `FlDialogs`, `FlText`,
 `FlBrowsers`, `FlImages`, `FlPreferences` and `FlTable` modules, and the
 tests pass. Also kept:
@@ -117,7 +117,10 @@ prefix of the C++ parts (`ofl::`, `ofl_`) was kept.
     many things a widget keeps (`Kept`, `Ref::keep`); and pipes
     (`Pipe`, `Write`, `Read`, `Close`), for `TestLoop`'s fd watches.
   - `images/`: one 4x2 image, red left and blue right, in each format
-    `TestImages` reads.
+    `TestImages` reads; and `anim.gif`, three frames of it, for
+    `TestAnimGIF`;
+  - `names/`: empty files whose names each directory sort orders
+    differently (`TestDialogs`, `TestBrowsers`).
 - `tools/gen-constants.py`: writes each module's constants and their
   test, from FLTK's headers (constants, below).
 - `tools/with-sway.sh`: runs a command on a headless sway (`make
@@ -183,7 +186,8 @@ make clean      # rm -rf build
   in `EXAMPLES`, and an example's module with a C++ part in
   `EXAMPLECXX`. `EXAMPLES` is one long line: edit it by matching its
   text, as `sed 's/^\(EXAMPLES := .*Last\)$/\1 New/'`, not by line
-  number.
+  number. An example that needs a command line under `make test` gets
+  one in `EXAMPLEARGS`, as `name=argument`.
 - **Constants**: never edit the block of a module between
   `BEGIN generated constants` and `END generated constants`. Add the
   name and C expression to `SPEC` in `tools/gen-constants.py`, after
@@ -509,6 +513,21 @@ held only in C++ memory**.
   the program's life. `Fl::args` returns 0 for an unknown option only
   until it has once stopped at a word that isn't an option: the shim
   decides from the word.
+- **Charts** (`doc/fltk-issues.md`, 60, 65): `maxsize(0)` drops every
+  entry, though 0 is no limit; an entry's label is cut to 18 bytes
+  in the middle of a UTF-8 character.
+- **Window shapes** (`doc/fltk-issues.md`, 61): X11's driver reads an
+  RGB image's drawn size from its data, past their end if it is drawn
+  larger, and keeps the image: FlImages gives it a copy. Wayland
+  supports shapes too.
+- **Animated GIFs** (`doc/fltk-issues.md`, 62, 64): an animation's
+  timer redraws its canvas, deleted or not, so FlImages' animation
+  watches the canvas; a copy plays whenever the original has a frame
+  shown.
+- **`fl_numericsort` is wrong** (`doc/fltk-issues.md`, 63): it skips
+  the character after a run of digits, and reads past a name's end
+  after one. pofltk sorts with its own (`ofl::numericsort`), and sets
+  it as FLTK's file chooser's.
 - **Screens**: `Fl::screen_num` is 0 for a point on no screen.
   xvfb-run's default screen is 640x480; `tools/with-sway.sh`'s output
   is 1280x800.

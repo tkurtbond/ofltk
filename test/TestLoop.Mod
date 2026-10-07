@@ -1,4 +1,4 @@
-MODULE TestLoop; (* The event loop: idle callbacks, file descriptors' watches, the event dispatch *)
+MODULE TestLoop; (* The event loop: idle callbacks, file descriptors' watches, the event dispatch, event handlers *)
 
 IMPORT GC := GarbageCollectedHeap, Fl, FlButtons, FlInputs, Check, Probe;
 
@@ -18,7 +18,7 @@ VAR
   button: FlButtons.Button;
   input: FlInputs.Input;
   box: Fl.Box;
-  pressed, seen: INTEGER;
+  pressed, seen, counted, taken, once: INTEGER;
   windowSeen: Fl.Window;
   pass, deleteBox: BOOLEAN;
   s: ARRAY 64 OF CHAR;
@@ -75,6 +75,25 @@ BEGIN
   END;
   RETURN pass & Fl.HandleDefault(event)
 END Dispatch;
+
+(* Counts shortcuts, and uses none. *)
+PROCEDURE Count(event: INTEGER): BOOLEAN;
+BEGIN IF event = Fl.EvShortcut THEN INC(counted) END; RETURN FALSE
+END Count;
+
+(* Uses a shortcut g. *)
+PROCEDURE TakeG(event: INTEGER): BOOLEAN;
+BEGIN
+  IF (event = Fl.EvShortcut) & (Fl.EventKey() = ORD("g")) THEN INC(taken); RETURN TRUE END;
+  RETURN FALSE
+END TakeG;
+
+(* Removes itself at its first shortcut, and the handler Count. *)
+PROCEDURE Once(event: INTEGER): BOOLEAN;
+BEGIN
+  IF event = Fl.EvShortcut THEN INC(once); Fl.RemoveHandler(Once); Fl.RemoveHandler(Count) END;
+  RETURN FALSE
+END Once;
 
 BEGIN
   (* Idle callbacks *)
@@ -152,6 +171,27 @@ BEGIN
   ok := Probe.Mouse(win, Fl.EvPush, 20, 20, Fl.LeftMouse, Fl.Button1, 0);
   ok := Probe.Mouse(win, Fl.EvRelease, 20, 20, Fl.LeftMouse, {}, 0);
   Check.Check((seen = n) & (pressed = 2), "SetEventDispatch NIL: FLTK's own again");
+  win.Delete;
+
+  (* Event handlers: a shortcut no widget takes (deleting win cleared
+     Fl.BelowMouse, as sending one needs: doc/fltk-issues.md, 3) *)
+  NEW(win); Fl.OpenWindow(win, 100, 100, "TestLoop handlers");
+  NEW(box); Fl.OpenBox(box, 10, 10, 80, 25, "box");
+  win.End;
+  Fl.AddHandler(TakeG); Fl.AddHandler(Count);
+  ok := Probe.HandleKey(win, Fl.EvShortcut, ORD("g"), {}, "g");
+  Check.Check(ok & (counted = 1) & (taken = 1), "handlers see a shortcut no widget took, newest first");
+  ok := Probe.HandleKey(win, Fl.EvShortcut, ORD("h"), {}, "h");
+  Check.Check(~ok & (counted = 2) & (taken = 1), "and pass on what they don't use");
+  Fl.AddHandler(Once);
+  ok := Probe.HandleKey(win, Fl.EvShortcut, ORD("g"), {}, "g");
+  Check.Check(ok & (once = 1) & (counted = 2) & (taken = 2),
+    "a handler may remove itself, and the next, which isn't called");
+  ok := Probe.HandleKey(win, Fl.EvShortcut, ORD("g"), {}, "g");
+  Check.Check(ok & (once = 1) & (counted = 2) & (taken = 3), "RemoveHandler");
+  Fl.RemoveHandler(TakeG); Fl.RemoveHandler(TakeG);
+  ok := Probe.HandleKey(win, Fl.EvShortcut, ORD("g"), {}, "g");
+  Check.Check(~ok & (taken = 3), "with none, FLTK's own");
   win.Delete;
 
   Check.Check(Fl.OpenWidgets() = 0, "every widget deleted");

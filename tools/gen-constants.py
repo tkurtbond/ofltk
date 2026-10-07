@@ -182,6 +182,11 @@ section("of a counter")
 add("int", [(camel(k), "FL_" + k) for k in "NORMAL_COUNTER SIMPLE_COUNTER".split()])
 section("of a spinner (Spinner.SetKind): whole numbers, or real ones")
 add("int", [("IntSpinner", "FL_INT_INPUT"), ("FloatSpinner", "FL_FLOAT_INPUT")])
+section("kinds of chart (Chart.SetKind); a special pie draws its first slice apart")
+add("int", [("BarChart", "FL_BAR_CHART"), ("HorBarChart", "FL_HORBAR_CHART"),
+            ("LineChart", "FL_LINE_CHART"), ("FillChart", "FL_FILL_CHART"),
+            ("SpikeChart", "FL_SPIKE_CHART"), ("PieChart", "FL_PIE_CHART"),
+            ("SpecialPieChart", "FL_SPECIALPIE_CHART")])
 
 module("FlLayout")
 section("kinds of flex (Flex.SetKind): one column, or one row")
@@ -261,6 +266,19 @@ section("how an item with a widget is drawn (Tree.SetItemDrawMode); {} draws the
 add("set", [("ItemDrawLabelAndWidget", "FL_TREE_ITEM_DRAW_LABEL_AND_WIDGET"),
             ("ItemHeightFromWidget", "FL_TREE_ITEM_HEIGHT_FROM_WIDGET")])
 
+module("FlImages")
+section("how an animation starts (OpenAnimGIF, AnimGIF.SetCanvas): DontStart, not playing; the canvas\n"
+        "     not sized to it, or not showing it; OptimizeMemory, frames kept at their own sizes;\n"
+        "     AnimLog and AnimDebug, FLTK's reports of the decoding, on standard output")
+add("set", [("DontStart", "Fl_Anim_GIF_Image::DONT_START"),
+            ("DontResizeCanvas", "Fl_Anim_GIF_Image::DONT_RESIZE_CANVAS"),
+            ("DontSetAsImage", "Fl_Anim_GIF_Image::DONT_SET_AS_IMAGE"),
+            ("OptimizeMemory", "Fl_Anim_GIF_Image::OPTIMIZE_MEMORY"),
+            ("AnimLog", "Fl_Anim_GIF_Image::LOG_FLAG"),
+            ("AnimDebug", "Fl_Anim_GIF_Image::DEBUG_FLAG")])
+section("how RGB images are scaled as they are drawn (SetScalingAlgorithm)")
+add("int", [("ScalingNearest", "FL_RGB_SCALING_NEAREST"), ("ScalingBilinear", "FL_RGB_SCALING_BILINEAR")])
+
 module("FlTable")
 WORDS.update({"STARTPAGE": "StartPage", "ENDPAGE": "EndPage", "RC": "RC"})
 section("what DrawCell draws, and where a Callback's event was (Table.CallbackContext)")
@@ -283,14 +301,14 @@ CHECKS = [
 ]
 
 HEADERS = ("#include <FL/Fl.H>\n#include <FL/Enumerations.H>\n#include <FL/fl_draw.H>\n"
-           "#include <FL/Fl_Button.H>\n#include <FL/Fl_Counter.H>\n#include <FL/Fl_Dial.H>\n"
+           "#include <FL/Fl_Button.H>\n#include <FL/Fl_Chart.H>\n#include <FL/Fl_Counter.H>\n#include <FL/Fl_Dial.H>\n"
            "#include <FL/Fl_Input_.H>\n#include <FL/Fl_Slider.H>\n#include <FL/Fl_Valuator.H>\n"
            "#include <FL/Fl_Flex.H>\n#include <FL/Fl_Grid.H>\n#include <FL/Fl_Pack.H>\n"
            "#include <FL/Fl_Scroll.H>\n#include <FL/Fl_Tabs.H>\n"
            "#include <FL/Fl_Menu_Item.H>\n#include <FL/Fl_Menu_Button.H>\n#include <FL/fl_ask.H>\n"
            "#include <FL/Fl_Native_File_Chooser.H>\n"
            "#include <FL/Fl_Text_Display.H>\n#include <FL/Fl_File_Browser.H>\n#include <FL/Fl_Tree.H>\n"
-           "#include <FL/Fl_Table_Row.H>\n"
+           "#include <FL/Fl_Table_Row.H>\n#include <FL/Fl_Anim_GIF_Image.H>\n"
            "#include <stdint.h>\n#include <stdio.h>\n")
 
 def oberon_set(v):

@@ -5,6 +5,7 @@
 #include <FL/Enumerations.H>
 #include <FL/fl_draw.H>
 #include <FL/Fl_Button.H>
+#include <FL/Fl_Chart.H>
 #include <FL/Fl_Counter.H>
 #include <FL/Fl_Dial.H>
 #include <FL/Fl_Input_.H>
@@ -23,6 +24,7 @@
 #include <FL/Fl_File_Browser.H>
 #include <FL/Fl_Tree.H>
 #include <FL/Fl_Table_Row.H>
+#include <FL/Fl_Anim_GIF_Image.H>
 #include <stdint.h>
 #include <stdio.h>
 #include <string.h>
@@ -371,6 +373,13 @@ const Entry entries[] = {
   {"FL_SIMPLE_COUNTER", (int32_t)(FL_SIMPLE_COUNTER)},
   {"FL_INT_INPUT", (int32_t)(FL_INT_INPUT)},
   {"FL_FLOAT_INPUT", (int32_t)(FL_FLOAT_INPUT)},
+  {"FL_BAR_CHART", (int32_t)(FL_BAR_CHART)},
+  {"FL_HORBAR_CHART", (int32_t)(FL_HORBAR_CHART)},
+  {"FL_LINE_CHART", (int32_t)(FL_LINE_CHART)},
+  {"FL_FILL_CHART", (int32_t)(FL_FILL_CHART)},
+  {"FL_SPIKE_CHART", (int32_t)(FL_SPIKE_CHART)},
+  {"FL_PIE_CHART", (int32_t)(FL_PIE_CHART)},
+  {"FL_SPECIALPIE_CHART", (int32_t)(FL_SPECIALPIE_CHART)},
   {"Fl_Flex::COLUMN", (int32_t)(Fl_Flex::COLUMN)},
   {"Fl_Flex::ROW", (int32_t)(Fl_Flex::ROW)},
   {"Fl_Pack::VERTICAL", (int32_t)(Fl_Pack::VERTICAL)},
@@ -478,6 +487,14 @@ const Entry entries[] = {
   {"FL_TREE_REASON_DRAGGED", (int32_t)(FL_TREE_REASON_DRAGGED)},
   {"FL_TREE_ITEM_DRAW_LABEL_AND_WIDGET", (int32_t)(FL_TREE_ITEM_DRAW_LABEL_AND_WIDGET)},
   {"FL_TREE_ITEM_HEIGHT_FROM_WIDGET", (int32_t)(FL_TREE_ITEM_HEIGHT_FROM_WIDGET)},
+  {"Fl_Anim_GIF_Image::DONT_START", (int32_t)(Fl_Anim_GIF_Image::DONT_START)},
+  {"Fl_Anim_GIF_Image::DONT_RESIZE_CANVAS", (int32_t)(Fl_Anim_GIF_Image::DONT_RESIZE_CANVAS)},
+  {"Fl_Anim_GIF_Image::DONT_SET_AS_IMAGE", (int32_t)(Fl_Anim_GIF_Image::DONT_SET_AS_IMAGE)},
+  {"Fl_Anim_GIF_Image::OPTIMIZE_MEMORY", (int32_t)(Fl_Anim_GIF_Image::OPTIMIZE_MEMORY)},
+  {"Fl_Anim_GIF_Image::LOG_FLAG", (int32_t)(Fl_Anim_GIF_Image::LOG_FLAG)},
+  {"Fl_Anim_GIF_Image::DEBUG_FLAG", (int32_t)(Fl_Anim_GIF_Image::DEBUG_FLAG)},
+  {"FL_RGB_SCALING_NEAREST", (int32_t)(FL_RGB_SCALING_NEAREST)},
+  {"FL_RGB_SCALING_BILINEAR", (int32_t)(FL_RGB_SCALING_BILINEAR)},
   {"Fl_Table::CONTEXT_NONE", (int32_t)(Fl_Table::CONTEXT_NONE)},
   {"Fl_Table::CONTEXT_STARTPAGE", (int32_t)(Fl_Table::CONTEXT_STARTPAGE)},
   {"Fl_Table::CONTEXT_ENDPAGE", (int32_t)(Fl_Table::CONTEXT_ENDPAGE)},

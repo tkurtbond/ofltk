@@ -1,10 +1,11 @@
 // The C++ part of FlValuators: sliders, scrollbars, counters, dials,
 // rollers, adjusters, value inputs and outputs, spinners and progress
-// bars. See pofltk.h for the conventions.
+// bars, and charts. See pofltk.h for the conventions.
 
 #include "pofltk.h"
 
 #include <FL/Fl_Adjuster.H>
+#include <FL/Fl_Chart.H>
 #include <FL/Fl_Counter.H>
 #include <FL/Fl_Dial.H>
 #include <FL/Fl_Progress.H>
@@ -15,6 +16,8 @@
 #include <FL/Fl_Value_Input.H>
 #include <FL/Fl_Value_Output.H>
 #include <FL/Fl_Value_Slider.H>
+
+#include <string.h>
 
 namespace {
 
@@ -29,6 +32,32 @@ intptr_t make(int32_t x, int32_t y, int32_t w, int32_t h, const char *label,
 Fl_Valuator *valuator(intptr_t v) { return ofl::as<Fl_Valuator>(v); }
 Fl_Spinner *spinner(intptr_t s) { return ofl::as<Fl_Spinner>(s); }
 Fl_Progress *progress(intptr_t p) { return ofl::as<Fl_Progress>(p); }
+Fl_Chart *chart(intptr_t c) { return ofl::as<Fl_Chart>(c); }
+
+// Fl_Chart's private maxnumb, reached as FlBrowsers.cpp reaches
+// Fl_Tree's _lastselect, through an explicit instantiation, which may
+// name a private member ([temp.explicit]).
+template <class Tag, typename Tag::type M> struct Reach {
+  friend typename Tag::type member(Tag) { return M; }
+};
+struct MaxNumb {
+  typedef int Fl_Chart::*type;
+  friend type member(MaxNumb);
+};
+template struct Reach<MaxNumb, &Fl_Chart::maxnumb>;
+
+// s cut to the FL_CHART_LABEL_MAX bytes a chart's entry keeps, into
+// out. FLTK cuts with strlcpy, which can leave the first bytes of a
+// UTF-8 character: this cuts before it.
+void entry_label(const char *s, char out[FL_CHART_LABEL_MAX + 1]) {
+  size_t n = strlen(s);
+  if (n > FL_CHART_LABEL_MAX) {
+    n = FL_CHART_LABEL_MAX;
+    while (n > 0 && (static_cast<unsigned char>(s[n]) & 0xC0) == 0x80) n--;
+  }
+  memcpy(out, s, n);
+  out[n] = 0;
+}
 
 // *t := w as a T; TRUE if it is one.
 template <class T> bool as_a(Fl_Widget *w, T **t) {
@@ -290,6 +319,76 @@ void ofl_progress_set_minimum(intptr_t p, double v) {
 
 void ofl_progress_set_maximum(intptr_t p, double v) {
   progress(p)->maximum(static_cast<float>(v));
+}
+
+
+// Charts
+
+intptr_t ofl_chart_new(int32_t x, int32_t y, int32_t w, int32_t h,
+                       const char *label, intptr_t self) {
+  return make<Fl_Chart>(x, y, w, h, label, self);
+}
+
+// how is 0 add, 1 insert before entry n, 2 replace entry n.
+void ofl_chart_put(intptr_t c, int32_t how, int32_t n, double v,
+                   const char *label, int32_t color) {
+  char s[FL_CHART_LABEL_MAX + 1];
+  entry_label(label, s);
+  unsigned col = static_cast<unsigned>(color);
+  switch (how) {
+    case 1: chart(c)->insert(n, v, s, col); break;
+    case 2: chart(c)->replace(n, v, s, col); break;
+    default: chart(c)->add(v, s, col); break;
+  }
+}
+
+void ofl_chart_clear(intptr_t c) { chart(c)->clear(); }
+
+// The lower bound if which is 0, else the upper.
+double ofl_chart_bound(intptr_t c, int32_t which) {
+  double a, b;
+  chart(c)->bounds(&a, &b);
+  return which == 0 ? a : b;
+}
+
+void ofl_chart_set_bounds(intptr_t c, double a, double b) {
+  chart(c)->bounds(a, b);
+}
+
+// what is 0 size, 1 maxsize, 2 textfont, 3 textsize, 4 textcolor,
+// 5 autosize, 6 type.
+int32_t ofl_chart_get(intptr_t c, int32_t what) {
+  Fl_Chart *t = chart(c);
+  switch (what) {
+    case 0: return t->size();
+    case 1: return t->maxsize();
+    case 2: return t->textfont();
+    case 3: return t->textsize();
+    case 4: return static_cast<int32_t>(t->textcolor());
+    case 5: return t->autosize();
+    default: return t->type();
+  }
+}
+
+// what as ofl_chart_get's, but not size.
+void ofl_chart_set(intptr_t c, int32_t what, int32_t v) {
+  Fl_Chart *t = chart(c);
+  switch (what) {
+    // maxsize(0) drops every entry, although 0, as a chart starts, is no
+    // limit (doc/fltk-issues.md, 60).
+    case 1:
+      if (v == 0) {
+        t->*member(MaxNumb()) = 0;
+      } else {
+        t->maxsize(v);
+      }
+      break;
+    case 2: t->textfont(v); break;
+    case 3: t->textsize(v); break;
+    case 4: t->textcolor(static_cast<Fl_Color>(v)); break;
+    case 5: t->autosize(static_cast<uchar>(v)); break;
+    case 6: t->type(static_cast<uchar>(v)); break;
+  }
 }
 
 }  // extern "C"

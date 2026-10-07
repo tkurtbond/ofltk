@@ -4,7 +4,7 @@ MODULE TestConstants; (* pofltk's constants are FLTK's *)
    value the installed FLTK's headers give (CConstants). A failure means
    FLTK's headers changed: run the script again, and see what moved. *)
 
-IMPORT SYSTEM, Out, Fl, FlDraw, FlButtons, FlValuators, FlLayout, FlMenus, FlDialogs, FlText, FlBrowsers, FlTable, Check, CConstants;
+IMPORT SYSTEM, Out, Fl, FlDraw, FlButtons, FlValuators, FlLayout, FlMenus, FlDialogs, FlText, FlBrowsers, FlImages, FlTable, Check, CConstants;
 
 VAR checked, wrong: INTEGER;
 
@@ -355,6 +355,13 @@ BEGIN
   Same(FlValuators.SimpleCounter, "FL_SIMPLE_COUNTER");
   Same(FlValuators.IntSpinner, "FL_INT_INPUT");
   Same(FlValuators.FloatSpinner, "FL_FLOAT_INPUT");
+  Same(FlValuators.BarChart, "FL_BAR_CHART");
+  Same(FlValuators.HorBarChart, "FL_HORBAR_CHART");
+  Same(FlValuators.LineChart, "FL_LINE_CHART");
+  Same(FlValuators.FillChart, "FL_FILL_CHART");
+  Same(FlValuators.SpikeChart, "FL_SPIKE_CHART");
+  Same(FlValuators.PieChart, "FL_PIE_CHART");
+  Same(FlValuators.SpecialPieChart, "FL_SPECIALPIE_CHART");
   Same(FlLayout.Column, "Fl_Flex::COLUMN");
   Same(FlLayout.Row, "Fl_Flex::ROW");
   Same(FlLayout.PackVertical, "Fl_Pack::VERTICAL");
@@ -462,6 +469,14 @@ BEGIN
   Same(FlBrowsers.ReasonDragged, "FL_TREE_REASON_DRAGGED");
   Same(ORD(FlBrowsers.ItemDrawLabelAndWidget), "FL_TREE_ITEM_DRAW_LABEL_AND_WIDGET");
   Same(ORD(FlBrowsers.ItemHeightFromWidget), "FL_TREE_ITEM_HEIGHT_FROM_WIDGET");
+  Same(ORD(FlImages.DontStart), "Fl_Anim_GIF_Image::DONT_START");
+  Same(ORD(FlImages.DontResizeCanvas), "Fl_Anim_GIF_Image::DONT_RESIZE_CANVAS");
+  Same(ORD(FlImages.DontSetAsImage), "Fl_Anim_GIF_Image::DONT_SET_AS_IMAGE");
+  Same(ORD(FlImages.OptimizeMemory), "Fl_Anim_GIF_Image::OPTIMIZE_MEMORY");
+  Same(ORD(FlImages.AnimLog), "Fl_Anim_GIF_Image::LOG_FLAG");
+  Same(ORD(FlImages.AnimDebug), "Fl_Anim_GIF_Image::DEBUG_FLAG");
+  Same(FlImages.ScalingNearest, "FL_RGB_SCALING_NEAREST");
+  Same(FlImages.ScalingBilinear, "FL_RGB_SCALING_BILINEAR");
   Same(FlTable.ContextNone, "Fl_Table::CONTEXT_NONE");
   Same(FlTable.ContextStartPage, "Fl_Table::CONTEXT_STARTPAGE");
   Same(FlTable.ContextEndPage, "Fl_Table::CONTEXT_ENDPAGE");
@@ -481,6 +496,6 @@ BEGIN
   Same(Fl.RGB(255, 0, 0), "fl_rgb_color(255, 0, 0)");
   Same(Fl.RGB(1, 2, 3), "fl_rgb_color(1, 2, 3)");
   Same(Fl.RGB(0, 0, 255), "fl_rgb_color(0, 0, 255)");
-  Check.Check((wrong = 0) & (checked = 462), "each of 462 constants and values is FLTK's");
+  Check.Check((wrong = 0) & (checked = 477), "each of 477 constants and values is FLTK's");
   Check.Summary
 END TestConstants.

@@ -1,9 +1,10 @@
 // The C++ part of FlImages: images, loaded or made from pixels, drawn, and
-// shown as widget labels; image surfaces, offscreen drawing. See pofltk.h
-// for the conventions.
+// shown as widget labels; animated GIFs; image surfaces, offscreen
+// drawing. See pofltk.h for the conventions.
 
 #include "pofltk.h"
 
+#include <FL/Fl_Anim_GIF_Image.H>
 #include <FL/Fl_BMP_Image.H>
 #include <FL/Fl_Browser.H>
 #include <FL/Fl_Copy_Surface.H>
@@ -17,6 +18,7 @@
 #include <FL/Fl_PNM_Image.H>
 #include <FL/Fl_Pixmap.H>
 #include <FL/Fl_SVG_Image.H>
+#include <FL/Fl_Tiled_Image.H>
 #include <FL/Fl_Window.H>
 #include <FL/Fl_XPM_Image.H>
 #include <FL/fl_draw.H>
@@ -33,14 +35,29 @@ namespace {
 // (ofl::Shared): FLTK keeps a label image's pointer, and doesn't own it.
 class Img : public ofl::Shared {
 public:
-  explicit Img(Fl_Image *i) : image(i), rgb_(0) {}
+  // under is an image i uses and doesn't own, which it holds: the image a
+  // tiled image tiles.
+  explicit Img(Fl_Image *i, ofl::Shared *under = 0)
+      : image(i), rgb_(0), under_(under) {
+    if (under_) under_->hold();
+  }
   ~Img() {
     delete rgb_;
     delete image;
+    if (under_) under_->release();
   }
   // The image as RGB pixels, for reading: itself, or a copy of a pixmap
-  // made once, until the image changes; 0 for a bitmap.
+  // made once, until the image changes, or an animation's frame shown,
+  // unless it is smaller than the animation (OPTIMIZE_MEMORY); 0 for a
+  // bitmap or a tiled image.
   Fl_RGB_Image *rgb() {
+    if (Fl_Anim_GIF_Image *a = dynamic_cast<Fl_Anim_GIF_Image *>(image)) {
+      Fl_RGB_Image *f = dynamic_cast<Fl_RGB_Image *>(a->image());
+      if (f && f->data_w() == a->data_w() && f->data_h() == a->data_h()) {
+        return f;
+      }
+      return 0;
+    }
     if (Fl_SVG_Image *s = dynamic_cast<Fl_SVG_Image *>(image)) s->normalize();
     if (Fl_RGB_Image *r = dynamic_cast<Fl_RGB_Image *>(image)) return r;
     if (!rgb_) {
@@ -58,9 +75,83 @@ public:
 
 private:
   Fl_RGB_Image *rgb_;
+  ofl::Shared *const under_;
 };
 
 Img *img(intptr_t i) { return reinterpret_cast<Img *>(i); }
+
+// Fl_Anim_GIF_Image's private canvas_, reached as FlBrowsers.cpp reaches
+// Fl_Tree's _lastselect, through an explicit instantiation, which may
+// name a private member ([temp.explicit]).
+template <class Tag, typename Tag::type M> struct Reach {
+  friend typename Tag::type member(Tag) { return M; }
+};
+struct CanvasOf {
+  typedef Fl_Widget *Fl_Anim_GIF_Image::*type;
+  friend type member(CanvasOf);
+};
+template struct Reach<CanvasOf, &Fl_Anim_GIF_Image::canvas_>;
+
+// An animated GIF. FLTK's animation keeps its canvas widget's pointer, and
+// redraws it from a timer, so a canvas deleted first would be used after
+// it is freed (doc/fltk-issues.md, 62): the animation watches the canvas,
+// and forgets it as it dies.
+class Anim : public Img, public ofl::Watcher {
+public:
+  explicit Anim(Fl_Anim_GIF_Image *a) : Img(a), canvas_(0) {}
+  ~Anim() {
+    if (canvas_) canvas_->unwatch(this);
+  }
+  Fl_Anim_GIF_Image *gif() const {
+    return static_cast<Fl_Anim_GIF_Image *>(image);
+  }
+  // Watches widget w, the canvas; 0 for none.
+  void watch(Fl_Widget *w) {
+    if (canvas_) canvas_->unwatch(this);
+    canvas_ = w ? ofl::ref_of(w) : 0;
+    if (canvas_) canvas_->watch(this);
+  }
+  void widget_gone() override {
+    gif()->*member(CanvasOf()) = 0;
+    canvas_ = 0;
+  }
+
+private:
+  ofl::Ref *canvas_;  // the canvas's
+};
+
+Anim *anim(intptr_t a) { return reinterpret_cast<Anim *>(a); }
+
+// Makes widget w (0 for none) a's canvas, as Fl_Anim_GIF_Image::canvas
+// does with flags. FLTK takes the old canvas's image away, and shows the
+// animation in the new one unless DONT_SET_AS_IMAGE: the widgets' holds
+// follow.
+void set_canvas(Anim *a, intptr_t w, int32_t flags) {
+  Fl_Anim_GIF_Image *g = a->gif();
+  Fl_Widget *old = g->canvas();
+  Fl_Widget *c = w ? ofl::widget(w) : 0;
+  g->canvas(c, static_cast<unsigned short>(flags));
+  if (old) ofl::ref_of(old)->hold(ofl::Ref::image, 0);
+  if (c && !(flags & Fl_Anim_GIF_Image::DONT_SET_AS_IMAGE)) {
+    ofl::ref_of(c)->hold(ofl::Ref::image, a);
+  }
+  a->watch(c);
+}
+
+// g, loaded, as an Anim, with canvas w and flags; 0 (and g deleted) if it
+// failed. g was made with DONT_START and no canvas, so a failure leaves
+// no widget showing it; the canvas is set, and the animation started,
+// as FLTK's constructor would.
+intptr_t open_anim(Fl_Anim_GIF_Image *g, intptr_t w, int32_t flags) {
+  if (!g->valid() || g->frames() <= 0 || g->w() <= 0 || g->h() <= 0) {
+    delete g;
+    return 0;
+  }
+  Anim *a = new Anim(g);
+  set_canvas(a, w, flags);
+  if (!(flags & Fl_Anim_GIF_Image::DONT_START)) g->start();
+  return reinterpret_cast<intptr_t>(a);
+}
 
 // A multi-label: two parts, drawn side by side, each nothing, text (its
 // own copy), an image or another multi-label, which it holds. FLTK keeps
@@ -283,7 +374,7 @@ intptr_t ofl_image_rgb(const unsigned char *bits, int32_t w, int32_t h,
 void ofl_image_close(intptr_t i) { img(i)->close(); }
 
 // what: 0 w, 1 h, 2 d, 3 data_w, 4 data_h, 5 kind (0 RGB, 1 pixmap, 2
-// other).
+// other, 3 animation).
 int32_t ofl_image_get(intptr_t i, int32_t what) {
   Fl_Image *m = img(i)->image;
   switch (what) {
@@ -295,6 +386,7 @@ int32_t ofl_image_get(intptr_t i, int32_t what) {
     case 4: return m->data_h();
     case 5:
       if (dynamic_cast<Fl_RGB_Image *>(m)) return 0;
+      if (dynamic_cast<Fl_Anim_GIF_Image *>(m)) return 3;
       if (dynamic_cast<Fl_Pixmap *>(m)) return 1;
       return 2;
     default: return m->w();
@@ -302,8 +394,31 @@ int32_t ofl_image_get(intptr_t i, int32_t what) {
 }
 
 // A copy of the image's data, w by h pixels; 0 if FLTK couldn't make it.
+// A tiled image's copy tiles the same image, which the original may own
+// (after color_average), so the copy holds the original. An animation's
+// copy has no canvas, and plays if the original does.
 intptr_t ofl_image_copy(intptr_t i, int32_t w, int32_t h) {
-  return make(img(i)->image->copy(w, h));
+  Fl_Image *m = img(i)->image;
+  if (dynamic_cast<Fl_Tiled_Image *>(m)) {
+    return reinterpret_cast<intptr_t>(new Img(m->copy(w, h), img(i)));
+  }
+  if (dynamic_cast<Fl_Anim_GIF_Image *>(m)) {
+    Fl_Anim_GIF_Image *c = static_cast<Fl_Anim_GIF_Image *>(m->copy(w, h));
+    if (!c->valid()) {
+      delete c;
+      return 0;
+    }
+    return reinterpret_cast<intptr_t>(new Anim(c));
+  }
+  return make(m->copy(w, h));
+}
+
+// Image t, repeated to fill w by h pixels, or the window it is drawn in
+// if both are 0. Fl_Tiled_Image keeps t's pointer, so the new image holds
+// t.
+intptr_t ofl_image_tiled(intptr_t t, int32_t w, int32_t h) {
+  return reinterpret_cast<intptr_t>(
+      new Img(new Fl_Tiled_Image(img(t)->image, w, h), img(t)));
 }
 
 // The size it is drawn at, its data unchanged.
@@ -404,6 +519,29 @@ void ofl_window_icon(intptr_t w, intptr_t i) {
   win->icon(i ? img(i)->rgb() : 0);
 }
 
+// Window w's shape, from image i: its pixels that aren't black or
+// transparent. 0 if i has no pixels to read (a bitmap, a tiled image).
+// FLTK keeps the image's pointer, and X11's driver reads w() by h()
+// pixels of its data, past their end if the image is drawn larger than
+// they are (doc/fltk-issues.md, 61): FLTK is given a copy, w() by h(),
+// which the window holds.
+int32_t ofl_window_shape(intptr_t w, intptr_t i) {
+  Fl_RGB_Image *r = img(i)->rgb();
+  if (r == 0) return 0;
+  Fl_Image *c = r->copy(r->w(), r->h());
+  if (Fl_SVG_Image *s = dynamic_cast<Fl_SVG_Image *>(c)) s->normalize();
+  if (c == 0 || c->fail() || c->w() <= 0 || c->h() <= 0) {
+    delete c;
+    return 0;
+  }
+  Img *m = new Img(c);
+  Fl_Window *win = ofl::as<Fl_Window>(w);
+  win->shape(c);
+  ofl::ref_of(win)->hold(ofl::Ref::shape, m);
+  m->close();  // the window's hold is its only one
+  return 1;
+}
+
 // The icon of browser b's line, i 0 for none. The browser holds the
 // image while a line shows it (ofl::drop_icons).
 void ofl_browser_icon(intptr_t b, int32_t line, intptr_t i) {
@@ -412,6 +550,136 @@ void ofl_browser_icon(intptr_t b, int32_t line, intptr_t i) {
   br->icon(line, m);
   if (i) ofl::ref_of(br)->keep(img(i), m);
   ofl::drop_icons(br);
+}
+
+// Animated GIFs
+
+// The animation in file name, or in the n bytes at data if name is 0, as
+// open_anim makes it; 0 unless it is a GIF FLTK can decode.
+intptr_t ofl_anim_load(const char *name, const unsigned char *data,
+                       int32_t n, intptr_t canvas, int32_t flags) {
+  unsigned short f =
+      static_cast<unsigned short>(flags | Fl_Anim_GIF_Image::DONT_START);
+  if (name) {
+    unsigned char head[16];
+    FILE *file = fopen(name, "rb");
+    if (!file) return 0;
+    size_t got = fread(head, 1, sizeof head, file);
+    fclose(file);
+    if (format(head, got) != gif) return 0;
+    return open_anim(new Fl_Anim_GIF_Image(name, 0, f), canvas, flags);
+  }
+  if (n <= 0 || format(data, static_cast<size_t>(n)) != gif) return 0;
+  return open_anim(
+      new Fl_Anim_GIF_Image(0, data, static_cast<size_t>(n), 0, f), canvas,
+      flags);
+}
+
+void ofl_anim_canvas(intptr_t a, intptr_t w, int32_t flags) {
+  set_canvas(anim(a), w, flags);
+}
+
+// The canvas's Oberon object, or 0.
+intptr_t ofl_anim_canvas_object(intptr_t a) {
+  Fl_Widget *c = anim(a)->gif()->canvas();
+  return c ? ofl::object_of(c) : 0;
+}
+
+// what: 0 frames, 1 frame, 2 canvas_w, 3 canvas_h, 4 playing, 5
+// frame_uncache, 6 is_animated.
+int32_t ofl_anim_get(intptr_t a, int32_t what) {
+  Fl_Anim_GIF_Image *g = anim(a)->gif();
+  switch (what) {
+    case 1: return g->frame();
+    case 2: return g->canvas_w();
+    case 3: return g->canvas_h();
+    case 4: return g->playing();
+    case 5: return g->frame_uncache();
+    case 6: return g->is_animated();
+    default: return g->frames();
+  }
+}
+
+// Frame n's x, y, w or h, by what (0 to 3).
+int32_t ofl_anim_frame_get(intptr_t a, int32_t what, int32_t n) {
+  Fl_Anim_GIF_Image *g = anim(a)->gif();
+  switch (what) {
+    case 1: return g->frame_y(n);
+    case 2: return g->frame_w(n);
+    case 3: return g->frame_h(n);
+    default: return g->frame_x(n);
+  }
+}
+
+// what: 0 start, 1 stop, 2 next, 3 frame_uncache(true), 4
+// frame_uncache(false).
+void ofl_anim_do(intptr_t a, int32_t what) {
+  Fl_Anim_GIF_Image *g = anim(a)->gif();
+  switch (what) {
+    case 1: g->stop(); break;
+    case 2: g->next(); break;
+    case 3: g->frame_uncache(true); break;
+    case 4: g->frame_uncache(false); break;
+    default: g->start(); break;
+  }
+}
+
+void ofl_anim_set_frame(intptr_t a, int32_t n) { anim(a)->gif()->frame(n); }
+
+double ofl_anim_delay(intptr_t a, int32_t n) {
+  return anim(a)->gif()->delay(n);
+}
+
+void ofl_anim_set_delay(intptr_t a, int32_t n, double d) {
+  anim(a)->gif()->delay(n, d);
+}
+
+double ofl_anim_speed(intptr_t a) { return anim(a)->gif()->speed(); }
+
+void ofl_anim_set_speed(intptr_t a, double s) { anim(a)->gif()->speed(s); }
+
+// Resizes the frames to w by h, or to the canvas if both are 0; by
+// scale if w is -1.
+void ofl_anim_resize(intptr_t a, int32_t w, int32_t h, double scale) {
+  if (w == -1) {
+    anim(a)->gif()->resize(scale);
+  } else {
+    anim(a)->gif()->resize(w, h);
+  }
+}
+
+// The name it was loaded from, into buf of n characters, truncated; ""
+// for one loaded from memory.
+void ofl_anim_name(intptr_t a, char *buf, int32_t n) {
+  const char *s = anim(a)->gif()->name();
+  ofl::copy_out(s ? s : "", buf, n);
+}
+
+// A copy of frame n's image, as the animation draws it; 0 if it has none.
+intptr_t ofl_anim_frame_image(intptr_t a, int32_t n) {
+  Fl_Image *f = anim(a)->gif()->image(n);
+  return f ? make(f->copy()) : 0;
+}
+
+// FLTK's settings for every animation and RGB image: which = 0 the least
+// delay between frames, 1 the scaling algorithm, 2 whether GIFs FLTK
+// loads itself (a file chooser's preview) are animated.
+double ofl_image_setting(int32_t which) {
+  switch (which) {
+    case 1: return Fl_Image::scaling_algorithm();
+    case 2: return Fl_GIF_Image::animate;
+    default: return Fl_Anim_GIF_Image::min_delay;
+  }
+}
+
+void ofl_image_set_setting(int32_t which, double v) {
+  switch (which) {
+    case 1:
+      Fl_Image::scaling_algorithm(static_cast<Fl_RGB_Scaling>(v));
+      break;
+    case 2: Fl_GIF_Image::animate = v != 0; break;
+    default: Fl_Anim_GIF_Image::min_delay = v; break;
+  }
 }
 
 // Multi-labels

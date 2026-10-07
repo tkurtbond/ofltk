@@ -15,7 +15,8 @@ VAR
   choice: FlMenus.Choice;
   label: ARRAY 64 OF CHAR;
   new, open, file, k: INTEGER;
-  i, j: FlImages.Image;
+  i, j, tile, tiled, copy: FlImages.Image;
+  shaped: Fl.Window;
   s, t: FlImages.Surface;
   bits: ARRAY 64 OF CHAR;
   data: ARRAY 4096 OF CHAR;
@@ -347,6 +348,36 @@ BEGIN
   t.Begin; t.Close;
   Check.Check(~t.IsOpen() & (FlImages.openSurfaces = 1), "Close ends a surface begun");
   s.Close; s.Close;
+
+  (* Tiled images *)
+  RedBlue; NEW(tile); FlImages.OpenRGB(tile, bits, 4, 2, 3, 0);
+  NEW(tiled); FlImages.OpenTiled(tiled, tile, 10, 3); tile.Close;
+  Check.Check((tiled.Kind() = FlImages.Other) & (tiled.W() = 10) & (tiled.H() = 3), "OpenTiled");
+  NEW(s); FlImages.OpenSurface(s, 12, 4);
+  s.Begin; FlDraw.SetColor(Fl.White); FlDraw.RectF(0, 0, 12, 4); tiled.Draw(0, 0); s.End;
+  NEW(j); s.GetImage(j);
+  Check.Check((j.Pixel(4, 0) = red) & (j.Pixel(6, 2) = blue) & (j.Pixel(9, 1) = red)
+    & (j.Pixel(10, 0) = white) & (j.Pixel(0, 3) = white), "draws its image repeated, holding it");
+  j.Close;
+  (* ColorAverage gives the tiled image a copy of its own to change, which
+     a copy of the tiled image uses too *)
+  tiled.ColorAverage(Fl.Green, 0.0); NEW(copy); tiled.Copy(copy, 10, 3); tiled.Close;
+  s.Begin; copy.Draw(0, 0); s.End;
+  NEW(j); s.GetImage(j);
+  Check.Check((j.Pixel(4, 0) = Fl.RGB(0, 255, 0)) & (j.Pixel(6, 2) = Fl.RGB(0, 255, 0)),
+    "a copy of a tiled image, changed, after it is closed");
+  j.Close; copy.Close; s.Close;
+
+  (* Shapes *)
+  NEW(shaped); Fl.OpenWindow(shaped, 40, 40, "shaped"); shaped.End;
+  n := FlImages.openImages;
+  NEW(j); FlImages.OpenRGB(j, bits, 4, 2, 3, 0); j.Scale(40, 40, FALSE, TRUE);
+  FlImages.SetShape(shaped, j); j.Close;  (* X11's driver read past j's data (valgrind) *)
+  xpm[0] := "4 2 2 1"; xpm[1] := "r c #FF0000"; xpm[2] := "b c None"; xpm[3] := "rrbb"; xpm[4] := "rrbb";
+  NEW(j); ASSERT(FlImages.OpenXPM(j, xpm, 5));
+  FlImages.SetShape(shaped, j); j.Close;
+  Check.Check(FlImages.openImages = n, "SetShape, of an image drawn larger than its data, and a pixmap");
+  shaped.Delete;
 
   i.Close; i.Close;
   pic.img := NIL;

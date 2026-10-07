@@ -1,4 +1,4 @@
-MODULE FlValuators; (* Sliders, scrollbars, counters, dials, rollers, spinners, progress *)
+MODULE FlValuators; (* Sliders, scrollbars, counters, dials, rollers, spinners, progress, charts *)
 
 (* A valuator has a real value between two bounds, which the user changes
    by dragging, clicking or typing. Each type is FLTK's class of the same
@@ -8,7 +8,7 @@ MODULE FlValuators; (* Sliders, scrollbars, counters, dials, rollers, spinners, 
 
    Spinner, a field with arrows, is a group in FLTK, and Progress, a bar,
    a plain widget: neither is a Valuator, but each has a value and bounds
-   of its own.
+   of its own. Nor is Chart, which shows a list of values.
 
    The C++ part is FlValuators.cpp. *)
 
@@ -42,6 +42,15 @@ CONST
   (* of a spinner (Spinner.SetKind): whole numbers, or real ones *)
   IntSpinner* = 2;
   FloatSpinner* = 1;
+
+  (* kinds of chart (Chart.SetKind); a special pie draws its first slice apart *)
+  BarChart* = 0;
+  HorBarChart* = 1;
+  LineChart* = 2;
+  FillChart* = 3;
+  SpikeChart* = 4;
+  PieChart* = 5;
+  SpecialPieChart* = 6;
 (* END generated constants *)
 
   (* the classes, as ofl_valuator_new numbers them *)
@@ -95,6 +104,11 @@ TYPE
   (* a bar filled in proportion to its value *)
   Progress* = POINTER TO ProgressDesc;
   ProgressDesc* = RECORD (Fl.WidgetDesc) END;
+
+  (* values, each with a label and a color, drawn as bars to start with
+     (SetKind) *)
+  Chart* = POINTER TO ChartDesc;
+  ChartDesc* = RECORD (Fl.WidgetDesc) END;
 
 PROCEDURE ["C", "ofl_valuator_new"] CNew(class, x, y, w, h: SYSTEM.INT32; label: ARRAY OF CHAR; self: SYSTEM.ADDRESS): SYSTEM.ADDRESS;
 PROCEDURE ["C", "ofl_spinner_new"] CSpinnerNew(x, y, w, h: SYSTEM.INT32; label: ARRAY OF CHAR; self: SYSTEM.ADDRESS): SYSTEM.ADDRESS;
@@ -159,6 +173,13 @@ PROCEDURE ["C", "ofl_progress_maximum"] CPrMaximum(p: SYSTEM.ADDRESS): LONGREAL;
 PROCEDURE ["C", "ofl_progress_set_value"] CPrSetValue(p: SYSTEM.ADDRESS; v: LONGREAL);
 PROCEDURE ["C", "ofl_progress_set_minimum"] CPrSetMinimum(p: SYSTEM.ADDRESS; v: LONGREAL);
 PROCEDURE ["C", "ofl_progress_set_maximum"] CPrSetMaximum(p: SYSTEM.ADDRESS; v: LONGREAL);
+PROCEDURE ["C", "ofl_chart_new"] CChartNew(x, y, w, h: SYSTEM.INT32; label: ARRAY OF CHAR; self: SYSTEM.ADDRESS): SYSTEM.ADDRESS;
+PROCEDURE ["C", "ofl_chart_put"] CChPut(c: SYSTEM.ADDRESS; how, n: SYSTEM.INT32; v: LONGREAL; label: ARRAY OF CHAR; color: SYSTEM.INT32);
+PROCEDURE ["C", "ofl_chart_clear"] CChClear(c: SYSTEM.ADDRESS);
+PROCEDURE ["C", "ofl_chart_bound"] CChBound(c: SYSTEM.ADDRESS; which: SYSTEM.INT32): LONGREAL;
+PROCEDURE ["C", "ofl_chart_set_bounds"] CChSetBounds(c: SYSTEM.ADDRESS; a, b: LONGREAL);
+PROCEDURE ["C", "ofl_chart_get"] CChGet(c: SYSTEM.ADDRESS; what: SYSTEM.INT32): SYSTEM.INT32;
+PROCEDURE ["C", "ofl_chart_set"] CChSet(c: SYSTEM.ADDRESS; what, v: SYSTEM.INT32);
 
 PROCEDURE Open(v: Valuator; class, x, y, w, h: INTEGER; label-: ARRAY OF CHAR);
 BEGIN Fl.EndOpen(v, CNew(class, x, y, w, h, label, Fl.BeginOpen(v)))
@@ -216,6 +237,10 @@ END OpenSpinner;
 PROCEDURE OpenProgress*(p: Progress; x, y, w, h: INTEGER; label-: ARRAY OF CHAR);
 BEGIN Fl.EndOpen(p, CProgressNew(x, y, w, h, label, Fl.BeginOpen(p)))
 END OpenProgress;
+
+PROCEDURE OpenChart*(c: Chart; x, y, w, h: INTEGER; label-: ARRAY OF CHAR);
+BEGIN Fl.EndOpen(c, CChartNew(x, y, w, h, label, Fl.BeginOpen(c)))
+END OpenChart;
 
 (* Valuator *)
 
@@ -592,5 +617,113 @@ END Maximum;
 PROCEDURE (p: Progress) SetBounds*(min, max: LONGREAL);
 BEGIN CPrSetMinimum(Fl.Live(p), min); CPrSetMaximum(Fl.Live(p), max)
 END SetBounds;
+
+(* Chart. Its entries are numbered from 1; a number outside them halts
+   (Fl.IndexOutOfRange). FLTK keeps an entry's value as a REAL, and its
+   label cut to 18 bytes, before any UTF-8 character that would cross the
+   18th. A color is Fl's. *)
+
+(* Adds an entry at the end; if the chart has its MaxCount, drops the
+   first. *)
+PROCEDURE (c: Chart) Add*(v: LONGREAL; label-: ARRAY OF CHAR; color: INTEGER);
+BEGIN CChPut(Fl.Live(c), 0, 0, v, label, color)
+END Add;
+
+(* Adds an entry before entry n, or at the end if n is Count() + 1; if the
+   chart has its MaxCount, drops the last. *)
+PROCEDURE (c: Chart) Insert*(n: INTEGER; v: LONGREAL; label-: ARRAY OF CHAR; color: INTEGER);
+  VAR h: SYSTEM.ADDRESS;
+BEGIN
+  h := Fl.Live(c); ASSERT((n >= 1) & (n <= CChGet(h, 0) + 1), Fl.IndexOutOfRange);
+  CChPut(h, 1, n, v, label, color)
+END Insert;
+
+PROCEDURE (c: Chart) Replace*(n: INTEGER; v: LONGREAL; label-: ARRAY OF CHAR; color: INTEGER);
+  VAR h: SYSTEM.ADDRESS;
+BEGIN
+  h := Fl.Live(c); ASSERT((n >= 1) & (n <= CChGet(h, 0)), Fl.IndexOutOfRange);
+  CChPut(h, 2, n, v, label, color)
+END Replace;
+
+(* Removes every entry, and sets the bounds to 0 and 0. *)
+PROCEDURE (c: Chart) Clear*;
+BEGIN CChClear(Fl.Live(c))
+END Clear;
+
+(* The number of entries. *)
+PROCEDURE (c: Chart) Count*(): INTEGER;
+BEGIN RETURN CChGet(Fl.Live(c), 0)
+END Count;
+
+(* The most entries the chart keeps, Add dropping the first and Insert
+   the last beyond it; 0, to start with, is no limit. *)
+PROCEDURE (c: Chart) MaxCount*(): INTEGER;
+BEGIN RETURN CChGet(Fl.Live(c), 1)
+END MaxCount;
+
+(* Drops the first entries beyond m; m from 0 up, or it halts
+   (Fl.IndexOutOfRange). *)
+PROCEDURE (c: Chart) SetMaxCount*(m: INTEGER);
+BEGIN ASSERT(m >= 0, Fl.IndexOutOfRange); CChSet(Fl.Live(c), 1, m)
+END SetMaxCount;
+
+(* The values at the chart's bottom and top (or left and right). Bounds
+   with min not below max, as 0 and 0 to start with, become the least and
+   the greatest of 0 and the entries' values when the chart is drawn. *)
+PROCEDURE (c: Chart) Bounds*(VAR min, max: LONGREAL);
+  VAR h: SYSTEM.ADDRESS;
+BEGIN h := Fl.Live(c); min := CChBound(h, 0); max := CChBound(h, 1)
+END Bounds;
+
+PROCEDURE (c: Chart) SetBounds*(min, max: LONGREAL);
+BEGIN CChSetBounds(Fl.Live(c), min, max)
+END SetBounds;
+
+(* Whether a bar or line chart with a MaxCount spreads its entries over
+   the whole chart, rather than leaving room for the rest; TRUE to start
+   with. *)
+PROCEDURE (c: Chart) Autosize*(): BOOLEAN;
+BEGIN RETURN CChGet(Fl.Live(c), 5) # 0
+END Autosize;
+
+PROCEDURE (c: Chart) SetAutosize*(on: BOOLEAN);
+  VAR v: SYSTEM.INT32;
+BEGIN IF on THEN v := 1 ELSE v := 0 END; CChSet(Fl.Live(c), 5, v)
+END SetAutosize;
+
+(* The entries' labels' font, size and color: Fl.Helvetica, 10 and
+   Fl.ForegroundColor to start with. *)
+PROCEDURE (c: Chart) TextFont*(): INTEGER;
+BEGIN RETURN CChGet(Fl.Live(c), 2)
+END TextFont;
+
+PROCEDURE (c: Chart) SetTextFont*(f: INTEGER);
+BEGIN CChSet(Fl.Live(c), 2, f)
+END SetTextFont;
+
+PROCEDURE (c: Chart) TextSize*(): INTEGER;
+BEGIN RETURN CChGet(Fl.Live(c), 3)
+END TextSize;
+
+PROCEDURE (c: Chart) SetTextSize*(z: INTEGER);
+BEGIN CChSet(Fl.Live(c), 3, z)
+END SetTextSize;
+
+PROCEDURE (c: Chart) TextColor*(): INTEGER;
+BEGIN RETURN CChGet(Fl.Live(c), 4)
+END TextColor;
+
+PROCEDURE (c: Chart) SetTextColor*(col: INTEGER);
+BEGIN CChSet(Fl.Live(c), 4, col)
+END SetTextColor;
+
+(* BarChart, PieChart and the rest. *)
+PROCEDURE (c: Chart) Kind*(): INTEGER;
+BEGIN RETURN CChGet(Fl.Live(c), 6)
+END Kind;
+
+PROCEDURE (c: Chart) SetKind*(k: INTEGER);
+BEGIN CChSet(Fl.Live(c), 6, k)
+END SetKind;
 
 END FlValuators.

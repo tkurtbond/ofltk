@@ -18,6 +18,7 @@ TYPE
 VAR
   answer: Answer;
   fc: FlDialogs.NativeFileChooser;
+  names: FlDialogs.Names;
   title: ARRAY 16 OF CHAR;
   s: ARRAY 256 OF CHAR;
   i, r, g, b, font, size, c: INTEGER;
@@ -63,6 +64,20 @@ BEGIN
   WHILE (j > 0) & (s[i - 1] = end[j - 1]) DO DEC(i); DEC(j) END;
   RETURN j = 0
 END Ends;
+
+(* Whether names are those in order, separated by spaces. *)
+PROCEDURE Order(names: FlDialogs.Names; order: ARRAY OF CHAR): BOOLEAN;
+  VAR i, j, k: INTEGER;
+BEGIN
+  j := 0;
+  FOR i := 0 TO SHORT(LEN(names^)) - 1 DO
+    k := 0;
+    WHILE (order[j] # " ") & (order[j] # 0X) & (order[j] = names[i][k]) DO INC(j); INC(k) END;
+    IF names[i][k] # 0X THEN RETURN FALSE END;
+    IF order[j] = " " THEN INC(j) ELSIF (order[j] # 0X) OR (i # LEN(names^) - 1) THEN RETURN FALSE END
+  END;
+  RETURN order[j] = 0X
+END Order;
 
 BEGIN
   Check.Check(FlDialogs.Hotspot(), "dialogs are shown under the mouse to start with");
@@ -164,6 +179,26 @@ BEGIN
 
   Escape; c := FlDialogs.ChooseFromColormap(Fl.Red);
   Check.Check(c = Fl.Red, "ChooseFromColormap gives back old if none is picked");
+
+  ok := FlDialogs.ListDirectory("images", FlDialogs.AlphaSort, names);
+  Check.Check(ok & (names # NIL) & (LEN(names^) = 9), "ListDirectory: every name, with . and ..");
+  IF ok & (LEN(names^) = 9) THEN
+    Check.Check((names[0]^ = "./") & (names[1]^ = "../") & (names[2]^ = "anim.gif")
+      & (names[3]^ = "rb.bmp") & (names[8]^ = "rb.xpm"), "sorted, a directory's name ending in /");
+    Check.Check(LEN(names[2]^) = 9, "each name just long enough")
+  END;
+  (* test/names: empty files, whose names each sort orders differently *)
+  ok := FlDialogs.ListDirectory("names", FlDialogs.AlphaSort, names);
+  Check.Check(ok & Order(names, "./ ../ B1 a10 a1yb a1za a2 ab12 ab12y ab12z"), "AlphaSort: by bytes");
+  ok := FlDialogs.ListDirectory("names", FlDialogs.CaseAlphaSort, names);
+  Check.Check(ok & Order(names, "./ ../ a10 a1yb a1za a2 ab12 ab12y ab12z B1"), "CaseAlphaSort: case ignored");
+  ok := FlDialogs.ListDirectory("names", FlDialogs.NumericSort, names);
+  Check.Check(ok & Order(names, "./ ../ B1 a1yb a1za a2 a10 ab12 ab12y ab12z"),
+    "NumericSort: numbers by value, then what follows, a name before a longer one it starts (FLTK's is wrong)");
+  ok := FlDialogs.ListDirectory("names", FlDialogs.CaseNumericSort, names);
+  Check.Check(ok & Order(names, "./ ../ a1yb a1za a2 a10 ab12 ab12y ab12z B1"), "CaseNumericSort");
+  ok := FlDialogs.ListDirectory("no-such-directory", FlDialogs.CaseNumericSort, names);
+  Check.Check(~ok & (names = NIL), "a directory that can't be read");
 
   Check.Check(Fl.OpenWidgets() = 0, "no widget left open");
   Check.Summary

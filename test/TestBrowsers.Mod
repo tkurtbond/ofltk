@@ -164,11 +164,15 @@ BEGIN
   SetFilter(files); Clobber;
   files.Filter(s);
   Check.Check(s = "*.cpp", "SetFilter, copied");
-  Check.Check(files.LoadDirectory(".") & (files.Count() = 4) & Is(files, 1, "../")
-    & Is(files, 2, "images/") & Is(files, 3, "CConstants.cpp") & Is(files, 4, "Probe.cpp"),
+  Check.Check(files.LoadDirectory(".") & (files.Count() = 5) & Is(files, 1, "../")
+    & Is(files, 2, "images/") & Is(files, 3, "names/") & Is(files, 4, "CConstants.cpp") & Is(files, 5, "Probe.cpp"),
     "LoadDirectory: the directories, then the files matching");
   files.SetFileType(FlBrowsers.Directories);
-  Check.Check(files.LoadDirectory(".") & (files.Count() = 2), "or the directories alone");
+  Check.Check(files.LoadDirectory(".") & (files.Count() = 3), "or the directories alone");
+  files.SetFileType(FlBrowsers.Files); files.SetFilter("a1*");
+  Check.Check(files.LoadDirectory("names") & (files.Count() = 4) & Is(files, 1, "../")
+    & Is(files, 2, "a1yb") & Is(files, 3, "a1za") & Is(files, 4, "a10"),
+    "in fl_numericsort's order, corrected (FLTK's is wrong)");
   Check.Check(~files.LoadDirectory("no such directory") & (files.Count() = 0), "a missing directory");
   files.SetTextSize(20);
   Check.Check((files.TextSize() = 20) & (files.IconSize() = 30), "SetTextSize sizes the icons too");

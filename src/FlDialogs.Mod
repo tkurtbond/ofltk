@@ -1,4 +1,4 @@
-MODULE FlDialogs; (* FLTK's common dialogs: messages, questions, input, colors and files *)
+MODULE FlDialogs; (* FLTK's common dialogs: messages, questions, input, colors and files; directories listed *)
 
 (* Each procedure shows a modal dialog and waits for the user, handling
    events meanwhile, so timers fire and windows are redrawn, but no other
@@ -53,6 +53,13 @@ CONST
   Cancelled* = 1;
   Failed* = -1;  (* ErrorMessage says why *)
 
+  (* the order of a directory's names (ListDirectory): by their bytes, or
+     ignoring case; with runs of digits as numbers, or not *)
+  AlphaSort* = 0;
+  CaseAlphaSort* = 1;
+  NumericSort* = 2;
+  CaseNumericSort* = 3;
+
 TYPE
   (* The desktop's own file chooser: zenity's, kdialog's or GTK's,
      whichever the program and FLTK's options allow and the system has,
@@ -62,6 +69,10 @@ TYPE
   NativeFileChooserDesc* = RECORD
     h: SYSTEM.ADDRESS
   END;
+
+  (* A directory's names (ListDirectory) *)
+  Name* = POINTER TO ARRAY OF CHAR;
+  Names* = POINTER TO ARRAY OF Name;
 
 VAR
   openChoosers-: INTEGER;  (* choosers opened and not yet closed or finalized *)
@@ -87,6 +98,10 @@ PROCEDURE ["C", "ofl_fnfc_get_int"] CFnfcGetInt(c: SYSTEM.ADDRESS; what: SYSTEM.
 PROCEDURE ["C", "ofl_fnfc_show"] CFnfcShow(c: SYSTEM.ADDRESS): SYSTEM.INT32;
 PROCEDURE ["C", "ofl_fnfc_filename"] CFnfcFilename(c: SYSTEM.ADDRESS; i: SYSTEM.INT32): SYSTEM.ADDRESS;
 PROCEDURE ["C", "ofl_fnfc_errmsg"] CFnfcErrmsg(c: SYSTEM.ADDRESS): SYSTEM.ADDRESS;
+PROCEDURE ["C", "ofl_filename_list"] CFilenameList(dir: ARRAY OF CHAR; sort: SYSTEM.INT32; VAR n: SYSTEM.INT32): SYSTEM.ADDRESS;
+PROCEDURE ["C", "ofl_filename_length"] CFilenameLength(l: SYSTEM.ADDRESS; i: SYSTEM.INT32): SYSTEM.INT32;
+PROCEDURE ["C", "ofl_filename_get"] CFilenameGet(l: SYSTEM.ADDRESS; i: SYSTEM.INT32; VAR buf: ARRAY OF CHAR; n: SYSTEM.INT32);
+PROCEDURE ["C", "ofl_filename_free"] CFilenameFree(l: SYSTEM.ADDRESS);
 
 (* Copies the C string at a into s, truncated to fit; "" for none. *)
 PROCEDURE FromC(a: SYSTEM.ADDRESS; VAR s: ARRAY OF CHAR);
@@ -331,5 +346,26 @@ END FileName;
 PROCEDURE (c: NativeFileChooser) ErrorMessage*(VAR msg: ARRAY OF CHAR);
 BEGIN FromC(CFnfcErrmsg(Hd(c)), msg)
 END ErrorMessage;
+
+(* Directories *)
+
+(* Lists directory dir's names in names, in the order sort says, with "."
+   and ".."; FLTK adds a "/" to each directory's name. FALSE, and names
+   NIL, if dir can't be read. *)
+PROCEDURE ListDirectory*(dir-: ARRAY OF CHAR; sort: INTEGER; VAR names: Names): BOOLEAN;
+  VAR l: SYSTEM.ADDRESS; n: SYSTEM.INT32; i: INTEGER;
+BEGIN
+  ASSERT((sort >= AlphaSort) & (sort <= CaseNumericSort), Fl.IndexOutOfRange);
+  names := NIL;
+  l := CFilenameList(dir, sort, n);
+  IF l = 0 THEN RETURN FALSE END;
+  NEW(names, n);
+  FOR i := 0 TO n - 1 DO
+    NEW(names[i], CFilenameLength(l, i) + 1);
+    CFilenameGet(l, i, names[i]^, SHORT(LEN(names[i]^)))
+  END;
+  CFilenameFree(l);
+  RETURN TRUE
+END ListDirectory;
 
 END FlDialogs.

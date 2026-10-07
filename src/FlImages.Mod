@@ -2,7 +2,9 @@ MODULE FlImages; (* Images: loaded from files or memory, made from pixels, drawn
 
 (* An Image is a picture FLTK can draw: loaded from a PNG, JPEG, GIF, BMP,
    XPM, PNM or SVG file (the format told by its contents), decoded from
-   bytes in memory, or made from RGB pixels. It is a resource the program
+   bytes in memory, made from RGB pixels, or another image tiled. An
+   AnimGIF is an animated GIF, whose frames FLTK shows one after another
+   in its canvas widget. It is a resource the program
    owns, as a TextBuffer is: Close it when done. A widget showing it as
    its label keeps it until the widget is deleted or shows another, so
    closing an image a widget shows is safe; so does a browser showing it
@@ -22,16 +24,43 @@ MODULE FlImages; (* Images: loaded from files or memory, made from pixels, drawn
 IMPORT SYSTEM, GarbageCollectedHeap, Fl, FlBrowsers, FlMenus;
 
 CONST
+(* BEGIN generated constants: tools/gen-constants.py writes this block,
+   from FLTK's headers; edit the script, not the block. *)
+
+  (* how an animation starts (OpenAnimGIF, AnimGIF.SetCanvas): DontStart, not playing; the canvas
+     not sized to it, or not showing it; OptimizeMemory, frames kept at their own sizes;
+     AnimLog and AnimDebug, FLTK's reports of the decoding, on standard output *)
+  DontStart* = {0};
+  DontResizeCanvas* = {1};
+  DontSetAsImage* = {2};
+  OptimizeMemory* = {3};
+  AnimLog* = {6};
+  AnimDebug* = {7};
+
+  (* how RGB images are scaled as they are drawn (SetScalingAlgorithm) *)
+  ScalingNearest* = 0;
+  ScalingBilinear* = 1;
+(* END generated constants *)
+
   (* what an image is (Image.Kind) *)
   RGB* = 0;     (* pixels, 1 to 4 bytes each: PNG, JPEG, BMP, PNM, SVG, and those made from pixels *)
   Pixmap* = 1;  (* a palette: GIF, XPM *)
-  Other* = 2;
+  Other* = 2;   (* a tiled image (OpenTiled) *)
+  Animation* = 3;  (* an animated GIF (AnimGIF) *)
 
 TYPE
   Image* = POINTER TO ImageDesc;
   ImageDesc* = RECORD
     h: SYSTEM.ADDRESS
   END;
+
+  (* An animated GIF (FLTK's Fl_Anim_GIF_Image): drawn as the frame it is
+     at, which, as it plays, it moves on from FLTK's timers, redrawing its
+     canvas, a widget that shows it. Every Image procedure takes one,
+     except the Open procedures of other images: an AnimGIF is always an
+     animation, and another Image never is (Fl.Unsupported). *)
+  AnimGIF* = POINTER TO AnimGIFDesc;
+  AnimGIFDesc* = RECORD (ImageDesc) END;
 
   (* A label of two parts, drawn side by side (FLTK's Fl_Multi_Label):
      each nothing, text, an image, or another multi-label, for more parts.
@@ -71,6 +100,22 @@ PROCEDURE ["C", "ofl_image_pixel"] CPixel(i: SYSTEM.ADDRESS; x, y: SYSTEM.INT32;
 PROCEDURE ["C", "ofl_image_save_png"] CSavePNG(i: SYSTEM.ADDRESS; name: ARRAY OF CHAR): SYSTEM.INT32;
 PROCEDURE ["C", "ofl_image_copy_to_clipboard"] CCopyToClipboard(i: SYSTEM.ADDRESS);
 PROCEDURE ["C", "ofl_take_pasted_image"] CTakePastedImage(): SYSTEM.ADDRESS;
+PROCEDURE ["C", "ofl_anim_load"] CAnimLoad(name: SYSTEM.ADDRESS; data: SYSTEM.ADDRESS; n: SYSTEM.INT32; canvas: SYSTEM.ADDRESS; flags: SYSTEM.INT32): SYSTEM.ADDRESS;
+PROCEDURE ["C", "ofl_anim_canvas"] CAnimCanvas(a, w: SYSTEM.ADDRESS; flags: SYSTEM.INT32);
+PROCEDURE ["C", "ofl_anim_canvas_object"] CAnimCanvasObject(a: SYSTEM.ADDRESS): SYSTEM.ADDRESS;
+PROCEDURE ["C", "ofl_anim_get"] CAnimGet(a: SYSTEM.ADDRESS; what: SYSTEM.INT32): SYSTEM.INT32;
+PROCEDURE ["C", "ofl_anim_frame_get"] CAnimFrameGet(a: SYSTEM.ADDRESS; what, n: SYSTEM.INT32): SYSTEM.INT32;
+PROCEDURE ["C", "ofl_anim_do"] CAnimDo(a: SYSTEM.ADDRESS; what: SYSTEM.INT32);
+PROCEDURE ["C", "ofl_anim_set_frame"] CAnimSetFrame(a: SYSTEM.ADDRESS; n: SYSTEM.INT32);
+PROCEDURE ["C", "ofl_anim_delay"] CAnimDelay(a: SYSTEM.ADDRESS; n: SYSTEM.INT32): LONGREAL;
+PROCEDURE ["C", "ofl_anim_set_delay"] CAnimSetDelay(a: SYSTEM.ADDRESS; n: SYSTEM.INT32; d: LONGREAL);
+PROCEDURE ["C", "ofl_anim_speed"] CAnimSpeed(a: SYSTEM.ADDRESS): LONGREAL;
+PROCEDURE ["C", "ofl_anim_set_speed"] CAnimSetSpeed(a: SYSTEM.ADDRESS; s: LONGREAL);
+PROCEDURE ["C", "ofl_anim_resize"] CAnimResize(a: SYSTEM.ADDRESS; w, h: SYSTEM.INT32; scale: LONGREAL);
+PROCEDURE ["C", "ofl_anim_name"] CAnimName(a: SYSTEM.ADDRESS; VAR buf: ARRAY OF CHAR; n: SYSTEM.INT32);
+PROCEDURE ["C", "ofl_anim_frame_image"] CAnimFrameImage(a: SYSTEM.ADDRESS; n: SYSTEM.INT32): SYSTEM.ADDRESS;
+PROCEDURE ["C", "ofl_image_setting"] CSetting(which: SYSTEM.INT32): LONGREAL;
+PROCEDURE ["C", "ofl_image_set_setting"] CSetSetting(which: SYSTEM.INT32; v: LONGREAL);
 PROCEDURE ["C", "ofl_multi_new"] CMultiNew(): SYSTEM.ADDRESS;
 PROCEDURE ["C", "ofl_multi_close"] CMultiClose(m: SYSTEM.ADDRESS);
 PROCEDURE ["C", "ofl_multi_set"] CMultiSet(m: SYSTEM.ADDRESS; i, kind: SYSTEM.INT32; s: ARRAY OF CHAR; t: SYSTEM.INT32; p: SYSTEM.ADDRESS);
@@ -80,6 +125,8 @@ PROCEDURE ["C", "ofl_menu_item_label"] CMenuItemLabel(m: SYSTEM.ADDRESS; i, kind
 PROCEDURE ["C", "ofl_browser_icon"] CBrowserIcon(b: SYSTEM.ADDRESS; line: SYSTEM.INT32; i: SYSTEM.ADDRESS);
 PROCEDURE ["C", "ofl_widget_image"] CWidgetImage(w: SYSTEM.ADDRESS; slot: SYSTEM.INT32; i: SYSTEM.ADDRESS);
 PROCEDURE ["C", "ofl_window_icon"] CWindowIcon(w, i: SYSTEM.ADDRESS);
+PROCEDURE ["C", "ofl_window_shape"] CWindowShape(w, i: SYSTEM.ADDRESS): SYSTEM.INT32;
+PROCEDURE ["C", "ofl_image_tiled"] CTiled(t: SYSTEM.ADDRESS; w, h: SYSTEM.INT32): SYSTEM.ADDRESS;
 PROCEDURE ["C", "ofl_surface_new"] CSurfaceNew(w, h: SYSTEM.INT32): SYSTEM.ADDRESS;
 PROCEDURE ["C", "ofl_surface_close"] CSurfaceClose(s: SYSTEM.ADDRESS);
 PROCEDURE ["C", "ofl_surface_begin"] CSurfaceBegin(s: SYSTEM.ADDRESS);
@@ -114,8 +161,16 @@ BEGIN
 END Opened;
 
 PROCEDURE New(i: Image);
-BEGIN ASSERT(i # NIL, Fl.NilArgument); ASSERT(i.h = 0, Fl.OpenedTwice)
+BEGIN
+  ASSERT(i # NIL, Fl.NilArgument); ASSERT(i.h = 0, Fl.OpenedTwice);
+  ASSERT(~(i IS AnimGIF), Fl.Unsupported)
 END New;
+
+PROCEDURE NewAnim(a: Image);
+BEGIN
+  ASSERT(a # NIL, Fl.NilArgument); ASSERT(a.h = 0, Fl.OpenedTwice);
+  ASSERT(a IS AnimGIF, Fl.Unsupported)
+END NewAnim;
 
 (* i's handle, halting if i is closed. *)
 PROCEDURE Hd(i: Image): SYSTEM.ADDRESS;
@@ -164,12 +219,25 @@ BEGIN
   ASSERT(Opened(i, CRGB(bits, w, h, d, ld)))  (* out of memory *)
 END OpenRGB;
 
+(* Makes i the image tile, repeated to fill w by h pixels, or, if both
+   are 0, the window it is drawn in: as the image of a box filling the
+   window, a background. i holds tile, which may be closed. *)
+PROCEDURE OpenTiled*(i, tile: Image; w, h: INTEGER);
+  VAR t: SYSTEM.ADDRESS;
+BEGIN
+  t := Hd(tile); New(i); ASSERT((w >= 0) & (h >= 0), Fl.IndexOutOfRange);
+  ASSERT(Opened(i, CTiled(t, w, h)))  (* out of memory *)
+END OpenTiled;
+
 (* Makes copy a copy of i's data, at w by h pixels: scaled, with FLTK's
-   own scaling. *)
+   own scaling. A copy of an AnimGIF is one, with no canvas, playing if i
+   has a frame shown, playing or not (doc/fltk-issues.md, 64). *)
 PROCEDURE (i: Image) Copy*(copy: Image; w, h: INTEGER);
   VAR s: SYSTEM.ADDRESS;
 BEGIN
-  s := Hd(i); New(copy); ASSERT((w > 0) & (h > 0), Fl.IndexOutOfRange);
+  s := Hd(i);
+  IF i IS AnimGIF THEN NewAnim(copy) ELSE New(copy) END;
+  ASSERT((w > 0) & (h > 0), Fl.IndexOutOfRange);
   ASSERT(Opened(copy, CCopy(s, w, h)))  (* out of memory *)
 END Copy;
 
@@ -315,6 +383,15 @@ PROCEDURE SetIcon*(win: Fl.Window; i: Image);
 BEGIN CWindowIcon(Fl.Live(win), Handle(i))
 END SetIcon;
 
+(* Shapes win as i's pixels that aren't transparent, or for an image
+   with no alpha, aren't black, scaled to win's size, and takes away its
+   border; the rest of win is not drawn, and takes no clicks. win keeps a
+   copy of i. An image with no pixels to read, a tiled one, halts
+   (Fl.Unsupported). FLTK can't make win a rectangle again. *)
+PROCEDURE SetShape*(win: Fl.Window; i: Image);
+BEGIN ASSERT(CWindowShape(Fl.Live(win), Hd(i)) # 0, Fl.Unsupported)
+END SetShape;
+
 (* Shows i at the left of b's line, which is 1 to b.Count(); NIL for
    none. The line is made as tall as the image. b keeps i while a line
    shows it. *)
@@ -324,6 +401,198 @@ BEGIN
   h := Fl.Live(b); ASSERT((line >= 1) & (line <= b.Count()), Fl.IndexOutOfRange);
   CBrowserIcon(h, line, Handle(i))
 END SetLineIcon;
+
+(* Animated GIFs *)
+
+PROCEDURE Canvas(w: Fl.Widget): SYSTEM.ADDRESS;
+BEGIN IF w = NIL THEN RETURN 0 ELSE RETURN Fl.Live(w) END
+END Canvas;
+
+(* Makes a the animation in GIF file name, with canvas, NIL for none:
+   the canvas is sized to the animation and shows it, and it starts
+   playing, unless flags say not. FALSE, and a not open, if the file
+   can't be read, or isn't a GIF FLTK can decode. *)
+PROCEDURE OpenAnimGIF*(a: AnimGIF; name-: ARRAY OF CHAR; canvas: Fl.Widget; flags: SET): BOOLEAN;
+BEGIN
+  NewAnim(a);
+  RETURN Opened(a, CAnimLoad(SYSTEM.ADR(name), 0, 0, Canvas(canvas), ORD(flags)))
+END OpenAnimGIF;
+
+(* The same, decoded from the first n bytes of data, with no name. *)
+PROCEDURE OpenAnimGIFData*(a: AnimGIF; data-: ARRAY OF CHAR; n: INTEGER; canvas: Fl.Widget; flags: SET): BOOLEAN;
+BEGIN
+  NewAnim(a); ASSERT((n >= 0) & (n <= LEN(data)), Fl.IndexOutOfRange);
+  RETURN Opened(a, CAnimLoad(0, SYSTEM.ADR(data), n, Canvas(canvas), ORD(flags)))
+END OpenAnimGIFData;
+
+(* Makes w a's canvas, NIL for none, with flags as OpenAnimGIF's
+   (DontStart aside): the old canvas, as in FLTK, loses its image, a or
+   not. A playing animation starts again. A canvas deleted is no longer
+   a's. *)
+PROCEDURE (a: AnimGIF) SetCanvas*(w: Fl.Widget; flags: SET);
+BEGIN CAnimCanvas(Hd(a), Canvas(w), ORD(flags))
+END SetCanvas;
+
+(* NIL for none. *)
+PROCEDURE (a: AnimGIF) Canvas*(): Fl.Widget;
+  VAR o: SYSTEM.ADDRESS;
+BEGIN
+  o := CAnimCanvasObject(Hd(a));
+  IF o = 0 THEN RETURN NIL ELSE RETURN SYSTEM.VAL(Fl.Widget, o) END
+END Canvas;
+
+(* The number of frames, from 1 up. *)
+PROCEDURE (a: AnimGIF) Frames*(): INTEGER;
+BEGIN RETURN CAnimGet(Hd(a), 0)
+END Frames;
+
+(* The frame shown, from 0 to Frames() - 1. *)
+PROCEDURE (a: AnimGIF) Frame*(): INTEGER;
+BEGIN RETURN CAnimGet(Hd(a), 1)
+END Frame;
+
+(* Shows frame n, redrawing the canvas. Not while a plays, which halts
+   (Fl.Unsupported). *)
+PROCEDURE (a: AnimGIF) SetFrame*(n: INTEGER);
+  VAR h: SYSTEM.ADDRESS;
+BEGIN
+  h := Hd(a); ASSERT((n >= 0) & (n < CAnimGet(h, 0)), Fl.IndexOutOfRange);
+  ASSERT(CAnimGet(h, 4) = 0, Fl.Unsupported);
+  CAnimSetFrame(h, n)
+END SetFrame;
+
+(* Plays from the next frame. *)
+PROCEDURE (a: AnimGIF) Start*;
+BEGIN CAnimDo(Hd(a), 0)
+END Start;
+
+PROCEDURE (a: AnimGIF) Stop*;
+BEGIN CAnimDo(Hd(a), 1)
+END Stop;
+
+(* Shows the next frame, the first after the last, unless a plays. *)
+PROCEDURE (a: AnimGIF) Next*;
+BEGIN CAnimDo(Hd(a), 2)
+END Next;
+
+(* Whether a is playing: it stops after the number of times the GIF says
+   to repeat it, typically never. *)
+PROCEDURE (a: AnimGIF) Playing*(): BOOLEAN;
+BEGIN RETURN CAnimGet(Hd(a), 4) # 0
+END Playing;
+
+(* Whether a has more than one frame. *)
+PROCEDURE (a: AnimGIF) IsAnimated*(): BOOLEAN;
+BEGIN RETURN CAnimGet(Hd(a), 6) # 0
+END IsAnimated;
+
+(* How long frame n is shown, in seconds, as the GIF says: 0 for one
+   that isn't animated. Playing, a shows it for SetAnimMinDelay's delay
+   at least. *)
+PROCEDURE (a: AnimGIF) Delay*(n: INTEGER): LONGREAL;
+  VAR h: SYSTEM.ADDRESS;
+BEGIN
+  h := Hd(a); ASSERT((n >= 0) & (n < CAnimGet(h, 0)), Fl.IndexOutOfRange);
+  RETURN CAnimDelay(h, n)
+END Delay;
+
+PROCEDURE (a: AnimGIF) SetDelay*(n: INTEGER; d: LONGREAL);
+  VAR h: SYSTEM.ADDRESS;
+BEGIN
+  h := Hd(a); ASSERT((n >= 0) & (n < CAnimGet(h, 0)), Fl.IndexOutOfRange);
+  CAnimSetDelay(h, n, d)
+END SetDelay;
+
+(* How fast a plays: 1 as the GIF says, 2 twice as fast. *)
+PROCEDURE (a: AnimGIF) Speed*(): LONGREAL;
+BEGIN RETURN CAnimSpeed(Hd(a))
+END Speed;
+
+PROCEDURE (a: AnimGIF) SetSpeed*(s: LONGREAL);
+BEGIN CAnimSetSpeed(Hd(a), s)
+END SetSpeed;
+
+(* The size of the GIF's own canvas, or the one Resize gave. *)
+PROCEDURE (a: AnimGIF) CanvasW*(): INTEGER;
+BEGIN RETURN CAnimGet(Hd(a), 2)
+END CanvasW;
+
+PROCEDURE (a: AnimGIF) CanvasH*(): INTEGER;
+BEGIN RETURN CAnimGet(Hd(a), 3)
+END CanvasH;
+
+(* Where frame n is drawn, in the canvas: the whole of it, unless a was
+   opened with OptimizeMemory and the GIF gives the frame less. *)
+PROCEDURE (a: AnimGIF) FrameXYWH*(n: INTEGER; VAR x, y, w, h: INTEGER);
+  VAR k: SYSTEM.ADDRESS;
+BEGIN
+  k := Hd(a); ASSERT((n >= 0) & (n < CAnimGet(k, 0)), Fl.IndexOutOfRange);
+  x := CAnimFrameGet(k, 0, n); y := CAnimFrameGet(k, 1, n);
+  w := CAnimFrameGet(k, 2, n); h := CAnimFrameGet(k, 3, n)
+END FrameXYWH;
+
+(* Makes i a copy of frame n's image. *)
+PROCEDURE (a: AnimGIF) FrameImage*(n: INTEGER; i: Image);
+  VAR h: SYSTEM.ADDRESS;
+BEGIN
+  h := Hd(a); ASSERT((n >= 0) & (n < CAnimGet(h, 0)), Fl.IndexOutOfRange);
+  New(i); ASSERT(Opened(i, CAnimFrameImage(h, n)))  (* out of memory *)
+END FrameImage;
+
+(* Whether each frame is drawn afresh, rather than kept ready to draw:
+   less memory, more time. FALSE to start with. *)
+PROCEDURE (a: AnimGIF) FrameUncache*(): BOOLEAN;
+BEGIN RETURN CAnimGet(Hd(a), 5) # 0
+END FrameUncache;
+
+PROCEDURE (a: AnimGIF) SetFrameUncache*(on: BOOLEAN);
+BEGIN IF on THEN CAnimDo(Hd(a), 3) ELSE CAnimDo(Hd(a), 4) END
+END SetFrameUncache;
+
+(* Scales every frame to w by h pixels, or to the canvas's size if both
+   are 0, sizing the canvas too unless SetCanvas said not. *)
+PROCEDURE (a: AnimGIF) Resize*(w, h: INTEGER);
+BEGIN ASSERT((w >= 0) & (h >= 0), Fl.IndexOutOfRange); CAnimResize(Hd(a), w, h, 0.0D0)
+END Resize;
+
+(* The same, to scale times its size. *)
+PROCEDURE (a: AnimGIF) ResizeBy*(scale: LONGREAL);
+BEGIN ASSERT(scale > 0.0D0, Fl.IndexOutOfRange); CAnimResize(Hd(a), -1, 0, scale)
+END ResizeBy;
+
+(* The name of the file a was loaded from; "" for memory. *)
+PROCEDURE (a: AnimGIF) GetName*(VAR s: ARRAY OF CHAR);
+BEGIN CAnimName(Hd(a), s, SHORT(LEN(s)))
+END GetName;
+
+(* The least delay between any animation's frames, in seconds; 0, none,
+   to start with. *)
+PROCEDURE AnimMinDelay*(): LONGREAL;
+BEGIN RETURN CSetting(0)
+END AnimMinDelay;
+
+PROCEDURE SetAnimMinDelay*(d: LONGREAL);
+BEGIN CSetSetting(0, d)
+END SetAnimMinDelay;
+
+(* How RGB images, and so animations' frames, are scaled to the size
+   they are drawn at: ScalingNearest, or ScalingBilinear, smoother and
+   slower, to start with. *)
+PROCEDURE ScalingAlgorithm*(): INTEGER;
+BEGIN RETURN SHORT(ENTIER(CSetting(1)))
+END ScalingAlgorithm;
+
+PROCEDURE SetScalingAlgorithm*(s: INTEGER);
+BEGIN
+  ASSERT((s = ScalingNearest) OR (s = ScalingBilinear), Fl.IndexOutOfRange);
+  CSetSetting(1, s)
+END SetScalingAlgorithm;
+
+(* Whether GIFs FLTK loads itself, as a file chooser's preview, are
+   animated; FALSE to start with. *)
+PROCEDURE SetAnimateGIFs*(on: BOOLEAN);
+BEGIN IF on THEN CSetSetting(2, 1.0D0) ELSE CSetSetting(2, 0.0D0) END
+END SetAnimateGIFs;
 
 (* Multi-labels *)
 

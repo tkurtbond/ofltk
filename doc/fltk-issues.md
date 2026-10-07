@@ -323,6 +323,78 @@ Unless an entry says otherwise, the version is FLTK 1.4.5 (Fedora's
   callback as it is pushed and drags: valgrind finds 4 errors without
   the clearing, none with it.
 
+### 60. `Fl_Chart::maxsize(0)` drops every entry
+
+- **What happens**: a chart starts with a maximum of 0 entries, which
+  is no limit; setting the maximum back to 0, after another, drops
+  every entry. Found 2026-10-07.
+- **Cause**: `Fl_Chart::maxsize` (`src/Fl_Chart.cxx`) sets `maxnumb`,
+  then keeps the last `maxnumb` entries if there are more: none, for
+  0. `add` and `insert` treat 0 as no limit.
+- **Effect on pofltk**: `Chart.SetMaxCount(0)` sets the private
+  `maxnumb` alone, reached through an explicit instantiation (`Reach`,
+  `src/FlValuators.cpp`); any other maximum goes through `maxsize`.
+- **Confirmed**: in the source. `TestChart` sets the maximum to 3 and
+  then back to 0, and inserts a fourth entry, which halts if the three
+  are gone.
+
+### 61. X11's window shape reads past an image drawn larger than its data
+
+- **What happens**: `Fl_Window::shape` of an RGB image scaled larger
+  than its data (`scale()`) reads past the data's end, on X11. Found
+  2026-10-07.
+- **Cause**: `Fl_X11_Window_Driver::shape_alpha_`
+  (`src/drivers/X11/Fl_X11_Window_Driver.cxx`) reads `w()` by `h()`
+  pixels of `data()`, which hold `data_w()` by `data_h()`. It also
+  keeps the image's pointer as the shape. Wayland's
+  (`Fl_Wayland_Window_Driver::shape_alpha_`) reads `data_w()` by
+  `data_h()`.
+- **Effect on pofltk**: `FlImages.SetShape` (`ofl_window_shape`,
+  `src/FlImages.cpp`) gives FLTK a copy of the image at its drawn size,
+  which the window holds.
+- **Confirmed**: `TestImages` shapes a window with a 4 by 2 image
+  scaled to 40 by 40: valgrind shows invalid reads in `shape_alpha_`
+  when the shim passes the image itself.
+
+### 63. `fl_numericsort` skips the character after a number, and reads past a name's end
+
+- **What happens**: `fl_numericsort` and `fl_casenumericsort` never
+  compare the character after a run of digits, so "a1za" comes before
+  "a1yb", and after a run of digits that ends a name they read past
+  its end: "ab12z" came before "ab12", and valgrind shows an invalid
+  read. FLTK's file chooser and `Fl_File_Browser::load` sort with
+  `fl_numericsort` by default. Found 2026-10-07, under valgrind, in
+  FLTK's file chooser as a path was typed into it.
+- **Cause**: `numericsort` (`src/numericsort.c`): after the digit runs,
+  `UTF_A` and `UTF_B` hold the next characters, but the loop decodes
+  the ones after them; and it checks for the end of a name only on the
+  branch for characters other than digits.
+- **Effect on pofltk**: `ofl::numericsort` and `ofl::casenumericsort`
+  (`src/pofltk.h`) sort as FLTK documents: runs of digits as numbers,
+  leading zeros aside, then what follows them; a name before a longer
+  one it starts. `FlDialogs.ListDirectory`, `FileBrowser.LoadDirectory`,
+  and FLTK's file chooser (`Fl_File_Chooser::sort`, set before each
+  chooser is shown) use them.
+- **Confirmed**: a scratch program listing a directory of "ab12" and
+  "ab12z" (a name filling its `dirent` exactly) with `fl_numericsort`:
+  valgrind's invalid read in `fl_utf8decode`, and "ab12z" first.
+  `TestDialogs` and `TestBrowsers` list `test/names/`; with FLTK's
+  sort, `TestDialogs` fails its check of the order, and valgrind finds
+  the read.
+
+### 64. A copy of an animation plays if the original has a frame shown
+
+- **What happens**: `Fl_Anim_GIF_Image::copy` starts the copy playing
+  whenever the original has a frame shown, playing or not; the source
+  says "start if original also was started". Found 2026-10-07.
+- **Cause**: `Fl_Anim_GIF_Image::copy` (`src/Fl_Anim_GIF_Image.cxx`)
+  tests `frame_ >= 0`, which a stopped animation's frame also is,
+  rather than whether its timer is pending.
+- **Effect on pofltk**: none; `Image.Copy` says so, and `TestAnimGIF`
+  checks that a copy of a stopped animation plays, so a fix in FLTK
+  will show.
+- **Confirmed**: `TestAnimGIF`.
+
 ## Pitfalls
 
 ### 5. FLTK keeps the label pointer it is given
@@ -854,3 +926,34 @@ Unless an entry says otherwise, the version is FLTK 1.4.5 (Fedora's
   button was) called the button's callback, its parent still the tree
   and `visible()` 1. `TestTreeItems` clicks where a removed item's
   button was, and checks it is deleted and calls nothing back.
+
+### 62. An animation's timer redraws a canvas deleted first
+
+- `Fl_Anim_GIF_Image` keeps its canvas widget's pointer, and while it
+  plays redraws the canvas, and sets its image, from an FLTK timer.
+  Nothing tells it the canvas is deleted, so the next frame uses freed
+  memory. FLTK's `examples/animgifimage.cxx` notes that the animation
+  must be deleted before its canvas. Found 2026-10-07.
+- **Cause**: `Fl_Anim_GIF_Image::cb_animate` and `set_frame`
+  (`src/Fl_Anim_GIF_Image.cxx`) use `canvas_`, which only `canvas()`
+  sets.
+- **Effect on pofltk**: an animation watches its canvas (`Anim`, an
+  `ofl::Watcher`, `src/FlImages.cpp`), and forgets it as it dies; an
+  animation deleted removes its timer (FLTK's destructor). So either
+  may go first.
+- **Confirmed**: `TestAnimGIF` deletes a playing animation's canvas,
+  then runs its timer, under valgrind; and closes an animation whose
+  timer is pending.
+
+### 65. `Fl_Chart` cuts a label in the middle of a UTF-8 character
+
+- An entry keeps its label in `str[FL_CHART_LABEL_MAX + 1]`, 18 bytes,
+  copied with `strlcpy`, which can leave the first bytes of a character
+  whose last cross the 18th: the label ends in invalid UTF-8. Found
+  2026-10-07.
+- **Cause**: `Fl_Chart::add`, `insert` and `replace`
+  (`src/Fl_Chart.cxx`).
+- **Effect on pofltk**: `entry_label` (`src/FlValuators.cpp`) cuts a
+  label before such a character.
+- **Confirmed**: in the source. `TestChart` draws 17 a's then an e
+  acute, and checks it is drawn as 17 a's.

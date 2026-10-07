@@ -19,8 +19,12 @@
 #include <FL/Fl_Menu_Item.H>
 #include <FL/Fl_Multi_Label.H>
 #include <FL/Fl_Widget.H>
+#include <FL/filename.H>
+#include <FL/fl_utf8.h>
+#include <ctype.h>
 #include <stdint.h>
 #include <stdlib.h>
+#include <string.h>
 
 #include <utility>
 #include <vector>
@@ -70,6 +74,16 @@ private:
   bool closed_;
 };
 
+// What must hear of a widget's death, beyond what the widget holds: an
+// animation that keeps a pointer to the widget and redraws it
+// (FlImages.cpp). widget_gone is called from ~Fl_Widget, and must not
+// use the widget.
+class Watcher {
+public:
+  virtual ~Watcher() {}
+  virtual void widget_gone() = 0;
+};
+
 // A widget's user data: its Oberon object's address. Opened with
 // AUTO_DELETE_USER_DATA, so FLTK deletes it when the widget is destroyed:
 // explicitly, with its parent, or by Fl::delete_widget (confirmed for all
@@ -78,12 +92,12 @@ private:
 // widget, so open sets it once and nothing sets it again.
 //
 // It also holds what the widget uses and doesn't own, such as its label
-// images and multi-label (slot, below), and releases them when the widget
+// images, its multi-label and a window's shape (slot, below), and releases them when the widget
 // dies. ~Fl_Widget
 // deletes it after the widget's last use of them.
 class Ref : public Fl_Callback_User_Data {
 public:
-  enum { image, deimage, label, slots };
+  enum { image, deimage, label, shape, slots };
   explicit Ref(intptr_t s) : self(s) {
     for (int i = 0; i < slots; i++) held[i] = 0;
   }
@@ -92,6 +106,9 @@ public:
       Dispatch d;
       on_deleted(self);
     }
+    // Told before anything held is released, which may delete a watcher.
+    std::vector<Watcher *> told(watchers);
+    for (Watcher *w : told) w->widget_gone();
     for (int i = 0; i < slots; i++) {
       if (held[i]) held[i]->release();
     }
@@ -133,11 +150,24 @@ public:
   }
   // How many are kept, for the tests.
   size_t kept_count() const { return kept.size(); }
+  // What slot i holds, or 0.
+  Shared *held_in(int i) const { return held[i]; }
+  // w hears of the widget's death, until it unwatches.
+  void watch(Watcher *w) { watchers.push_back(w); }
+  void unwatch(Watcher *w) {
+    for (size_t i = 0; i < watchers.size(); i++) {
+      if (watchers[i] == w) {
+        watchers.erase(watchers.begin() + i);
+        return;
+      }
+    }
+  }
   const intptr_t self;
 
 private:
   Shared *held[slots];
   std::vector<std::pair<Shared *, const void *> > kept;
+  std::vector<Watcher *> watchers;
 };
 
 // Every opened widget's FLTK callback, defined in Fl.cpp; also how
@@ -323,6 +353,49 @@ inline Fl_Widget *widget(intptr_t h) {
 }
 
 template <class T> T *as(intptr_t h) { return static_cast<T *>(widget(h)); }
+
+// fl_numericsort and fl_casenumericsort, corrected: FLTK's never compares
+// the character after a run of digits, and reads past a name's end after
+// one, so "ab12z" comes before "ab12" (doc/fltk-issues.md, 63). Runs of
+// digits compare as numbers, leading zeros aside; other characters as
+// Unicode code points, case folded unless cs; a name before a longer one
+// it starts.
+inline int numeric_compare(const char *a, const char *b, bool cs) {
+  const char *end_a = a + strlen(a), *end_b = b + strlen(b);
+  while (a < end_a && b < end_b) {
+    if (isdigit(static_cast<unsigned char>(*a)) &&
+        isdigit(static_cast<unsigned char>(*b))) {
+      while (*a == '0') a++;
+      while (*b == '0') b++;
+      const char *da = a, *db = b;
+      while (isdigit(static_cast<unsigned char>(*a))) a++;
+      while (isdigit(static_cast<unsigned char>(*b))) b++;
+      if (a - da != b - db) return a - da < b - db ? -1 : 1;
+      int c = strncmp(da, db, static_cast<size_t>(a - da));
+      if (c) return c < 0 ? -1 : 1;
+    } else {
+      int la, lb;
+      unsigned ua = fl_utf8decode(a, end_a, &la);
+      unsigned ub = fl_utf8decode(b, end_b, &lb);
+      if (!cs) {
+        ua = static_cast<unsigned>(fl_tolower(ua));
+        ub = static_cast<unsigned>(fl_tolower(ub));
+      }
+      if (ua != ub) return ua < ub ? -1 : 1;
+      a += la;
+      b += lb;
+    }
+  }
+  return (a < end_a) - (b < end_b);
+}
+
+inline int numericsort(struct dirent **a, struct dirent **b) {
+  return numeric_compare((*a)->d_name, (*b)->d_name, true);
+}
+
+inline int casenumericsort(struct dirent **a, struct dirent **b) {
+  return numeric_compare((*a)->d_name, (*b)->d_name, false);
+}
 
 }  // namespace ofl
 

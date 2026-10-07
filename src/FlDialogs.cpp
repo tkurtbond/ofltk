@@ -11,6 +11,7 @@
 #include <FL/Fl_Native_File_Chooser.H>
 #include <FL/fl_ask.H>
 #include <FL/fl_show_colormap.H>
+#include <FL/filename.H>
 #include <stdlib.h>
 #include <string.h>
 
@@ -47,6 +48,14 @@ struct Chooser {
 };
 
 Chooser *chooser(intptr_t c) { return reinterpret_cast<Chooser *>(c); }
+
+// A directory's names, as fl_filename_list gives them, until freed.
+struct Listing {
+  dirent **list;
+  int n;
+};
+
+Listing *listing(intptr_t l) { return reinterpret_cast<Listing *>(l); }
 
 }  // namespace
 
@@ -123,6 +132,7 @@ int32_t ofl_show_colormap(int32_t old) {
 // if cancelled. FLTK returns its own copy.
 int32_t ofl_file_chooser(int32_t dir, const char *title, const char *pattern,
                          char *buf, int32_t n, int32_t relative) {
+  Fl_File_Chooser::sort = ofl::numericsort;  // doc/fltk-issues.md, 63
   const char *r = dir ? fl_dir_chooser(keep_title(title), buf, relative)
                       : fl_file_chooser(keep_title(title), pattern, buf,
                                         relative);
@@ -183,7 +193,12 @@ int32_t ofl_fnfc_get_int(intptr_t c, int32_t what) {
 }
 
 // 0 a file chosen, 1 cancelled, -1 an error (ofl_fnfc_errmsg).
-int32_t ofl_fnfc_show(intptr_t c) { return chooser(c)->chooser.show(); }
+// FLTK's own chooser lists a directory sorted by Fl_File_Chooser::sort,
+// which is fl_numericsort until it is set (doc/fltk-issues.md, 63).
+int32_t ofl_fnfc_show(intptr_t c) {
+  Fl_File_Chooser::sort = ofl::numericsort;
+  return chooser(c)->chooser.show();
+}
 
 // File i chosen, of ofl_fnfc_get_int(c, 4).
 intptr_t ofl_fnfc_filename(intptr_t c, int32_t i) {
@@ -192,6 +207,37 @@ intptr_t ofl_fnfc_filename(intptr_t c, int32_t i) {
 
 intptr_t ofl_fnfc_errmsg(intptr_t c) {
   return reinterpret_cast<intptr_t>(chooser(c)->chooser.errmsg());
+}
+
+// Directories
+
+// Directory dir's names, sorted by sort (0 fl_alphasort, 1
+// fl_casealphasort, 2 fl_numericsort, 3 fl_casenumericsort, the last two
+// corrected: doc/fltk-issues.md, 63), their number in *n; 0 if it can't
+// be read.
+intptr_t ofl_filename_list(const char *dir, int32_t sort, int32_t *n) {
+  Fl_File_Sort_F *f = sort == 1   ? fl_casealphasort
+                      : sort == 2 ? ofl::numericsort
+                      : sort == 3 ? ofl::casenumericsort
+                                  : fl_alphasort;
+  dirent **list = 0;
+  int k = fl_filename_list(dir, &list, f);
+  if (k < 0) return 0;
+  *n = k;
+  return reinterpret_cast<intptr_t>(new Listing{list, k});
+}
+
+int32_t ofl_filename_length(intptr_t l, int32_t i) {
+  return static_cast<int32_t>(strlen(listing(l)->list[i]->d_name));
+}
+
+void ofl_filename_get(intptr_t l, int32_t i, char *buf, int32_t n) {
+  ofl::copy_out(listing(l)->list[i]->d_name, buf, n);
+}
+
+void ofl_filename_free(intptr_t l) {
+  fl_filename_free_list(&listing(l)->list, listing(l)->n);
+  delete listing(l);
 }
 
 }  // extern "C"

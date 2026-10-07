@@ -442,10 +442,20 @@ TYPE
      HandleDefault, which hands the event on, says. *)
   EventDispatch* = PROCEDURE (event: INTEGER; w: Window): BOOLEAN;
 
+  (* Sees an event no widget used (AddHandler), such as an EvShortcut no
+     widget took. It returns TRUE if it used the event, which then goes
+     to no other handler. *)
+  EventHandler* = PROCEDURE (event: INTEGER): BOOLEAN;
+  HandlerNode = POINTER TO RECORD
+    h: EventHandler;
+    next: HandlerNode
+  END;
+
   SelfProc = PROCEDURE (self: SYSTEM.ADDRESS);
   HandleProc = PROCEDURE (self: SYSTEM.ADDRESS; event: SYSTEM.INT32): SYSTEM.INT32;
   ResizeProc = PROCEDURE (self: SYSTEM.ADDRESS; x, y, w, h: SYSTEM.INT32);
   DispatchProc = PROCEDURE (event: SYSTEM.INT32; self: SYSTEM.ADDRESS): SYSTEM.INT32;
+  HandlerProc = PROCEDURE (event: SYSTEM.INT32): SYSTEM.INT32;
   ArgProc = PROCEDURE (i: SYSTEM.INT32): SYSTEM.INT32;
 
   (* A program's own command-line options (ParseArgs): given argument i
@@ -463,6 +473,7 @@ VAR
   watches: FdWatch;          (* every watch watching *)
   dispatch: EventDispatch;   (* the event dispatch, or NIL for FLTK's own *)
   dispatching: INTEGER;      (* how many dispatch calls are running *)
+  handlers: HandlerNode;     (* the event handlers, newest first *)
 
 PROCEDURE ["C", "ofl_register"] CRegister(callback, draw: SelfProc; handle: HandleProc; resize: ResizeProc; deleted, timeout: SelfProc);
 PROCEDURE ["C", "ofl_group_new"] CGroupNew(x, y, w, h: SYSTEM.INT32; self: SYSTEM.ADDRESS): SYSTEM.ADDRESS;
@@ -530,7 +541,10 @@ PROCEDURE ["C", "ofl_focus"] CFocus(): SYSTEM.ADDRESS;
 PROCEDURE ["C", "ofl_belowmouse"] CBelowmouse(): SYSTEM.ADDRESS;
 PROCEDURE ["C", "ofl_pushed"] CPushed(): SYSTEM.ADDRESS;
 PROCEDURE ["C", "ofl_open_uri"] COpenURI(uri: ARRAY OF CHAR; VAR msg: ARRAY OF CHAR; n: SYSTEM.INT32): SYSTEM.INT32;
-PROCEDURE ["C", "ofl_register_loop"] CRegisterLoop(idle, fd: SelfProc; dispatch: DispatchProc);
+PROCEDURE ["C", "ofl_register_loop"] CRegisterLoop(idle, fd: SelfProc; dispatch: DispatchProc; handler: HandlerProc);
+PROCEDURE ["C", "ofl_event_handlers"] CEventHandlers(on: SYSTEM.INT32);
+PROCEDURE ["C", "ofl_redraw_all"] CRedrawAll;
+PROCEDURE ["C", "ofl_window_shown_any"] CWindowShownAny(): SYSTEM.INT32;
 PROCEDURE ["C", "ofl_add_idle"] CAddIdle(self: SYSTEM.ADDRESS);
 PROCEDURE ["C", "ofl_remove_idle"] CRemoveIdle(self: SYSTEM.ADDRESS);
 PROCEDURE ["C", "ofl_add_fd"] CAddFd(fd, when: SYSTEM.INT32; self: SYSTEM.ADDRESS);
@@ -1720,6 +1734,42 @@ BEGIN
   IF d = NIL THEN CEventDispatch(0) ELSE CEventDispatch(1) END
 END SetEventDispatch;
 
+(* Event handlers *)
+
+(* Adds h to the handlers, which see the events no widget used, newest
+   first; h may be added more than once. *)
+PROCEDURE AddHandler*(h: EventHandler);
+  VAR n: HandlerNode;
+BEGIN
+  ASSERT(h # NIL, NilArgument);
+  IF handlers = NIL THEN CEventHandlers(1) END;
+  NEW(n); n.h := h; n.next := handlers; handlers := n
+END AddHandler;
+
+(* Removes h, added last; nothing if it isn't added. *)
+PROCEDURE RemoveHandler*(h: EventHandler);
+  VAR n, prev: HandlerNode;
+BEGIN
+  n := handlers; prev := NIL;
+  WHILE (n # NIL) & (n.h # h) DO prev := n; n := n.next END;
+  IF n # NIL THEN
+    IF prev = NIL THEN handlers := n.next ELSE prev.next := n.next END;
+    n.h := NIL;  (* removed; n.next stays, for HandlerD *)
+    IF handlers = NIL THEN CEventHandlers(0) END
+  END
+END RemoveHandler;
+
+(* Redraws every window shown. *)
+PROCEDURE Redraw*;
+BEGIN CRedrawAll
+END Redraw;
+
+(* Whether any window is shown, the program's or FLTK's own (a dialog's,
+   a menu's). *)
+PROCEDURE WindowShown*(): BOOLEAN;
+BEGIN RETURN CWindowShownAny() # 0
+END WindowShown;
+
 (* In the event dispatch only (NotFiring): FLTK's own handling of the
    event, for the dispatch's window; TRUE if a widget used it. *)
 PROCEDURE HandleDefault*(event: INTEGER): BOOLEAN;
@@ -1816,7 +1866,21 @@ BEGIN
   IF used THEN RETURN 1 ELSE RETURN 0 END
 END DispatchD;
 
+(* Each handler in turn, until one uses the event. One may remove itself
+   or another: a node removed keeps its next, and its h is NIL, so it is
+   passed over. One added meanwhile is first, and not called. *)
+PROCEDURE HandlerD(event: SYSTEM.INT32): SYSTEM.INT32;
+  VAR n: HandlerNode;
+BEGIN
+  n := handlers;
+  WHILE n # NIL DO
+    IF (n.h # NIL) & n.h(event) THEN RETURN 1 END;
+    n := n.next
+  END;
+  RETURN 0
+END HandlerD;
+
 BEGIN
   CRegister(CallbackD, DrawD, HandleD, ResizeD, DeletedD, TimeoutD);
-  CRegisterLoop(IdleD, FdD, DispatchD)
+  CRegisterLoop(IdleD, FdD, DispatchD, HandlerD)
 END Fl.

@@ -130,23 +130,28 @@ END Hello.
     last run commands through `examples/Pipe`, an example module with
     a C++ part, since running a command isn't FLTK's;
   - trees: `TreeAsContainer` and `TreeOfTables` (widgets in items),
-    `TreeCustomDrawItems` (items that draw themselves).
+    `TreeCustomDrawItems` (items that draw themselves);
+  - `ChartSimple`, and `ShapedWindow` (a window shaped by an image);
+  - animated GIFs: `AnimGifImageSimple`, `AnimGifImage` (FLTK's tests
+    of them, a directory's or a file chosen), `AnimGifImagePlay`
+    (played frame by frame by the program) and `AnimGifImageResize`
+    (copied to its canvas's size).
 
 ## Modules
 
 | Module | Contents |
 |---|---|
-| `Fl` | `Widget`, `Group`, `Window`, `DoubleWindow`, `Box`; the event loop, timers, idle callbacks, file descriptors' watches, the event dispatch, events, colors, fonts, box and label types, schemes, options, the clipboard, command-line options, screens, opening URIs |
+| `Fl` | `Widget`, `Group`, `Window`, `DoubleWindow`, `Box`; the event loop, timers, idle callbacks, file descriptors' watches, the event dispatch, event handlers, events, colors, fonts, box and label types, schemes, options, the clipboard, command-line options, screens, opening URIs |
 | `FlDraw` | `fl_draw.H`: lines, shapes, paths, transformations, text, fonts, clipping, boxes and symbols |
 | `FlButtons` | `Button` and its kinds: check, light, round, radio, return, repeat, toggle |
 | `FlInputs` | `Input` and its kinds, `Output`, `MultilineOutput` |
-| `FlValuators` | sliders, `Counter`, `Dial`, `Roller`, `Spinner`, `Adjuster`, `ValueInput`, `ValueOutput`, `Scrollbar`, `Progress` |
+| `FlValuators` | sliders, `Counter`, `Dial`, `Roller`, `Spinner`, `Adjuster`, `ValueInput`, `ValueOutput`, `Scrollbar`, `Progress`, `Chart` |
 | `FlLayout` | `Flex`, `Grid`, `Pack`, `Scroll`, `Tabs`, `Tile`, `Wizard` |
 | `FlMenus` | `MenuBar`, `MenuButton`, `Choice`, `SchemeChoice`, menu items |
-| `FlDialogs` | messages, questions, input, colors, file choosers, `NativeFileChooser` |
+| `FlDialogs` | messages, questions, input, colors, file choosers, `NativeFileChooser`; directories listed |
 | `FlText` | `TextBuffer`, `TextDisplay`, `TextEditor`, styles |
 | `FlBrowsers` | `Browser` and its kinds, `CheckBrowser`, `FileBrowser`, `Tree`, `TreeItem` (FLTK's, or the program's own, which draw themselves; widgets in items) |
-| `FlImages` | `Image` (loaded, decoded, or from pixels), `MultiLabel`; images on widgets, browser lines and menu items; `Surface` (offscreen drawing) |
+| `FlImages` | `Image` (loaded, decoded, from pixels, or tiled), `AnimGIF` (animated GIFs), `MultiLabel`; images on widgets, browser lines and menu items; window shapes; `Surface` (offscreen drawing) |
 | `FlPreferences` | `Preferences`: FLTK's settings databases |
 | `FlTable` | `Table`, `TableRow`: cells the program draws |
 
