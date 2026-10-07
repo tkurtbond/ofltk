@@ -16,6 +16,9 @@
 #include <FL/Fl_Menu_Button.H>
 #include <FL/Fl_Menu_Item.H>
 #include <FL/Fl_Window.H>
+#include <string.h>
+
+#include <vector>
 
 namespace {
 
@@ -86,6 +89,58 @@ private:
   const char *text_;
 };
 
+// FLTK reads an item's label as its text whatever its type
+// (doc/fltk-issues.md, 54): Fl_Menu_::insert finds a path's submenus by
+// it, and find_index and item_pathname make paths of it. So while one of
+// them runs, each item showing an image or a multi-label has its name as
+// its text.
+class Names {
+public:
+  explicit Names(Fl_Menu_ *m) : m_(m) {
+    Fl_Menu_Item *items = const_cast<Fl_Menu_Item *>(m->menu());
+    for (int i = 0; items && i < m->size(); i++) {
+      if (ofl::ItemLabel *l = ofl::item_label(m, items + i)) {
+        labels_.push_back(l);
+        items[i].text = l->name;
+      }
+    }
+  }
+  ~Names() {
+    if (labels_.empty()) return;
+    Fl_Menu_Item *items = const_cast<Fl_Menu_Item *>(m_->menu());
+    for (int i = 0; items && i < m_->size(); i++) {
+      for (ofl::ItemLabel *l : labels_) {
+        if (items[i].text == l->name) {
+          items[i].text = reinterpret_cast<const char *>(&l->ml);
+        }
+      }
+    }
+  }
+
+private:
+  Fl_Menu_ *m_;
+  std::vector<ofl::ItemLabel *> labels_;
+};
+
+// Makes items from to to - 1 of m text again, each its own copy of its
+// name. Fl_Menu_::remove and replace free() an item's text whatever its
+// type (doc/fltk-issues.md, 54), and would free an ItemLabel's ml.
+void plain(Fl_Menu_ *m, int from, int to) {
+  Fl_Menu_Item *items = const_cast<Fl_Menu_Item *>(m->menu());
+  for (int i = from; i < to; i++) {
+    if (ofl::ItemLabel *l = ofl::item_label(m, items + i)) {
+      items[i].text = strdup(l->name);
+      items[i].labeltype_ = FL_NORMAL_LABEL;
+    }
+  }
+}
+
+// The index after item i and its submenu, if it has one.
+int after(Fl_Menu_ *m, int i) {
+  const Fl_Menu_Item *items = m->menu();
+  return static_cast<int>(items[i].next() - items);
+}
+
 }  // namespace
 
 extern "C" {
@@ -114,6 +169,7 @@ int32_t ofl_menu_is_item(intptr_t m, int32_t i) {
 int32_t ofl_menu_insert(intptr_t m, int32_t index, const char *label,
                         int32_t shortcut, intptr_t action, int32_t flags) {
   KeepValue keep(menu(m));
+  Names names(menu(m));
   return menu(m)->insert(index, label, shortcut, 0,
                          reinterpret_cast<void *>(action),
                          flags & ~FL_SUBMENU_POINTER);
@@ -121,14 +177,21 @@ int32_t ofl_menu_insert(intptr_t m, int32_t index, const char *label,
 
 void ofl_menu_remove(intptr_t m, int32_t i) {
   KeepValue keep(menu(m));
+  plain(menu(m), i, after(menu(m), i));
   menu(m)->remove(i);
+  ofl::drop_item_labels(menu(m));
 }
 
-void ofl_menu_clear(intptr_t m) { menu(m)->clear(); }
+void ofl_menu_clear(intptr_t m) {
+  menu(m)->clear();
+  ofl::drop_item_labels(menu(m));
+}
 
 void ofl_menu_clear_submenu(intptr_t m, int32_t i) {
   KeepValue keep(menu(m));
+  plain(menu(m), i + 1, after(menu(m), i));
   menu(m)->clear_submenu(i);
+  ofl::drop_item_labels(menu(m));
 }
 
 int32_t ofl_menu_value(intptr_t m) { return menu(m)->value(); }
@@ -144,22 +207,26 @@ void ofl_menu_pick(intptr_t m, int32_t i) { menu(m)->picked(item(m, i)); }
 void ofl_menu_setonly(intptr_t m, int32_t i) { menu(m)->setonly(item(m, i)); }
 
 void ofl_menu_label(intptr_t m, int32_t i, char *buf, int32_t n) {
-  ofl::copy_out(item(m, i)->text, buf, n);
+  ofl::copy_out(ofl::item_name(menu(m), item(m, i)), buf, n);
 }
 
 // Fl_Menu_::replace copies the text of a menu made by add().
 void ofl_menu_set_label(intptr_t m, int32_t i, const char *s) {
+  plain(menu(m), i, i + 1);
   menu(m)->replace(i, s);
+  ofl::drop_item_labels(menu(m));
 }
 
 // 1 if item i's path ("File/Open") fits in buf.
 int32_t ofl_menu_pathname(intptr_t m, int32_t i, char *buf, int32_t n) {
+  Names names(menu(m));
   int r = menu(m)->item_pathname(buf, n, item(m, i));
   if (r != 0) buf[0] = 0;
   return r == 0;
 }
 
 int32_t ofl_menu_find_index(intptr_t m, const char *path) {
+  Names names(menu(m));
   return menu(m)->find_index(path);
 }
 

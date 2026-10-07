@@ -175,6 +175,7 @@ PROCEDURE ["C", "ofl_tree_set"] CTreeSet(t: SYSTEM.ADDRESS; what, v: SYSTEM.INT3
 PROCEDURE ["C", "ofl_tree_set_root_label"] CSetRootLabel(t: SYSTEM.ADDRESS; s: ARRAY OF CHAR);
 PROCEDURE ["C", "ofl_tree_select_all"] CSelectAll(t: SYSTEM.ADDRESS; on: SYSTEM.INT32): SYSTEM.INT32;
 PROCEDURE ["C", "ofl_tree_item_item"] CItemItem(t, p: SYSTEM.ADDRESS; what: SYSTEM.INT32; VAR serial: SYSTEM.INT32): SYSTEM.ADDRESS;
+PROCEDURE ["C", "ofl_tree_item_swap"] CItemSwap(p: SYSTEM.ADDRESS; a, b: SYSTEM.INT32);
 PROCEDURE ["C", "ofl_tree_item_child"] CItemChild(t, p: SYSTEM.ADDRESS; i: SYSTEM.INT32; VAR serial: SYSTEM.INT32): SYSTEM.ADDRESS;
 PROCEDURE ["C", "ofl_tree_item_add"] CItemAdd(t, p: SYSTEM.ADDRESS; what: SYSTEM.INT32; name: ARRAY OF CHAR; pos: SYSTEM.INT32; VAR serial: SYSTEM.INT32): SYSTEM.ADDRESS;
 PROCEDURE ["C", "ofl_tree_item_remove"] CItemRemove(t, p: SYSTEM.ADDRESS);
@@ -885,6 +886,16 @@ BEGIN
   h := T(i); ASSERT((n >= 0) & (n < CItemGet(h, i.p, 0)), Fl.IndexOutOfRange);
   p := CItemChild(h, i.p, n, serial); RETURN Item(i.tree, p, serial)
 END Child;
+
+(* Swaps i's children a and b, from 0 to Children() - 1: to sort them,
+   say. The tree isn't redrawn. *)
+PROCEDURE (i: TreeItem) SwapChildren*(a, b: INTEGER);
+  VAR n: INTEGER;
+BEGIN
+  n := CItemGet(T(i), i.p, 0);
+  ASSERT((a >= 0) & (a < n) & (b >= 0) & (b < n), Fl.IndexOutOfRange);
+  CItemSwap(i.p, a, b)
+END SwapChildren;
 
 (* 0 for the root, 1 for its children, and so on. *)
 PROCEDURE (i: TreeItem) Depth*(): INTEGER;

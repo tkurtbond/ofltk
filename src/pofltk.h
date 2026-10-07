@@ -15,8 +15,15 @@
 
 #include <FL/Fl.H>
 #include <FL/Fl_Image.H>
+#include <FL/Fl_Menu_.H>
+#include <FL/Fl_Menu_Item.H>
+#include <FL/Fl_Multi_Label.H>
 #include <FL/Fl_Widget.H>
 #include <stdint.h>
+#include <stdlib.h>
+
+#include <utility>
+#include <vector>
 
 namespace ofl {
 
@@ -71,11 +78,12 @@ private:
 // widget, so open sets it once and nothing sets it again.
 //
 // It also holds what the widget uses and doesn't own, such as its label
-// images (slot, below), and releases them when the widget dies. ~Fl_Widget
+// images and multi-label (slot, below), and releases them when the widget
+// dies. ~Fl_Widget
 // deletes it after the widget's last use of them.
 class Ref : public Fl_Callback_User_Data {
 public:
-  enum { image, deimage, slots };
+  enum { image, deimage, label, slots };
   explicit Ref(intptr_t s) : self(s) {
     for (int i = 0; i < slots; i++) held[i] = 0;
   }
@@ -87,6 +95,7 @@ public:
     for (int i = 0; i < slots; i++) {
       if (held[i]) held[i]->release();
     }
+    for (auto &k : kept) k.first->release();
   }
   // Holds r (or nothing, if r is 0) in slot i, releasing what was there.
   void hold(int i, Shared *r) {
@@ -94,10 +103,41 @@ public:
     if (held[i]) held[i]->release();
     held[i] = r;
   }
+  // Holds r, which FLTK knows as key, beside the slots, for uses a
+  // widget has any number of (a browser's line icons); once, however
+  // many times it is kept.
+  void keep(Shared *r, const void *key) {
+    for (auto &k : kept) {
+      if (k.first == r) return;
+    }
+    r->hold();
+    kept.push_back(std::make_pair(r, key));
+  }
+  // Releases what is kept whose key used(key) says is no longer used.
+  template <class F> void drop_unused(F used) {
+    for (size_t i = 0; i < kept.size();) {
+      if (used(kept[i].second)) {
+        i++;
+      } else {
+        kept[i].first->release();
+        kept.erase(kept.begin() + i);
+      }
+    }
+  }
+  // What is kept for key, or 0.
+  Shared *kept_for(const void *key) const {
+    for (auto &k : kept) {
+      if (k.second == key) return k.first;
+    }
+    return 0;
+  }
+  // How many are kept, for the tests.
+  size_t kept_count() const { return kept.size(); }
   const intptr_t self;
 
 private:
   Shared *held[slots];
+  std::vector<std::pair<Shared *, const void *> > kept;
 };
 
 // Every opened widget's FLTK callback, defined in Fl.cpp; also how
@@ -108,6 +148,74 @@ inline Ref *ref_of(Fl_Widget *w) { return static_cast<Ref *>(w->user_data()); }
 
 inline intptr_t self_of(Fl_Widget *w) {
   return static_cast<Ref *>(w->user_data())->self;
+}
+
+// The label of a menu item showing an image or a multi-label (part):
+// FLTK's item points at ml, the item's own, so every item's text pointer
+// stays its own (FlMenus finds items by it), and ml's first part is the
+// image or the multi-label. name is the item's text, for its path, and
+// for when it is text again; FLTK reads an item's label as its text
+// whatever its type (doc/fltk-issues.md, 54), so pofltk asks item_name
+// instead. The menu keeps it
+// (Ref::keep, with ml's address) while the item shows it.
+class ItemLabel : public Shared {
+public:
+  ItemLabel(char *n, Shared *p) : name(n), part_(p) {
+    part_->hold();
+    ml.labela = 0;
+    ml.labelb = 0;
+    ml.typea = FL_NO_LABEL;
+    ml.typeb = FL_NO_LABEL;
+  }
+  ~ItemLabel() {
+    free(name);
+    part_->release();
+  }
+  Fl_Multi_Label ml;
+  char *const name;
+
+private:
+  Shared *part_;
+};
+
+// Whether item's text is an ItemLabel's ml, not text.
+inline bool special(const Fl_Menu_Item *item) {
+  return item->labeltype_ == _FL_MULTI_LABEL;
+}
+
+inline ItemLabel *item_label(Fl_Menu_ *m, const Fl_Menu_Item *item) {
+  if (!special(item)) return 0;
+  return dynamic_cast<ItemLabel *>(ref_of(m)->kept_for(item->text));
+}
+
+// item's text, whatever its label shows; 0 at the end of a menu.
+inline const char *item_name(Fl_Menu_ *m, const Fl_Menu_Item *item) {
+  ItemLabel *l = item_label(m, item);
+  return l ? l->name : item->text;
+}
+
+// Releases the item labels no item of m shows.
+inline void drop_item_labels(Fl_Menu_ *m) {
+  ref_of(m)->drop_unused([m](const void *key) {
+    const Fl_Menu_Item *items = m->menu();
+    for (int i = 0; items && i < m->size(); i++) {
+      if (special(items + i) && items[i].text == key) return true;
+    }
+    return false;
+  });
+}
+
+// Releases the line icons browser b no longer shows. Fl_Browser::icon
+// keeps the image's pointer, and a line removed or cleared drops it
+// unseen (doc/fltk-issues.md, 56), so whatever changes b's lines or
+// icons calls this after.
+template <class B> void drop_icons(B *b) {
+  ref_of(b)->drop_unused([b](const void *key) {
+    for (int l = 1; l <= b->size(); l++) {
+      if (b->icon(l) == key) return true;
+    }
+    return false;
+  });
 }
 
 // The Oberon object of w, or 0 if w is 0 or a widget pofltk didn't open

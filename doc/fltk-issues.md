@@ -226,6 +226,75 @@ Unless an entry says otherwise, the version is FLTK 1.4.5 (Fedora's
   crashed on the `FL_DND_LEAVE`, unshown, on Xvfb and on headless sway,
   and didn't with the window shown.
 
+### 54. A menu item's image or multi-label is read and freed as its text
+
+- **What happens**: an `Fl_Menu_Item` showing an image or a multi-label
+  (`image()`, `multi_label()`) holds the `Fl_Image *` or
+  `Fl_Multi_Label *` in its `text`. `Fl_Menu_::remove` and `replace`
+  `free()` that pointer, of an object made with `new` or static;
+  `item_pathname` and `find_index` copy its bytes into the path as if
+  they were text, so the item's path isn't found. Found 2026-10-07.
+- **Cause**: `Fl_Menu_::remove` and `replace` (`src/Fl_Menu_add.cxx`)
+  free every `text` of a menu made by `add()` (`alloc > 1`), whatever
+  its `labeltype_`; `Fl_Menu_::clear` (`src/Fl_Menu_.cxx`, GitHub issue
+  875) skips `_FL_IMAGE_LABEL` and `_FL_MULTI_LABEL`. `item_pathname_`
+  and `find_index` use `label()`, which is `text`. `Fl_Menu_::insert`
+  finds a path's submenus by their titles' `text` too.
+- **Effect on pofltk**: a menu item showing an image or a multi-label
+  (`FlImages.SetItemImage`, `SetItemMultiLabel`) points at an
+  `ofl::ItemLabel` of its own (`src/pofltk.h`), which keeps the item's
+  text as its name. Before `remove`, `clear_submenu` and `replace`,
+  `FlMenus.cpp` gives each such item its name again (`plain`), and
+  while `insert`, `item_pathname` and `find_index` run, the names stand
+  in for the labels (`Names`). So paths, `ItemLabel` and `FindIndex`
+  see the item's text.
+- **Confirmed**: a scratch C++ program giving an item an image, as
+  FLTK's `examples/howto-menu-with-images.cxx` does: valgrind's invalid
+  free in `remove`, and in `replace`; `item_pathname` gave 9 bytes, not
+  "File/New", and `find_index("File/New")` -1. `TestImages`.
+
+### 55. `Fl_Multi_Label::label(Fl_Widget *)` frees nothing, and the widget later frees it
+
+- **What happens**: a multi-label given to a widget whose label was
+  set with `copy_label` doesn't free the copied text, as its
+  documentation says it does: the text leaks, and the widget later
+  `free()`s the `Fl_Multi_Label` as its copied label. Found 2026-10-07.
+- **Cause**: `Fl_Multi_Label::label(Fl_Widget *)`
+  (`src/Fl_Multi_Label.cxx`) calls `Fl_Widget::label(Fl_Labeltype,
+  const char *)`, which (`FL/Fl_Widget.H`) assigns the type and the
+  pointer and leaves the `COPIED_LABEL` flag set; `~Fl_Widget` and
+  `Fl_Widget::label(const char *)` then free the pointer.
+- **Effect on pofltk**: `ofl_widget_multi_label` (`src/FlImages.cpp`)
+  calls `label(0)` first, which frees a copied label and clears the
+  flag. Text set on a widget showing a multi-label (`ofl_widget_copy_label`,
+  `src/Fl.cpp`) sets the type back to `FL_NORMAL_LABEL`, since
+  `copy_label` keeps the type, and FLTK would draw the text as a
+  multi-label.
+- **Confirmed**: a scratch C++ program, a box with `copy_label` and
+  then a multi-label, deleted: valgrind's invalid free in
+  `~Fl_Widget`, and the copied text definitely lost.
+
+### 57. `Fl::args` forgets an unknown option after once stopping at a word
+
+- **What happens**: `Fl::args` returns 0 when it stops at an option
+  that neither the program's handler nor FLTK knows, as documented,
+  but only until a call has stopped at a word that isn't an option
+  (`rest`, `-`, `--x`). After that, every call returns the index of
+  the unknown option instead, as if it were such a word. Found
+  2026-10-07.
+- **Cause**: `Fl::arg` (`src/Fl_arg.cxx`) sets the file-static
+  `return_i` when it meets a word that isn't an option, and `Fl::args`
+  returns `return_i ? i : 0` for an argument nothing took; nothing
+  clears `return_i`.
+- **Effect on pofltk**: `ofl_args` (`src/Fl.cpp`) ignores `Fl::args`'
+  result and looks at the word where it stopped: an option (a word
+  starting with `-`, not `-` alone, not `--`) is unknown, and
+  `ParseArgs` returns `FALSE`.
+- **Confirmed**: a scratch C++ program calling `Fl::args` on
+  `-bogus`, then on `-kbd rest`, then on `-bogus` again: 0, then 2,
+  then 1. `TestArgs` parses its command line twice, the second time
+  without the handler that takes `-o`.
+
 ## Pitfalls
 
 ### 5. FLTK keeps the label pointer it is given
@@ -718,3 +787,18 @@ Unless an entry says otherwise, the version is FLTK 1.4.5 (Fedora's
   `Fl_Group`, its checks of `Children`, `Add`, `Remove`, `Insert` and
   `Clear` fail.
 
+### 56. `Fl_Browser::icon` keeps the image, and a line removed drops it unseen
+
+- An `Fl_Browser` line's icon is an `Fl_Image *` FLTK keeps and never
+  deletes; the line can go by `remove`, `clear` or `load`, with
+  nothing to say the image is no longer used. FLTK documents it: the
+  caller keeps the icon allocated.
+- **Cause**: `FL_BLINE::icon` (`src/Fl_Browser.cxx`) is a plain
+  pointer, set by `Fl_Browser::icon` and freed with the line.
+- **Effect on pofltk**: the browser holds each image a line shows
+  (`ofl::Ref::keep`), and after each change to its lines or icons lets
+  go of those no line shows (`ofl::drop_icons`, `src/pofltk.h`).
+  `FlImages.SetLineIcon` sets one.
+- **Confirmed**: `TestImages` counts the images a browser holds
+  (`Probe.Kept`) as icons are set, lines removed and the browser
+  cleared; with the release after `clear` taken out, its check fails.

@@ -247,6 +247,7 @@ Programmer errors halt, as in polibfyaml. poc's `ASSERT(x, n)` prints
 | 75 | `RepeatTimeout` outside its own timer's `Fire` (`Fl.NotFiring`) |
 | 76 | a widget that must be a group's child isn't: a grid's cell, a flex's fixed size, a tab or wizard page, a tile's size range (`Fl.NotAChild`) |
 | 77 | a `Begin` and `End` out of order: an image surface's `End` that doesn't match the last `Begin` (`Fl.OutOfOrder`) |
+| 78 | an argument a call can't take: a multi-label for a window, a multi-label put in itself, a label type that needs an image (`Fl.Unsupported`) |
 
 Bad data from outside the program is never a halt: an image that fails
 to load, a file chooser cancelled. Those come back as `BOOLEAN` results.
@@ -1084,38 +1085,88 @@ nothing new; writing them found three small gaps, bound here.
 - `EventXRoot` and `EventYRoot` were bound already (Phase 2), so
   Phase 10 needn't add them.
 
-### Phase 10: Small additions
+### Phase 10: Small additions `[done]`
 
-Seven ports, and the small bindings they need:
+Done 2026-10-07, with poc 0.4.1 and FLTK 1.4.5: seven ports, and the
+small bindings they need. Each port was checked as Phase 9's were,
+against FLTK's own build under Xvfb, and matched pixel for pixel in
+every interaction tried; what they print matched too.
 
-- `Fl.BoxDX`, `BoxDY`, `BoxDW`, `BoxDH` (`Fl::box_dx` and the rest),
-  for `draggable-group`.
-- `Table.TabCellNav`/`SetTabCellNav`, for `table-spreadsheet`.
-- `TreeItem.SwapChildren`, for `tree-custom-sort`. The tree's map of
-  live items is unchanged by a swap; the test checks the order and
-  the items' serials.
-- A browser line's icon (`Fl_Browser::icon`), for
-  `howto-browser-with-icons`. FLTK keeps the image pointer, so the
-  browser's `Keeps` holds the image, counted, until the line or the
-  browser goes, as `Ref` does for a widget's image.
-- Multi-labels (`Fl_Multi_Label`), for widgets and menu items, for
-  `howto-menu-with-images`. Each holds text or an image, or another
-  multi-label, and FLTK keeps all the pointers: the text is copied,
-  and the images and the label are held until the widget or item
-  no longer uses them.
-- `fl_open_uri`, for `menubar-add`, returning `FALSE` with FLTK's
-  message rather than halting.
-- Command-line options: `Fl::args`, `Fl::arg` and `Fl::help`, and
-  `Fl_Window::show(argc, argv)`, for `howto-parse-args`. FLTK keeps
-  pointers into `argv` (the display name, geometry, title), so the
-  shim builds its own `argv`, kept for the program's life, from
-  poc's `Args`. A program's own options come back from an Oberon
-  procedure, as `Fl_Args_Handler` does.
-- Screen queries: `Fl::w`, `Fl::h`, `Fl::screen_count`,
-  `Fl::screen_xywh`, `Fl::screen_work_area`; and `event_shift` if
-  `EventState` doesn't cover it (`event_x_root` and `event_y_root`
-  are `EventXRoot` and `EventYRoot` already). Under sway's headless output and Xvfb
-  the screen is the output's size, which the test checks.
+- Ported: `DraggableGroup`, `TableSpreadsheet`, `TreeCustomSort`,
+  `BrowserWithIcons`, `MenuWithImages`, `MenubarAdd`, `ParseArgs`.
+  `TreeCustomSort` makes its numbers with a generator of its own, with
+  a fixed seed (poc has no `rand`), so it is compared with FLTK's by
+  its layout after sorting.
+- **`Fl.BoxDX`, `BoxDY`, `BoxDW`, `BoxDH`** (`Fl::box_dx` and the
+  rest), for `DraggableGroup`. A box type outside 0 to 255 halts
+  (`IndexOutOfRange`, `HaltBoxType`).
+- **`Table.TabCellNav`/`SetTabCellNav`**, for `TableSpreadsheet`.
+  `TestTable`: Tab is refused without it, and moves a cell with it,
+  Shift-Tab back.
+- **`TreeItem.SwapChildren`**, for `TreeCustomSort`. The tree's map
+  of live items is unchanged by a swap; `TestTree` checks the order
+  and that the items are the same items, with their children.
+- **`FlImages.SetLineIcon`** (`Fl_Browser::icon`), for
+  `BrowserWithIcons`. FLTK keeps the image and never deletes it, and a
+  line removed drops it unseen (`doc/fltk-issues.md`, 56). So `Ref`
+  gained a list of what a widget keeps beside its slots
+  (`Ref::keep`), each held once, and a browser lets go of the images
+  no line shows after each change to its lines (`ofl::drop_icons`).
+  `Probe.Kept` counts them, and `TestImages` checks the count as icons
+  are set and lines removed or cleared; with the release after
+  `clear` taken out, it fails. (Valgrind alone couldn't tell: the
+  browser lets go of everything when it is deleted.)
+- **Multi-labels** (`FlImages.MultiLabel`, `Fl_Multi_Label`), for
+  `MenuWithImages`: a resource like `Image`, of two parts, each
+  nothing, text (copied), an image or another multi-label, which it
+  holds. A widget shows one with `SetMultiLabel` (held in `Ref`'s new
+  `label` slot), a menu item with `SetItemMultiLabel`, and a menu item
+  an image with `SetItemImage`.
+  - FLTK reads a menu item's label as its text whatever its type, and
+    `remove` and `replace` `free()` it (`doc/fltk-issues.md`, 54). So
+    each such item points at an `ofl::ItemLabel` of its own, which
+    keeps the item's text: `ItemLabel`, `ItemPath`, `FindIndex` and
+    `Insert` see the text (`Names` swaps it in while they run), and
+    `Remove`, `ClearSubmenu` and `SetItemLabel` give the item its text
+    back first (`plain`). Each item's text pointer stays its own, so
+    `KeepValue` still finds the chosen item. An image item's label is
+    a multi-label of the image and nothing, which FLTK draws as it
+    draws the image (the port matched).
+  - `Fl_Multi_Label::label(Fl_Widget *)` doesn't free a copied label,
+    and leaves it marked to be freed, so the widget later frees the
+    multi-label (`doc/fltk-issues.md`, 55): the shim clears the label
+    first. `Widget.SetLabel` gives a widget text again;
+    `SetLabelType` keeps a multi-label; `GetLabel` of one is "".
+  - A multi-label put in itself, one for a window (whose label is its
+    title), and `SetLabelType` of 5 to 7 halt with the new code 78,
+    `Fl.Unsupported` (`HaltMultiLabel`).
+- **`Fl.OpenURI`** (`fl_open_uri`), for `MenubarAdd`: `FALSE`, with
+  FLTK's message, for a scheme FLTK doesn't open or no program to open
+  it. `TestWidget` tests only that path, which starts no program.
+- **Command-line options**: `Fl.ParseArgs` (`Fl::args`, with the
+  program's handler, an Oberon procedure given each argument's
+  number), `Arg`, `ArgsHelp` and `Window.ShowArgs`
+  (`show(argc, argv)`), for `ParseArgs`.
+  - FLTK keeps pointers into `argv`; poc's `Args.argv` is C's own,
+    which lasts the program's life, so the shim needs no copy (the
+    plan expected one).
+  - `Fl::args` returns 0 for an option no one knows only until it has
+    once stopped at a word that isn't an option: its flag for that is
+    static and never cleared (`doc/fltk-issues.md`, 57). The shim
+    decides from the word where parsing stopped.
+  - `TestArgs` is run by `make test` with a command line of its own
+    (`TESTARGS`): the program's options and FLTK's, `-s` and `-nokbd`
+    taking effect, `-g` and `-ti` on the window `ShowArgs` shows, and
+    a second parse finding an unknown option.
+  - `FindIndex` takes the `&`s of the labels, as FLTK's `find_index`
+    does; FlMenus' comment said otherwise, and is corrected.
+- **Screens**: `Fl.ScreenX`, `ScreenY`, `ScreenW`, `ScreenH` (the main
+  screen's work area), `ScreenCount`, `ScreenXYWH`, `ScreenWorkArea`
+  and `ScreenAt` (`screen_num`, 0 for a point on no screen).
+  `TestWidget` checks they agree, and prints screen 0: 640x480 on
+  xvfb-run's default screen, 1280x800 on `tools/with-sway.sh`'s
+  output, each its own work area. `EventState` already covers
+  `event_shift`.
 
 ### Phase 11: The event loop
 

@@ -184,8 +184,8 @@ PROCEDURE (m: Menu) IsItem*(i: INTEGER): BOOLEAN;
 BEGIN RETURN CIsItem(Fl.Live(m), i) # 0
 END IsItem;
 
-(* The index of the item with this path ("File/Open", as FLTK would show
-   it, without "&"), or -1. *)
+(* The index of the item with this path ("File/Open", with any "&" its
+   labels have: "&File/&Open"), or -1. *)
 PROCEDURE (m: Menu) FindIndex*(path-: ARRAY OF CHAR): INTEGER;
 BEGIN RETURN CFindIndex(Fl.Live(m), path)
 END FindIndex;
@@ -213,12 +213,14 @@ PROCEDURE (m: Menu) Pick*(i: INTEGER);
 BEGIN CPick(Item(m, i), i)
 END Pick;
 
-(* Item i's label, without its path; truncated to fit. *)
+(* Item i's label, without its path; truncated to fit. An item showing
+   an image or a multi-label (FlImages.SetItemImage) still has it. *)
 PROCEDURE (m: Menu) ItemLabel*(i: INTEGER; VAR label: ARRAY OF CHAR);
 BEGIN CLabel(Item(m, i), i, label, SHORT(LEN(label)))
 END ItemLabel;
 
-(* Copies label, which is not a path: a "/" in it is a slash. *)
+(* Copies label, which is not a path: a "/" in it is a slash. The item
+   shows it, not an image or a multi-label. *)
 PROCEDURE (m: Menu) SetItemLabel*(i: INTEGER; label-: ARRAY OF CHAR);
 BEGIN CSetLabel(Item(m, i), i, label)
 END SetItemLabel;

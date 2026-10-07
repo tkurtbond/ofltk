@@ -132,6 +132,19 @@ BEGIN
   Check.Check((r1 = 1) & (c1 = 1) & (r2 = 2) & (c2 = 3) & t.IsSelected(2, 2) & ~t.IsSelected(0, 0),
     "SetSelection, GetSelection, IsSelected");
   Check.Check(t.MoveCursor(2, 2, FALSE), "MoveCursor");
+
+  (* Tab: the next widget, or with TabCellNav the next cell *)
+  Check.Check(~t.TabCellNav(), "TabCellNav: off to start with");
+  Fl.SetFocus(t); t.SetSelection(1, 1, 1, 1);
+  Check.Check(~Probe.Key(Fl.EvKeyDown, Fl.KeyTab, {}, 09X), "Tab: the table leaves it to FLTK");
+  t.SetTabCellNav(TRUE);
+  Check.Check(t.TabCellNav() & Probe.Key(Fl.EvKeyDown, Fl.KeyTab, {}, 09X), "SetTabCellNav: the table takes Tab");
+  t.GetSelection(r1, c1, r2, c2);
+  Check.Check((r1 = 1) & (c1 = 2) & (r2 = 1) & (c2 = 2), "and moves to the next cell");
+  ok := Probe.Key(Fl.EvKeyDown, Fl.KeyTab, Fl.Shift, 09X);
+  t.GetSelection(r1, c1, r2, c2);
+  Check.Check(ok & (r1 = 1) & (c1 = 1), "Shift-Tab: the cell before");
+  t.SetTabCellNav(FALSE); Fl.SetFocus(NIL);
   t.SetRows(100);
   t.SetRowPosition(50);
   Check.Check(t.RowPosition() = 50, "SetRowPosition");

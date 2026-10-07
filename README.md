@@ -19,7 +19,7 @@ It covers:
 - text buffers, displays and editors;
 - browsers and trees, tables;
 - images (PNG, JPEG, GIF, BMP, XPM, PNM, SVG), offscreen drawing;
-- the clipboard, preferences.
+- the clipboard, preferences, command-line options, screens.
 
 ## Requirements
 
@@ -119,13 +119,17 @@ END Hello.
     `TableWithRightClickMenu`, `TableWithRightColumnStretchFit`,
     `TableSpreadsheetWithKeyboardNav`;
   - text: `TextDisplayWithColors`, `TextEditorWithDynamicColors`;
-  - `NativeFileChooserSimpleApp`: File/Open, Save and Save As.
+  - `NativeFileChooserSimpleApp`: File/Open, Save and Save As;
+  - `DraggableGroup`, `TableSpreadsheet`, `TreeCustomSort`;
+  - images in lists and menus: `BrowserWithIcons`, `MenuWithImages`;
+  - `MenubarAdd`, and `ParseArgs`: a program's own command-line
+    options beside FLTK's.
 
 ## Modules
 
 | Module | Contents |
 |---|---|
-| `Fl` | `Widget`, `Group`, `Window`, `DoubleWindow`, `Box`; the event loop, timers, events, colors, fonts, box and label types, schemes, options, the clipboard |
+| `Fl` | `Widget`, `Group`, `Window`, `DoubleWindow`, `Box`; the event loop, timers, events, colors, fonts, box and label types, schemes, options, the clipboard, command-line options, screens, opening URIs |
 | `FlDraw` | `fl_draw.H`: lines, shapes, paths, transformations, text, fonts, clipping, boxes and symbols |
 | `FlButtons` | `Button` and its kinds: check, light, round, radio, return, repeat, toggle |
 | `FlInputs` | `Input` and its kinds, `Output`, `MultilineOutput` |
@@ -135,7 +139,7 @@ END Hello.
 | `FlDialogs` | messages, questions, input, colors, file choosers, `NativeFileChooser` |
 | `FlText` | `TextBuffer`, `TextDisplay`, `TextEditor`, styles |
 | `FlBrowsers` | `Browser` and its kinds, `CheckBrowser`, `FileBrowser`, `Tree`, `TreeItem` |
-| `FlImages` | `Image` (loaded, decoded, or from pixels), widgets' images, `Surface` (offscreen drawing) |
+| `FlImages` | `Image` (loaded, decoded, or from pixels), `MultiLabel`; images on widgets, browser lines and menu items; `Surface` (offscreen drawing) |
 | `FlPreferences` | `Preferences`: FLTK's settings databases |
 | `FlTable` | `Table`, `TableRow`: cells the program draws |
 
@@ -169,11 +173,11 @@ callback, or a `Draw` or `Handle`, FLTK deletes it later, when its
 event loop next runs (`Fl::delete_widget`), since FLTK may still be
 using it.
 
-**Resources.** `TextBuffer`, `Image`, `Surface`, `Preferences` and
-`NativeFileChooser` belong to the program: `Close` them when done
-(`Close` is idempotent, and the collector closes one lost without it). A
-widget using one keeps it, so closing a buffer a display shows, or an
-image a box shows, is safe.
+**Resources.** `TextBuffer`, `Image`, `MultiLabel`, `Surface`,
+`Preferences` and `NativeFileChooser` belong to the program: `Close`
+them when done (`Close` is idempotent, and the collector closes one lost
+without it). A widget using one keeps it, so closing a buffer a display
+shows, or an image a box, a browser line or a menu item shows, is safe.
 
 **Strings.** Labels and other text FLTK keeps are copied, so an Oberon
 string may die with its procedure.
@@ -193,6 +197,7 @@ prints `assertion failed (n)`:
 | 75 | `RepeatTimeout` outside its timer's `Fire` (`Fl.NotFiring`) |
 | 76 | a widget that must be a group's child isn't (`Fl.NotAChild`) |
 | 77 | a surface's `Begin` and `End` out of order (`Fl.OutOfOrder`) |
+| 78 | an argument a call can't take: a multi-label for a window, or put in itself (`Fl.Unsupported`) |
 
 ## FLTK's problems
 

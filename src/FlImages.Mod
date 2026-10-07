@@ -1,11 +1,13 @@
-MODULE FlImages; (* Images: loaded from files or memory, made from pixels, drawn offscreen *)
+MODULE FlImages; (* Images: loaded from files or memory, made from pixels, drawn offscreen; multi-labels *)
 
 (* An Image is a picture FLTK can draw: loaded from a PNG, JPEG, GIF, BMP,
    XPM, PNM or SVG file (the format told by its contents), decoded from
    bytes in memory, or made from RGB pixels. It is a resource the program
    owns, as a TextBuffer is: Close it when done. A widget showing it as
    its label keeps it until the widget is deleted or shows another, so
-   closing an image a widget shows is safe. An image the program loses
+   closing an image a widget shows is safe; so does a browser showing it
+   on a line, and a menu showing it on an item. A MultiLabel puts text
+   and images side by side, in a widget's label or a menu item. An image the program loses
    without closing is closed by the collector. Using a closed image halts
    (Fl.ClosedResource).
 
@@ -17,7 +19,7 @@ MODULE FlImages; (* Images: loaded from files or memory, made from pixels, drawn
    knows color names ("red") on X11 alone, and draws them gray under
    Wayland. The C++ part is FlImages.cpp. *)
 
-IMPORT SYSTEM, GarbageCollectedHeap, Fl;
+IMPORT SYSTEM, GarbageCollectedHeap, Fl, FlBrowsers, FlMenus;
 
 CONST
   (* what an image is (Image.Kind) *)
@@ -28,6 +30,15 @@ CONST
 TYPE
   Image* = POINTER TO ImageDesc;
   ImageDesc* = RECORD
+    h: SYSTEM.ADDRESS
+  END;
+
+  (* A label of two parts, drawn side by side (FLTK's Fl_Multi_Label):
+     each nothing, text, an image, or another multi-label, for more parts.
+     A resource, as an Image is: the widgets and menu items showing it
+     keep it, and it keeps its parts. *)
+  MultiLabel* = POINTER TO MultiLabelDesc;
+  MultiLabelDesc* = RECORD
     h: SYSTEM.ADDRESS
   END;
 
@@ -43,6 +54,7 @@ TYPE
 VAR
   openImages-: INTEGER;    (* images made and not yet closed or finalized *)
   openSurfaces-: INTEGER;  (* the same, for surfaces *)
+  openMultiLabels-: INTEGER;  (* the same, for multi-labels *)
   current: Surface;        (* the surface last begun and not ended *)
 
 PROCEDURE ["C", "ofl_image_load"] CLoad(name: ARRAY OF CHAR): SYSTEM.ADDRESS;
@@ -59,6 +71,13 @@ PROCEDURE ["C", "ofl_image_pixel"] CPixel(i: SYSTEM.ADDRESS; x, y: SYSTEM.INT32;
 PROCEDURE ["C", "ofl_image_save_png"] CSavePNG(i: SYSTEM.ADDRESS; name: ARRAY OF CHAR): SYSTEM.INT32;
 PROCEDURE ["C", "ofl_image_copy_to_clipboard"] CCopyToClipboard(i: SYSTEM.ADDRESS);
 PROCEDURE ["C", "ofl_take_pasted_image"] CTakePastedImage(): SYSTEM.ADDRESS;
+PROCEDURE ["C", "ofl_multi_new"] CMultiNew(): SYSTEM.ADDRESS;
+PROCEDURE ["C", "ofl_multi_close"] CMultiClose(m: SYSTEM.ADDRESS);
+PROCEDURE ["C", "ofl_multi_set"] CMultiSet(m: SYSTEM.ADDRESS; i, kind: SYSTEM.INT32; s: ARRAY OF CHAR; t: SYSTEM.INT32; p: SYSTEM.ADDRESS);
+PROCEDURE ["C", "ofl_multi_contains"] CMultiContains(m, n: SYSTEM.ADDRESS): SYSTEM.INT32;
+PROCEDURE ["C", "ofl_widget_multi_label"] CWidgetMultiLabel(w: SYSTEM.ADDRESS; m: SYSTEM.ADDRESS);
+PROCEDURE ["C", "ofl_menu_item_label"] CMenuItemLabel(m: SYSTEM.ADDRESS; i, kind: SYSTEM.INT32; p: SYSTEM.ADDRESS);
+PROCEDURE ["C", "ofl_browser_icon"] CBrowserIcon(b: SYSTEM.ADDRESS; line: SYSTEM.INT32; i: SYSTEM.ADDRESS);
 PROCEDURE ["C", "ofl_widget_image"] CWidgetImage(w: SYSTEM.ADDRESS; slot: SYSTEM.INT32; i: SYSTEM.ADDRESS);
 PROCEDURE ["C", "ofl_window_icon"] CWindowIcon(w, i: SYSTEM.ADDRESS);
 PROCEDURE ["C", "ofl_surface_new"] CSurfaceNew(w, h: SYSTEM.INT32): SYSTEM.ADDRESS;
@@ -295,6 +314,120 @@ END SetInactiveImage;
 PROCEDURE SetIcon*(win: Fl.Window; i: Image);
 BEGIN CWindowIcon(Fl.Live(win), Handle(i))
 END SetIcon;
+
+(* Shows i at the left of b's line, which is 1 to b.Count(); NIL for
+   none. The line is made as tall as the image. b keeps i while a line
+   shows it. *)
+PROCEDURE SetLineIcon*(b: FlBrowsers.Browser; line: INTEGER; i: Image);
+  VAR h: SYSTEM.ADDRESS;
+BEGIN
+  h := Fl.Live(b); ASSERT((line >= 1) & (line <= b.Count()), Fl.IndexOutOfRange);
+  CBrowserIcon(h, line, Handle(i))
+END SetLineIcon;
+
+(* Multi-labels *)
+
+PROCEDURE CloseMulti(m: MultiLabel);
+BEGIN
+  IF m.h # 0 THEN CMultiClose(m.h); m.h := 0; DEC(openMultiLabels) END
+END CloseMulti;
+
+(* GC finalizer: a multi-label lost without Close. *)
+PROCEDURE FinalizeMulti(obj: SYSTEM.PTR);
+BEGIN CloseMulti(SYSTEM.VAL(MultiLabel, obj))
+END FinalizeMulti;
+
+(* m's handle, halting if m is closed. *)
+PROCEDURE Mh(m: MultiLabel): SYSTEM.ADDRESS;
+BEGIN
+  ASSERT(m # NIL, Fl.NilArgument); ASSERT(m.h # 0, Fl.ClosedResource);
+  RETURN m.h
+END Mh;
+
+(* Opens m with both parts nothing. *)
+PROCEDURE OpenMultiLabel*(m: MultiLabel);
+BEGIN
+  ASSERT(m # NIL, Fl.NilArgument); ASSERT(m.h = 0, Fl.OpenedTwice);
+  m.h := CMultiNew(); INC(openMultiLabels);
+  GarbageCollectedHeap.RegisterFinalizer(m, FinalizeMulti)
+END OpenMultiLabel;
+
+(* Gives up the program's hold on m; idempotent. What shows m keeps it. *)
+PROCEDURE (m: MultiLabel) Close*;
+BEGIN CloseMulti(m)
+END Close;
+
+PROCEDURE (m: MultiLabel) IsOpen*(): BOOLEAN;
+BEGIN RETURN m.h # 0
+END IsOpen;
+
+PROCEDURE Part(m: MultiLabel; part: INTEGER): SYSTEM.ADDRESS;
+  VAR h: SYSTEM.ADDRESS;
+BEGIN h := Mh(m); ASSERT((part = 0) OR (part = 1), Fl.IndexOutOfRange); RETURN h
+END Part;
+
+(* Part 0 is drawn first, at the left (or top, as the label is aligned),
+   and part 1 after it. A change shows when what shows m is redrawn. *)
+
+(* The part becomes text, copied, drawn as label type t (Fl.NormalLabel
+   to Fl.EmbossedLabel); "" for nothing. *)
+PROCEDURE (m: MultiLabel) SetText*(part: INTEGER; text-: ARRAY OF CHAR; t: INTEGER);
+  VAR h: SYSTEM.ADDRESS;
+BEGIN
+  h := Part(m, part); ASSERT((t >= Fl.NormalLabel) & (t <= Fl.EmbossedLabel), Fl.Unsupported);
+  IF text = "" THEN CMultiSet(h, part, 0, "", 0, 0) ELSE CMultiSet(h, part, 1, text, t, 0) END
+END SetText;
+
+(* The part becomes image i, which m keeps; NIL for nothing. *)
+PROCEDURE (m: MultiLabel) SetImage*(part: INTEGER; i: Image);
+  VAR h: SYSTEM.ADDRESS;
+BEGIN
+  h := Part(m, part);
+  IF i = NIL THEN CMultiSet(h, part, 0, "", 0, 0) ELSE CMultiSet(h, part, 2, "", 0, Hd(i)) END
+END SetImage;
+
+(* The part becomes multi-label n, which m keeps; NIL for nothing. n
+   that is m, or holds it, would be drawn forever, and halts
+   (Fl.Unsupported). *)
+PROCEDURE (m: MultiLabel) SetMulti*(part: INTEGER; n: MultiLabel);
+  VAR h: SYSTEM.ADDRESS;
+BEGIN
+  h := Part(m, part);
+  IF n = NIL THEN CMultiSet(h, part, 0, "", 0, 0)
+  ELSE ASSERT(CMultiContains(Mh(n), h) = 0, Fl.Unsupported); CMultiSet(h, part, 3, "", 0, n.h)
+  END
+END SetMulti;
+
+(* w's label becomes m, which w keeps until it shows another label, or
+   is deleted; NIL for no label. Fl.Widget.SetLabel gives it text again.
+   Not for a window, whose label is its title (Fl.Unsupported). *)
+PROCEDURE SetMultiLabel*(w: Fl.Widget; m: MultiLabel);
+  VAR h: SYSTEM.ADDRESS;
+BEGIN
+  h := Fl.Live(w); ASSERT(~(w IS Fl.Window), Fl.Unsupported);
+  IF m = NIL THEN CWidgetMultiLabel(h, 0) ELSE CWidgetMultiLabel(h, Mh(m)) END
+END SetMultiLabel;
+
+(* Menu items *)
+
+(* Item i of menu m shows image i, which the menu keeps while the item
+   shows it; NIL for its text again. The item keeps its text, which its
+   path is made of (ItemPath, FindIndex and Insert of FlMenus.Menu), and
+   ItemLabel gives. Removing the item, or SetItemLabel, lets i go. *)
+PROCEDURE SetItemImage*(m: FlMenus.Menu; item: INTEGER; i: Image);
+  VAR h: SYSTEM.ADDRESS;
+BEGIN
+  h := Fl.Live(m); ASSERT(m.IsItem(item), Fl.IndexOutOfRange);
+  IF i = NIL THEN CMenuItemLabel(h, item, 0, 0) ELSE CMenuItemLabel(h, item, 1, Hd(i)) END
+END SetItemImage;
+
+(* The same, for multi-label l. *)
+PROCEDURE SetItemMultiLabel*(m: FlMenus.Menu; item: INTEGER; l: MultiLabel);
+  VAR h: SYSTEM.ADDRESS;
+BEGIN
+  h := Fl.Live(m); ASSERT(m.IsItem(item), Fl.IndexOutOfRange);
+  IF l = NIL THEN CMenuItemLabel(h, item, 0, 0) ELSE CMenuItemLabel(h, item, 2, Mh(l)) END
+END SetItemMultiLabel;
 
 (* Surfaces *)
 

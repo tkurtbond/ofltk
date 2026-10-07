@@ -65,6 +65,14 @@ BEGIN
   c := t.Add("c"); d := t.Add("d"); e := t.Add("e");
   Check.Check((root.Children() = 4) & FlBrowsers.Same(root.Child(0), a) & FlBrowsers.Same(root.Child(3), e),
     "Children and Child");
+  root.SwapChildren(0, 3);
+  Check.Check(FlBrowsers.Same(root.Child(0), e) & FlBrowsers.Same(root.Child(3), a)
+    & FlBrowsers.Same(root.Child(1), c) & FlBrowsers.Same(root.Next(), e) & FlBrowsers.Same(t.Last(), b),
+    "SwapChildren");
+  Check.Check(a.IsLive() & e.IsLive() & FlBrowsers.Same(a.Child(0), b) & FlBrowsers.Same(b.Parent(), a),
+    "the items swapped are the same items, with their children");
+  root.SwapChildren(3, 0);
+  Check.Check(FlBrowsers.Same(root.Child(0), a) & FlBrowsers.Same(root.Child(3), e), "and back");
   Check.Check(FlBrowsers.Same(t.First(), root) & FlBrowsers.Same(root.Next(), a) & FlBrowsers.Same(a.Next(), b)
     & FlBrowsers.Same(b.Next(), c) & FlBrowsers.Same(t.Last(), e) & (e.Next() = NIL)
     & FlBrowsers.Same(c.Prev(), b), "Next and Prev go down the tree, children after their parent");

@@ -5,6 +5,7 @@ MODULE Probe; (* For the tests: a widget's pixels, and events sent as from the u
 IMPORT SYSTEM, Fl;
 
 PROCEDURE ["C", "ofltest_capture"] CCapture(w: SYSTEM.ADDRESS): SYSTEM.INT32;
+PROCEDURE ["C", "ofltest_kept"] CKept(w: SYSTEM.ADDRESS): SYSTEM.INT32;
 PROCEDURE ["C", "ofltest_pixel"] CPixel(x, y: SYSTEM.INT32): SYSTEM.INT32;
 PROCEDURE ["C", "ofltest_release"] CRelease;
 PROCEDURE ["C", "ofltest_mouse"] CMouse(win: SYSTEM.ADDRESS; event, x, y, button, state, clicks: SYSTEM.INT32): SYSTEM.INT32;
@@ -21,6 +22,12 @@ PROCEDURE ["C", "ofltest_key"] CKey(event, key, state: SYSTEM.INT32; s: ARRAY OF
 PROCEDURE Capture*(w: Fl.Widget): BOOLEAN;
 BEGIN RETURN CCapture(w.h) # 0
 END Capture;
+
+(* How many resources w keeps beside its label images: a browser's
+   line icons. *)
+PROCEDURE Kept*(w: Fl.Widget): INTEGER;
+BEGIN RETURN CKept(w.h)
+END Kept;
 
 (* Pixel x, y of the capture, from w's top left, as Fl.RGB gives it: its
    red, green and blue, and 0. *)

@@ -184,6 +184,7 @@ void ofl_browser_insert(intptr_t b, int32_t line, const char *s) {
 
 void ofl_browser_remove(intptr_t b, int32_t line) {
   browser(b)->remove(line);
+  ofl::drop_icons(browser(b));
 }
 
 void ofl_browser_move(intptr_t b, int32_t to, int32_t from) {
@@ -194,12 +195,17 @@ void ofl_browser_swap(intptr_t b, int32_t a, int32_t c) {
   browser(b)->swap(a, c);
 }
 
-void ofl_browser_clear(intptr_t b) { browser(b)->clear(); }
+void ofl_browser_clear(intptr_t b) {
+  browser(b)->clear();
+  ofl::drop_icons(browser(b));
+}
 
 // 1 if the file was read. Fl_Browser::load returns 1 for "", having
 // read nothing.
 int32_t ofl_browser_load(intptr_t b, const char *name) {
-  return browser(b)->load(name) != 0 && name[0] != 0;
+  int r = browser(b)->load(name);
+  ofl::drop_icons(browser(b));
+  return r != 0 && name[0] != 0;
 }
 
 void ofl_browser_text(intptr_t b, int32_t line, char *buf, int32_t n) {
@@ -287,6 +293,7 @@ int32_t ofl_file_browser_load(intptr_t b, const char *dir) {
   char *d = strdup(dir);
   if (d == 0) return 0;
   int n = files(b)->load(d);
+  ofl::drop_icons(files(b));
   free(k->dir);
   k->dir = d;
   return n > 0;
@@ -507,6 +514,12 @@ intptr_t ofl_tree_item_item(intptr_t t, intptr_t p, int32_t what,
 intptr_t ofl_tree_item_child(intptr_t t, intptr_t p, int32_t i,
                              int32_t *serial) {
   return hand(t, item(p)->child(i), serial);
+}
+
+// Swaps children a and b of p, both checked by the caller. The tree's map
+// of live items holds items, not their places, so it is unchanged.
+void ofl_tree_item_swap(intptr_t p, int32_t a, int32_t b) {
+  item(p)->swap_children(a, b);
 }
 
 // what: 0 add a child, 1 insert a child at pos, 2 insert above (0 for the

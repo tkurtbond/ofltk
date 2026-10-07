@@ -20,7 +20,7 @@ MODULE Fl; (* pofltk's core: widgets, groups, windows, boxes, timers, the event 
 
    The C++ part is Fl.cpp, with pofltk.h. *)
 
-IMPORT SYSTEM;
+IMPORT SYSTEM, Args;
 
 CONST
   (* ASSERT codes of programmer errors (PLAN.md, "Halt codes") *)
@@ -32,6 +32,7 @@ CONST
   NotFiring* = 75;      (* RepeatTimeout outside its timer's Fire *)
   NotAChild* = 76;      (* a widget that must be a group's child isn't *)
   OutOfOrder* = 77;     (* an End that doesn't match the last Begin *)
+  Unsupported* = 78;    (* an argument a call can't take: a multi-label for a window, or in itself *)
 
   (* where Copy puts text, and Paste takes it from: FLTK has no names *)
   Selection* = 0;  (* the selection buffer, pasted with the middle button on X11 *)
@@ -411,12 +412,19 @@ TYPE
   SelfProc = PROCEDURE (self: SYSTEM.ADDRESS);
   HandleProc = PROCEDURE (self: SYSTEM.ADDRESS; event: SYSTEM.INT32): SYSTEM.INT32;
   ResizeProc = PROCEDURE (self: SYSTEM.ADDRESS; x, y, w, h: SYSTEM.INT32);
+  ArgProc = PROCEDURE (i: SYSTEM.INT32): SYSTEM.INT32;
+
+  (* A program's own command-line options (ParseArgs): given argument i
+     (Args.Get), the number of words of it the program uses: 0 if it
+     isn't one of them, 1 for an option alone, 2 for one with a value. *)
+  ArgHandler* = PROCEDURE (i: INTEGER): INTEGER;
 
 VAR
   widgets: Widget;  (* every open widget: the registry *)
   timers: Timer;    (* every pending timer *)
   openCount, pendingCount: LONGINT;
   firing: Timer;    (* the timer whose Fire is running, or NIL *)
+  argHandler: ArgHandler;  (* the handler of the ParseArgs running *)
 
 PROCEDURE ["C", "ofl_register"] CRegister(callback, draw: SelfProc; handle: HandleProc; resize: ResizeProc; deleted, timeout: SelfProc);
 PROCEDURE ["C", "ofl_group_new"] CGroupNew(x, y, w, h: SYSTEM.INT32; self: SYSTEM.ADDRESS): SYSTEM.ADDRESS;
@@ -483,6 +491,15 @@ PROCEDURE ["C", "ofl_event_inside"] CEventInside(x, y, w, h: SYSTEM.INT32): SYST
 PROCEDURE ["C", "ofl_focus"] CFocus(): SYSTEM.ADDRESS;
 PROCEDURE ["C", "ofl_belowmouse"] CBelowmouse(): SYSTEM.ADDRESS;
 PROCEDURE ["C", "ofl_pushed"] CPushed(): SYSTEM.ADDRESS;
+PROCEDURE ["C", "ofl_open_uri"] COpenURI(uri: ARRAY OF CHAR; VAR msg: ARRAY OF CHAR; n: SYSTEM.INT32): SYSTEM.INT32;
+PROCEDURE ["C", "ofl_screen"] CScreen(what: SYSTEM.INT32): SYSTEM.INT32;
+PROCEDURE ["C", "ofl_screen_count"] CScreenCount(): SYSTEM.INT32;
+PROCEDURE ["C", "ofl_screen_xywh"] CScreenXYWH(n, work: SYSTEM.INT32; VAR x, y, w, h: SYSTEM.INT32);
+PROCEDURE ["C", "ofl_screen_num"] CScreenNum(x, y: SYSTEM.INT32): SYSTEM.INT32;
+PROCEDURE ["C", "ofl_args"] CArgs(argc: SYSTEM.INT32; argv: SYSTEM.ADDRESS; VAR i: SYSTEM.INT32; handler: ArgProc): SYSTEM.INT32;
+PROCEDURE ["C", "ofl_arg"] CArg(argc: SYSTEM.INT32; argv: SYSTEM.ADDRESS; i: SYSTEM.INT32): SYSTEM.INT32;
+PROCEDURE ["C", "ofl_args_help"] CArgsHelp(): SYSTEM.ADDRESS;
+PROCEDURE ["C", "ofl_window_show_args"] CWindowShowArgs(w: SYSTEM.ADDRESS; argc: SYSTEM.INT32; argv: SYSTEM.ADDRESS);
 PROCEDURE ["C", "ofl_set_focus"] CSetFocus(w: SYSTEM.ADDRESS);
 PROCEDURE ["C", "ofl_group_begin"] CBegin(g: SYSTEM.ADDRESS);
 PROCEDURE ["C", "ofl_group_end"] CEnd(g: SYSTEM.ADDRESS);
@@ -549,6 +566,7 @@ PROCEDURE ["C", "ofl_contrast"] CContrast(fg, bg: SYSTEM.INT32): SYSTEM.INT32;
 PROCEDURE ["C", "ofl_inactive"] CInactive(c: SYSTEM.INT32): SYSTEM.INT32;
 PROCEDURE ["C", "ofl_normal_size"] CNormalSize(): SYSTEM.INT32;
 PROCEDURE ["C", "ofl_set_normal_size"] CSetNormalSize(s: SYSTEM.INT32);
+PROCEDURE ["C", "ofl_box_d"] CBoxD(b, what: SYSTEM.INT32): SYSTEM.INT32;
 PROCEDURE ["C", "ofl_set_scheme"] CSetScheme(name: ARRAY OF CHAR): SYSTEM.INT32;
 PROCEDURE ["C", "ofl_scheme"] CScheme(): SYSTEM.ADDRESS;
 
@@ -696,11 +714,12 @@ PROCEDURE (w: Widget) Handle*(event: INTEGER): BOOLEAN;
 BEGIN RETURN CBaseHandle(Live(w), event) # 0
 END Handle;
 
+(* Copied; it replaces a multi-label (FlImages.SetMultiLabel). *)
 PROCEDURE (w: Widget) SetLabel*(label-: ARRAY OF CHAR);
 BEGIN CCopyLabel(Live(w), label)
 END SetLabel;
 
-(* The label, truncated to fit label, "" for none. *)
+(* The label, truncated to fit label, "" for none or a multi-label. *)
 PROCEDURE (w: Widget) GetLabel*(VAR label: ARRAY OF CHAR);
 BEGIN FromC(CLabel(Live(w)), label)
 END GetLabel;
@@ -744,8 +763,11 @@ PROCEDURE (w: Widget) LabelType*(): INTEGER;
 BEGIN RETURN CLabelType(Live(w))
 END LabelType;
 
+(* NormalLabel to EmbossedLabel. The types of a multi-label, an image or
+   an icon (5 to 7) halt (Unsupported): FlImages.SetMultiLabel gives a
+   widget a multi-label, which it keeps whatever type is set. *)
 PROCEDURE (w: Widget) SetLabelType*(t: INTEGER);
-BEGIN CSetLabelType(Live(w), t)
+BEGIN ASSERT((t < 5) OR (t > 7), Unsupported); CSetLabelType(Live(w), t)
 END SetLabelType;
 
 (* Where the label goes: a set of the Align constants. *)
@@ -996,6 +1018,15 @@ END Child;
 
 (* Window *)
 
+(* Shows w, as Show does, with FLTK's command-line options (ParseArgs,
+   which this calls first if no ParseArgs or Arg has): its title, its
+   class name, and, for the first window shown this way, its geometry;
+   and the colors and scheme. A title or class not given is the
+   program's name. *)
+PROCEDURE (w: Window) ShowArgs*;
+BEGIN CWindowShowArgs(Live(w), Args.argc, Args.argv)
+END ShowArgs;
+
 (* With no action, FLTK's default: hide the window (Fl::atclose). *)
 PROCEDURE (w: Window) Callback*;
 BEGIN
@@ -1130,6 +1161,29 @@ END NormalSize;
 PROCEDURE SetNormalSize*(s: INTEGER);
 BEGIN CSetNormalSize(s)
 END SetNormalSize;
+
+(* The border of box type b, as drawn: how far inside a box's left and
+   top edges what it holds starts (BoxDX, BoxDY), and how much narrower
+   and shorter it is (BoxDW, BoxDH). b is from 0 to 255. *)
+PROCEDURE BoxD(b, what: INTEGER): INTEGER;
+BEGIN ASSERT((b >= 0) & (b <= 255), IndexOutOfRange); RETURN CBoxD(b, what)
+END BoxD;
+
+PROCEDURE BoxDX*(b: INTEGER): INTEGER;
+BEGIN RETURN BoxD(b, 0)
+END BoxDX;
+
+PROCEDURE BoxDY*(b: INTEGER): INTEGER;
+BEGIN RETURN BoxD(b, 1)
+END BoxDY;
+
+PROCEDURE BoxDW*(b: INTEGER): INTEGER;
+BEGIN RETURN BoxD(b, 2)
+END BoxDW;
+
+PROCEDURE BoxDH*(b: INTEGER): INTEGER;
+BEGIN RETURN BoxD(b, 3)
+END BoxDH;
 
 (* FLTK's look: "none" (or "base"), "plastic", "gtk+", "gleam" or "oxy".
    FALSE if FLTK doesn't know name; the look is then "none". *)
@@ -1352,6 +1406,104 @@ END BelowMouse;
 PROCEDURE Pushed*(): Widget;
 BEGIN RETURN SYSTEM.VAL(Widget, CPushed())
 END Pushed;
+
+(* Screens, numbered from 0 *)
+
+(* The work area of the main screen, screen 0: the screen less what the
+   desktop keeps, such as panels. *)
+PROCEDURE ScreenX*(): INTEGER;
+BEGIN RETURN CScreen(0)
+END ScreenX;
+
+PROCEDURE ScreenY*(): INTEGER;
+BEGIN RETURN CScreen(1)
+END ScreenY;
+
+PROCEDURE ScreenW*(): INTEGER;
+BEGIN RETURN CScreen(2)
+END ScreenW;
+
+PROCEDURE ScreenH*(): INTEGER;
+BEGIN RETURN CScreen(3)
+END ScreenH;
+
+PROCEDURE ScreenCount*(): INTEGER;
+BEGIN RETURN CScreenCount()
+END ScreenCount;
+
+(* Screen n's place and size, from 0 to ScreenCount() - 1. *)
+PROCEDURE ScreenXYWH*(n: INTEGER; VAR x, y, w, h: INTEGER);
+  VAR cx, cy, cw, ch: SYSTEM.INT32;
+BEGIN
+  ASSERT((n >= 0) & (n < CScreenCount()), IndexOutOfRange);
+  CScreenXYWH(n, 0, cx, cy, cw, ch); x := cx; y := cy; w := cw; h := ch
+END ScreenXYWH;
+
+(* Screen n's work area. *)
+PROCEDURE ScreenWorkArea*(n: INTEGER; VAR x, y, w, h: INTEGER);
+  VAR cx, cy, cw, ch: SYSTEM.INT32;
+BEGIN
+  ASSERT((n >= 0) & (n < CScreenCount()), IndexOutOfRange);
+  CScreenXYWH(n, 1, cx, cy, cw, ch); x := cx; y := cy; w := cw; h := ch
+END ScreenWorkArea;
+
+(* The screen the point x, y is on; 0 if it is on none. *)
+PROCEDURE ScreenAt*(x, y: INTEGER): INTEGER;
+BEGIN RETURN CScreenNum(x, y)
+END ScreenAt;
+
+(* Command-line options *)
+
+(* The C++ part's handler: argHandler's, checked. *)
+PROCEDURE CallArgHandler(i: SYSTEM.INT32): SYSTEM.INT32;
+  VAR n: INTEGER;
+BEGIN
+  n := argHandler(i);
+  ASSERT((n >= 0) & (n <= Args.argc - i), IndexOutOfRange);
+  RETURN n
+END CallArgHandler;
+
+(* Parses the command line's options (Args), the program's and FLTK's,
+   from argument 1: handler, if not NIL, is offered each first, then
+   FLTK (Arg). i is the number of the first argument not parsed:
+   Args.argc if all were, or the first not an option (not starting with
+   "-", or starting with "--", or "-" alone), or the first option
+   neither knows, or that lacks its value, when the result is FALSE.
+   FLTK's options take effect at once (-scheme, -kbd, -dnd, -tooltips,
+   and the rest), or are kept for ShowArgs. ArgsHelp lists them. *)
+PROCEDURE ParseArgs*(handler: ArgHandler; VAR i: INTEGER): BOOLEAN;
+  VAR r: INTEGER; n: SYSTEM.INT32;
+BEGIN
+  argHandler := handler;
+  IF handler = NIL THEN r := CArgs(Args.argc, Args.argv, n, NIL)
+  ELSE r := CArgs(Args.argc, Args.argv, n, CallArgHandler)
+  END;
+  argHandler := NIL; i := n;
+  RETURN r # 0
+END ParseArgs;
+
+(* Parses argument i, if it is one of FLTK's options: the number of words
+   used, 0 if it isn't one. *)
+PROCEDURE Arg*(i: INTEGER): INTEGER;
+BEGIN
+  ASSERT((i >= 0) & (i < Args.argc), IndexOutOfRange);
+  RETURN CArg(Args.argc, Args.argv, i)
+END Arg;
+
+(* FLTK's options, a line each, indented a space (" -bg2 color" and the
+   rest, without a heading), truncated to fit s. *)
+PROCEDURE ArgsHelp*(VAR s: ARRAY OF CHAR);
+BEGIN FromC(CArgsHelp(), s)
+END ArgsHelp;
+
+(* Opens uri with the desktop's program for it (xdg-open, on Linux),
+   which runs on by itself: a file:, ftp:, http:, https:, mailto: or
+   news: URI. TRUE if the program was started, with msg its command;
+   FALSE, with msg why not, if uri's scheme isn't one of those, or no
+   program could be found. msg is truncated to fit. *)
+PROCEDURE OpenURI*(uri-: ARRAY OF CHAR; VAR msg: ARRAY OF CHAR): BOOLEAN;
+BEGIN RETURN COpenURI(uri, msg, SHORT(LEN(msg))) # 0
+END OpenURI;
 
 (* Timer *)
 

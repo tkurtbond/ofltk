@@ -242,6 +242,16 @@ PROCEDURE (t: Table) ScrollbarSize*(): INTEGER;
 BEGIN RETURN Get(t, 15)
 END ScrollbarSize;
 
+(* Whether Tab and Shift-Tab move between t's cells, rather than the
+   focus to the next widget, as they do to start with. *)
+PROCEDURE (t: Table) SetTabCellNav*(on: BOOLEAN);
+BEGIN Set(t, 21, Int(on))
+END SetTabCellNav;
+
+PROCEDURE (t: Table) TabCellNav*(): BOOLEAN;
+BEGIN RETURN Get(t, 21) # 0
+END TabCellNav;
+
 (* In a Callback: the row, column and context (ContextCell and the rest)
    of the event that called it. *)
 PROCEDURE (t: Table) CallbackRow*(): INTEGER;

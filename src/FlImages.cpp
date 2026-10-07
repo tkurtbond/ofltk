@@ -5,11 +5,14 @@
 #include "pofltk.h"
 
 #include <FL/Fl_BMP_Image.H>
+#include <FL/Fl_Browser.H>
 #include <FL/Fl_Copy_Surface.H>
 #include <FL/Fl_GIF_Image.H>
 #include <FL/Fl_Image.H>
 #include <FL/Fl_Image_Surface.H>
 #include <FL/Fl_JPEG_Image.H>
+#include <FL/Fl_Menu_.H>
+#include <FL/Fl_Multi_Label.H>
 #include <FL/Fl_PNG_Image.H>
 #include <FL/Fl_PNM_Image.H>
 #include <FL/Fl_Pixmap.H>
@@ -58,6 +61,54 @@ private:
 };
 
 Img *img(intptr_t i) { return reinterpret_cast<Img *>(i); }
+
+// A multi-label: two parts, drawn side by side, each nothing, text (its
+// own copy), an image or another multi-label, which it holds. FLTK keeps
+// the pointers to it and its parts, and owns none of them.
+class Multi : public ofl::Shared {
+public:
+  Multi() {
+    for (int i = 0; i < 2; i++) {
+      text_[i] = 0;
+      part_[i] = 0;
+    }
+    ml.labela = ml.labelb = 0;
+    ml.typea = ml.typeb = FL_NO_LABEL;
+  }
+  ~Multi() {
+    for (int i = 0; i < 2; i++) set(i, FL_NO_LABEL, 0, 0, 0);
+  }
+  // Part i becomes value, of label type t: text, copied, or the label of
+  // what part holds (an image or a multi-label).
+  void set(int i, Fl_Labeltype t, const char *value, char *text,
+           ofl::Shared *part) {
+    if (part) part->hold();
+    char *old_text = text_[i];
+    ofl::Shared *old_part = part_[i];
+    (i == 0 ? ml.labela : ml.labelb) = value;
+    (i == 0 ? ml.typea : ml.typeb) = static_cast<uchar>(t);
+    text_[i] = text;
+    part_[i] = part;
+    free(old_text);
+    if (old_part) old_part->release();
+  }
+  // Whether this is m, or holds it, however deeply.
+  bool contains(const Multi *m) const {
+    if (m == this) return true;
+    for (int i = 0; i < 2; i++) {
+      const Multi *p = dynamic_cast<const Multi *>(part_[i]);
+      if (p && p->contains(m)) return true;
+    }
+    return false;
+  }
+  Fl_Multi_Label ml;
+
+private:
+  char *text_[2];
+  ofl::Shared *part_[2];
+};
+
+Multi *multi(intptr_t m) { return reinterpret_cast<Multi *>(m); }
 
 // i, made by FLTK, as an Img; 0 (and i deleted) if it failed.
 intptr_t make(Fl_Image *i) {
@@ -351,6 +402,100 @@ void ofl_widget_image(intptr_t w, int32_t slot, intptr_t i) {
 void ofl_window_icon(intptr_t w, intptr_t i) {
   Fl_Window *win = ofl::as<Fl_Window>(w);
   win->icon(i ? img(i)->rgb() : 0);
+}
+
+// The icon of browser b's line, i 0 for none. The browser holds the
+// image while a line shows it (ofl::drop_icons).
+void ofl_browser_icon(intptr_t b, int32_t line, intptr_t i) {
+  Fl_Browser *br = ofl::as<Fl_Browser>(b);
+  Fl_Image *m = i ? img(i)->image : 0;
+  br->icon(line, m);
+  if (i) ofl::ref_of(br)->keep(img(i), m);
+  ofl::drop_icons(br);
+}
+
+// Multi-labels
+
+intptr_t ofl_multi_new() { return reinterpret_cast<intptr_t>(new Multi); }
+
+void ofl_multi_close(intptr_t m) { multi(m)->close(); }
+
+// Part i of m becomes, by kind: 0 nothing, 1 text s of label type t, 2
+// the image p, 3 the multi-label p.
+void ofl_multi_set(intptr_t m, int32_t i, int32_t kind, const char *s,
+                   int32_t t, intptr_t p) {
+  switch (kind) {
+    case 1: {
+      char *copy = strdup(s);
+      if (copy == 0) return;
+      multi(m)->set(i, static_cast<Fl_Labeltype>(t), copy, copy, 0);
+      break;
+    }
+    case 2:
+      multi(m)->set(i, FL_IMAGE_LABEL,
+                    reinterpret_cast<const char *>(img(p)->image), 0, img(p));
+      break;
+    case 3:
+      multi(m)->set(i, FL_MULTI_LABEL,
+                    reinterpret_cast<const char *>(&multi(p)->ml), 0,
+                    multi(p));
+      break;
+    default: multi(m)->set(i, FL_NO_LABEL, 0, 0, 0);
+  }
+}
+
+int32_t ofl_multi_contains(intptr_t m, intptr_t n) {
+  return multi(m)->contains(multi(n));
+}
+
+// Widget w shows multi-label m as its label, or no label if m is 0.
+// Fl_Widget::label(type, value) doesn't free a label copy_label made, and
+// leaves it marked to be freed (doc/fltk-issues.md, 55), so label(0)
+// frees it first.
+void ofl_widget_multi_label(intptr_t w, intptr_t m) {
+  Fl_Widget *wd = ofl::widget(w);
+  wd->label(static_cast<const char *>(0));
+  if (m) {
+    wd->label(FL_MULTI_LABEL, reinterpret_cast<const char *>(&multi(m)->ml));
+  } else {
+    wd->labeltype(FL_NORMAL_LABEL);
+  }
+  ofl::ref_of(wd)->hold(ofl::Ref::label, m ? multi(m) : 0);
+  wd->redraw();
+}
+
+// Item i of menu mn shows, by kind: 0 its text, 1 the image p, 2 the
+// multi-label p. The item gets an ofl::ItemLabel, which takes its text
+// (Fl_Menu_::insert's own copy) as its name.
+void ofl_menu_item_label(intptr_t mn, int32_t i, int32_t kind, intptr_t p) {
+  Fl_Menu_ *m = ofl::as<Fl_Menu_>(mn);
+  Fl_Menu_Item *it = const_cast<Fl_Menu_Item *>(m->menu()) + i;
+  char *name;
+  if (ofl::ItemLabel *old = ofl::item_label(m, it)) {
+    name = strdup(old->name);
+    if (name == 0) return;
+  } else {
+    name = const_cast<char *>(it->text);
+  }
+  if (kind == 0) {
+    it->label(FL_NORMAL_LABEL, name);
+  } else {
+    ofl::ItemLabel *l;
+    if (kind == 1) {
+      l = new ofl::ItemLabel(name, img(p));
+      l->ml.typea = FL_IMAGE_LABEL;
+      l->ml.labela = reinterpret_cast<const char *>(img(p)->image);
+    } else {
+      l = new ofl::ItemLabel(name, multi(p));
+      l->ml.typea = FL_MULTI_LABEL;
+      l->ml.labela = reinterpret_cast<const char *>(&multi(p)->ml);
+    }
+    ofl::ref_of(m)->keep(l, &l->ml);
+    l->close();  // the menu's hold is its only one
+    it->label(FL_MULTI_LABEL, reinterpret_cast<const char *>(&l->ml));
+  }
+  ofl::drop_item_labels(m);
+  m->redraw();
 }
 
 // Image surfaces: drawing into an image, offscreen.

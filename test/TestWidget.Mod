@@ -3,13 +3,15 @@ MODULE TestWidget; (* Widget, group and window properties; colors and schemes *)
 (* Each property set reads back as set, through FLTK. Drawing them is
    tested by pixels in Phase 2. *)
 
-IMPORT Fl, Check;
+IMPORT Out, Fl, Check;
 
 VAR
   win: Fl.Window;
   g: Fl.Group;
   a, b, c, d: Fl.Box;
   s: ARRAY 64 OF CHAR;
+  short: ARRAY 10 OF CHAR;
+  sx, sy, sw, sh, wx, wy, ww, wh: INTEGER;
   r, gr, bl: INTEGER;
   shown: BOOLEAN;
 
@@ -120,6 +122,32 @@ BEGIN
   Check.Check(Fl.Contrast(Fl.Black, Fl.Black) = Fl.White, "black on black contrasts to white");
   Fl.GetRGB(Fl.ColorAverage(Fl.RGB(200, 0, 0), Fl.RGB(0, 0, 100), 0.5D0), r, gr, bl);
   Check.Check((r = 100) & (gr = 0) & (bl = 50), "ColorAverage");
+
+  (* box borders, from FLTK's table of box types *)
+  Check.Check((Fl.BoxDX(Fl.NoBox) = 0) & (Fl.BoxDW(Fl.NoBox) = 0), "BoxDX: none for NoBox");
+  Check.Check((Fl.BoxDX(Fl.ThinUpBox) = 1) & (Fl.BoxDY(Fl.ThinUpBox) = 1)
+    & (Fl.BoxDW(Fl.ThinUpBox) = 2) & (Fl.BoxDH(Fl.ThinUpBox) = 2), "BoxDX, BoxDY, BoxDW, BoxDH");
+  Check.Check((Fl.BoxDX(Fl.EngravedBox) = 2) & (Fl.BoxDH(Fl.EngravedBox) = 4), "an engraved box's");
+
+  (* Screens. Their sizes are the display's, and printed: xvfb-run's
+     default screen is 640x480, and tools/with-sway.sh's output 1280x800,
+     each its own work area. *)
+  Check.Check(Fl.ScreenCount() >= 1, "ScreenCount");
+  Fl.ScreenXYWH(0, sx, sy, sw, sh); Fl.ScreenWorkArea(0, wx, wy, ww, wh);
+  Check.Check((sw > 0) & (sh > 0) & (wx >= sx) & (wy >= sy) & (wx + ww <= sx + sw) & (wy + wh <= sy + sh),
+    "ScreenXYWH, and its work area inside it");
+  Check.Check((Fl.ScreenX() = wx) & (Fl.ScreenY() = wy) & (Fl.ScreenW() = ww) & (Fl.ScreenH() = wh),
+    "ScreenX, ScreenY, ScreenW, ScreenH: the main screen's work area");
+  Check.Check((Fl.ScreenAt(sx + sw - 1, sy + sh - 1) = 0) & (Fl.ScreenAt(sx - 10000, sy - 10000) = 0),
+    "ScreenAt: 0 on screen 0, and on none");
+  Out.String("# screen 0: "); Out.Int(sx, 0); Out.Char(","); Out.Int(sy, 0); Out.Char(" ");
+  Out.Int(sw, 0); Out.Char("x"); Out.Int(sh, 0); Out.String(", work area ");
+  Out.Int(ww, 0); Out.Char("x"); Out.Int(wh, 0); Out.Ln;
+
+  (* OpenURI: only what starts no program *)
+  Check.Check(~Fl.OpenURI("foo:bar", s) & (s = 'URI scheme "foo" not supported.'),
+    "OpenURI of a scheme FLTK doesn't open: FALSE, and why");
+  Check.Check(~Fl.OpenURI("foo:bar", short) & (short = "URI schem"), "its message truncated to fit");
 
   (* schemes and the normal size *)
   Check.Check(Fl.SetScheme("gtk+"), "a known scheme");

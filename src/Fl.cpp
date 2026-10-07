@@ -10,6 +10,7 @@
 #include <FL/Fl_Pack.H>
 #include <FL/Fl_Table.H>
 #include <FL/Fl_Window.H>
+#include <FL/filename.H>
 #include <FL/platform.H>
 
 namespace ofl {
@@ -132,18 +133,30 @@ int32_t ofl_widget_base_handle(intptr_t w, int32_t event) {
 
 // Fl_Window::copy_label also sets a shown window's title, but it hides
 // Fl_Widget's rather than overriding it, so a window must be called as one.
+// Text replaces a multi-label (FlImages), which the widget then lets go;
+// copy_label keeps the label type, so it is set back to text first
+// (doc/fltk-issues.md, 55).
 void ofl_widget_copy_label(intptr_t w, const char *label) {
-  Fl_Window *win = ofl::widget(w)->as_window();
+  Fl_Widget *wd = ofl::widget(w);
+  bool was_multi = wd->labeltype() == _FL_MULTI_LABEL;
+  if (was_multi) wd->label(FL_NORMAL_LABEL, 0);
+  Fl_Window *win = wd->as_window();
   if (win) {
     win->copy_label(ofl::label_text(label));
   } else {
-    ofl::widget(w)->copy_label(ofl::label_text(label));
+    wd->copy_label(ofl::label_text(label));
   }
+  if (was_multi) ofl::ref_of(wd)->hold(ofl::Ref::label, 0);
 }
 
-// The label, a const char *, or 0 for none.
+// The label, a const char *, or 0 for none: a multi-label, an image or an
+// icon label isn't text.
 intptr_t ofl_widget_label(intptr_t w) {
-  return reinterpret_cast<intptr_t>(ofl::widget(w)->label());
+  Fl_Widget *wd = ofl::widget(w);
+  if (wd->labeltype() >= _FL_MULTI_LABEL && wd->labeltype() <= _FL_IMAGE_LABEL) {
+    return 0;
+  }
+  return reinterpret_cast<intptr_t>(wd->label());
 }
 
 int32_t ofl_widget_x(intptr_t w) { return ofl::widget(w)->x(); }
@@ -290,7 +303,10 @@ int32_t ofl_widget_labeltype(intptr_t w) {
   return ofl::widget(w)->labeltype();
 }
 
+// A multi-label's parts have their own types, so a widget showing one
+// keeps it. FlImages sets the types that make the label something else.
 void ofl_widget_set_labeltype(intptr_t w, int32_t t) {
+  if (ofl::widget(w)->labeltype() == _FL_MULTI_LABEL) return;
   ofl::widget(w)->labeltype(static_cast<Fl_Labeltype>(t));
 }
 
@@ -399,8 +415,100 @@ int32_t ofl_inactive(int32_t c) {
 int32_t ofl_normal_size(void) { return FL_NORMAL_SIZE; }
 void ofl_set_normal_size(int32_t s) { FL_NORMAL_SIZE = s; }
 
+// The box type b's border: what 0 dx, 1 dy, 2 dw, 3 dh. b is checked by
+// the caller, since FLTK indexes its table of box types with it.
+int32_t ofl_box_d(int32_t b, int32_t what) {
+  Fl_Boxtype t = static_cast<Fl_Boxtype>(b);
+  switch (what) {
+    case 0: return Fl::box_dx(t);
+    case 1: return Fl::box_dy(t);
+    case 2: return Fl::box_dw(t);
+    default: return Fl::box_dh(t);
+  }
+}
+
 // name is "none", "base", "plastic", "gtk+", "gleam" or "oxy"; 1 if FLTK
 // knows it.
+// Screens. what: 0 x, 1 y, 2 w, 3 h of the main screen's work area.
+int32_t ofl_screen(int32_t what) {
+  switch (what) {
+    case 1: return Fl::y();
+    case 2: return Fl::w();
+    case 3: return Fl::h();
+    default: return Fl::x();
+  }
+}
+
+int32_t ofl_screen_count() { return Fl::screen_count(); }
+
+// Screen n's place and size, or its work area if work is 1.
+void ofl_screen_xywh(int32_t n, int32_t work, int32_t *x, int32_t *y,
+                     int32_t *w, int32_t *h) {
+  int X, Y, W, H;
+  if (work) {
+    Fl::screen_work_area(X, Y, W, H, n);
+  } else {
+    Fl::screen_xywh(X, Y, W, H, n);
+  }
+  *x = X;
+  *y = Y;
+  *w = W;
+  *h = H;
+}
+
+int32_t ofl_screen_num(int32_t x, int32_t y) { return Fl::screen_num(x, y); }
+
+// Command-line options. FLTK keeps pointers into argv (the title, the
+// geometry, the class name) until a window is shown with them, and C's
+// own argv, which poc's Args.argv is, lasts the program's life.
+
+namespace {
+int32_t (*arg_handler)(int32_t);
+
+// FLTK's Fl_Args_Handler, giving the program's handler the argument's
+// number; the handler's result, checked by Fl.Mod, is the words it used.
+int handle_arg(int, char **, int &i) {
+  int n = arg_handler(i);
+  i += n;
+  return n;
+}
+
+char **argv_of(intptr_t argv) { return reinterpret_cast<char **>(argv); }
+}  // namespace
+
+// Fl::args with handler (0 for none), *i the first argument not parsed:
+// 1 unless that is an option no one knows, or lacks its value. Fl::args
+// says so by returning 0, but only until it has once stopped at a word
+// that isn't an option (doc/fltk-issues.md, 57), so this decides it from
+// the word, as Fl::arg does.
+int32_t ofl_args(int32_t argc, intptr_t argv, int32_t *i,
+                 int32_t (*handler)(int32_t)) {
+  arg_handler = handler;
+  int n = 1;
+  Fl::args(argc, argv_of(argv), n, handler ? handle_arg : 0);
+  *i = n;
+  const char *s = n < argc ? argv_of(argv)[n] : 0;
+  return !(s && s[0] == '-' && s[1] != 0 && s[1] != '-');
+}
+
+int32_t ofl_arg(int32_t argc, intptr_t argv, int32_t i) {
+  int n = i;
+  return Fl::arg(argc, argv_of(argv), n);
+}
+
+intptr_t ofl_args_help() { return reinterpret_cast<intptr_t>(Fl::help); }
+
+void ofl_window_show_args(intptr_t w, int32_t argc, intptr_t argv) {
+  ofl::as<Fl_Window>(w)->show(argc, argv_of(argv));
+}
+
+// 1 if a program was started to open uri; msg, n bytes, gets its command,
+// or why not.
+int32_t ofl_open_uri(const char *uri, char *msg, int32_t n) {
+  if (n > 0) msg[0] = 0;
+  return fl_open_uri(uri, msg, n) != 0;
+}
+
 int32_t ofl_set_scheme(const char *name) { return Fl::scheme(name); }
 
 // The scheme's name, a const char *, or 0 for none.

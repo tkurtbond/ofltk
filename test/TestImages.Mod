@@ -1,6 +1,6 @@
 MODULE TestImages; (* FlImages: images from pixels, files and memory; labels, drawing, surfaces *)
 
-IMPORT SYSTEM, GC := GarbageCollectedHeap, Files, Fl, FlDraw, FlImages, Check, Probe;
+IMPORT SYSTEM, GC := GarbageCollectedHeap, Files, Fl, FlDraw, FlBrowsers, FlMenus, FlImages, Check, Probe;
 
 TYPE
   (* Draws its image at its top left, on white. *)
@@ -10,12 +10,17 @@ VAR
   win: Fl.Window;
   box: Fl.Box;
   pic: Picture;
+  br: FlBrowsers.Browser;
+  ml, ml2: FlImages.MultiLabel;
+  choice: FlMenus.Choice;
+  label: ARRAY 64 OF CHAR;
+  new, open, file, k: INTEGER;
   i, j: FlImages.Image;
   s, t: FlImages.Surface;
   bits: ARRAY 64 OF CHAR;
   data: ARRAY 4096 OF CHAR;
   xpm: ARRAY 5, 16 OF CHAR;
-  n, white, red, blue: INTEGER;
+  n, x, y, white, red, blue: INTEGER;
   ok: BOOLEAN;
 
 PROCEDURE (p: Picture) Draw*;
@@ -60,6 +65,22 @@ BEGIN
   END;
   RETURN TRUE
 END Near;
+
+(* Whether w, w by h, has red in it, the first (by rows) at x, y. *)
+PROCEDURE FindRed(w: Fl.Widget; VAR x, y: INTEGER): BOOLEAN;
+  VAR found: BOOLEAN;
+BEGIN
+  found := FALSE;
+  IF Probe.Capture(w) THEN
+    y := 0;
+    WHILE ~found & (y < w.H()) DO
+      x := 0;
+      WHILE (x < w.W()) & (Probe.Pixel(x, y) # red) DO INC(x) END;
+      IF x < w.W() THEN found := TRUE ELSE INC(y) END
+    END
+  END;
+  RETURN found
+END FindRed;
 
 (* Whether i is 4 by 2, red on the left and blue on the right. *)
 PROCEDURE IsRedBlue(i: FlImages.Image): BOOLEAN;
@@ -202,6 +223,105 @@ BEGIN
   NEW(j); i.Copy(j, 4, 2); FlImages.SetImage(box, j); j.Close;
   box.Delete;  (* and the image with it: valgrind would see a leak *)
 
+  (* A browser line's icon, kept by the browser while a line shows it *)
+  NEW(br); FlBrowsers.OpenBrowser(br, 0, 0, 100, 100, "");
+  br.Add("One"); br.Add("Two"); br.Add("Three");
+  NEW(j); i.Copy(j, 8, 20);
+  FlImages.SetLineIcon(br, 2, j); FlImages.SetLineIcon(br, 3, j);
+  j.Close; j := NIL; Churn;
+  Check.Check(FindRed(br, x, y) & (y > 10) & (Probe.Pixel(x + 4, y) = blue) & (Probe.Pixel(x + 3, y + 19) = red)
+    & (Probe.Pixel(x, y + 20) # red), "SetLineIcon: drawn on the line, after the program closed it");
+  Probe.Release;
+  Check.Check(Probe.Kept(br) = 1, "held once for two lines");
+  br.Remove(2);
+  Check.Check(FindRed(br, x, y) & (Probe.Kept(br) = 1), "kept while a line shows it");
+  Probe.Release;
+  FlImages.SetLineIcon(br, 2, NIL);
+  Check.Check(~FindRed(br, x, y) & (Probe.Kept(br) = 0), "SetLineIcon NIL: released");
+  Probe.Release;
+  NEW(j); i.Copy(j, 8, 20); FlImages.SetLineIcon(br, 1, j); j.Close;
+  NEW(j); i.Copy(j, 8, 20); FlImages.SetLineIcon(br, 1, j); j.Close;
+  Check.Check(Probe.Kept(br) = 1, "another icon on the line: the first released");
+  br.Clear;
+  Check.Check(Probe.Kept(br) = 0, "Clear: released");
+  NEW(j); i.Copy(j, 8, 20); br.Add("One"); FlImages.SetLineIcon(br, 1, j); j.Close;
+  br.Delete;  (* and the image with it *)
+
+  (* Multi-labels *)
+  NEW(ml); FlImages.OpenMultiLabel(ml);
+  NEW(j); i.Copy(j, 8, 8); ml.SetImage(0, j); j.Close; j := NIL;
+  ml.SetText(1, "Hi", Fl.NormalLabel);
+  NEW(box); Fl.OpenBox(box, 0, 0, 60, 20, "x"); box.SetBoxType(Fl.FlatBox); box.SetColor(Fl.White);
+  box.SetAlign(Fl.AlignLeft + Fl.AlignInside);
+  FlImages.SetMultiLabel(box, ml);
+  n := FlImages.openMultiLabels;
+  ml.Close; ml := NIL; Churn;
+  Check.Check(FlImages.openMultiLabels = n - 1, "a multi-label closed by the program");
+  ok := FindRed(box, x, y);
+  Check.Check(ok & (Probe.Pixel(x + 4, y) = blue), "is still drawn: its widget holds it, and it its image");
+  k := x + 8; n := 0;
+  WHILE k < 60 DO
+    IF Probe.Pixel(k, 10) # white THEN INC(n) END;
+    INC(k)
+  END;
+  Check.Check(n > 0, "with its text after the image");
+  Probe.Release;
+  box.GetLabel(label);
+  Check.Check(label = "", "GetLabel of a multi-label is empty");
+  box.SetLabelType(Fl.ShadowLabel);
+  Check.Check(box.LabelType() = 5, "SetLabelType keeps a multi-label");
+  box.SetLabel("text"); box.GetLabel(label);
+  Check.Check((label = "text") & (box.LabelType() = Fl.NormalLabel) & ~FindRed(box, x, y),
+    "SetLabel gives it text again");  (* and lets the multi-label go: valgrind would see it *)
+  Probe.Release;
+  NEW(ml); FlImages.OpenMultiLabel(ml); NEW(ml2); FlImages.OpenMultiLabel(ml2);
+  ml2.SetText(0, "a", Fl.NormalLabel); ml.SetMulti(1, ml2); ml.SetText(0, "b", Fl.EngravedLabel);
+  ml2.Close; FlImages.SetMultiLabel(box, ml); ml.Close;
+  FlImages.SetMultiLabel(box, NIL); box.GetLabel(label);
+  Check.Check((label = "") & (box.LabelType() = Fl.NormalLabel), "SetMultiLabel NIL: no label");
+  NEW(ml); FlImages.OpenMultiLabel(ml); FlImages.SetMultiLabel(box, ml); ml.Close;
+  box.Delete;  (* and the multi-label with it *)
+
+  (* A menu item's image and multi-label *)
+  NEW(choice); FlMenus.OpenChoice(choice, 0, 0, 100, 25, "");
+  new := choice.Add("File/New", 0, {}, NIL, {});
+  open := choice.Add("File/Open", 0, {}, NIL, {});
+  file := choice.FindIndex("File");
+  NEW(j); i.Copy(j, 8, 8);
+  FlImages.SetItemImage(choice, new, j); FlImages.SetItemImage(choice, file, j);
+  NEW(ml); FlImages.OpenMultiLabel(ml); ml.SetImage(0, j); ml.SetText(1, "Open", Fl.NormalLabel);
+  FlImages.SetItemMultiLabel(choice, open, ml); ml.Close; j.Close;
+  Check.Check(Probe.Kept(choice) = 3, "each item showing an image keeps it");
+  choice.ItemLabel(new, label);
+  Check.Check(label = "New", "an item showing an image keeps its text");
+  Check.Check(choice.ItemPath(new, label) & (label = "File/New"), "and its path");
+  Check.Check((choice.FindIndex("File/New") = new) & (choice.FindIndex("File/Open") = open), "FindIndex finds it");
+  ok := choice.SetValue(open);
+  n := choice.Length();
+  k := choice.Add("File/Save", 0, {}, NIL, {});
+  Check.Check((k = open + 1) & (choice.Length() = n + 1), "Insert finds a submenu whose title shows an image");
+  Check.Check(choice.Value() = open, "and keeps the item chosen");
+  choice.Remove(k);
+  Check.Check(FindRed(choice, x, y), "a choice shows its item's image");
+  Probe.Release;
+  FlImages.SetItemImage(choice, new, NIL); choice.ItemLabel(new, label);
+  Check.Check((label = "New") & (Probe.Kept(choice) = 2), "SetItemImage NIL: text again, the image let go");
+  NEW(j); i.Copy(j, 8, 8); FlImages.SetItemImage(choice, new, j); FlImages.SetItemImage(choice, new, j); j.Close;
+  Check.Check(Probe.Kept(choice) = 3, "another image on the item: the first let go");
+  choice.SetItemLabel(new, "Neu"); choice.ItemLabel(new, label);
+  Check.Check((label = "Neu") & (Probe.Kept(choice) = 2), "SetItemLabel: text, the image let go");
+  choice.Remove(open);
+  Check.Check((Probe.Kept(choice) = 1) & (choice.Value() = -1), "Remove lets its image go");
+  choice.Remove(file);
+  Check.Check((Probe.Kept(choice) = 0) & (choice.Length() = 1), "Remove of a submenu, and its title's image");
+  new := choice.Add("New", 0, {}, NIL, {});
+  NEW(j); i.Copy(j, 8, 8); FlImages.SetItemImage(choice, new, j);
+  choice.Clear;
+  Check.Check(Probe.Kept(choice) = 0, "Clear lets them go");
+  new := choice.Add("New", 0, {}, NIL, {});
+  FlImages.SetItemImage(choice, new, j); j.Close;
+  choice.Delete;  (* and the image with it *)
+
   (* Surfaces *)
   NEW(s); FlImages.OpenSurface(s, 20, 10);
   s.Begin;
@@ -231,7 +351,7 @@ BEGIN
   i.Close; i.Close;
   pic.img := NIL;
   win.Delete;
-  Check.Check((FlImages.openImages = 0) & (FlImages.openSurfaces = 0) & (Fl.OpenWidgets() = 0),
-    "every image, surface and widget closed");
+  Check.Check((FlImages.openImages = 0) & (FlImages.openSurfaces = 0) & (FlImages.openMultiLabels = 0)
+    & (Fl.OpenWidgets() = 0), "every image, surface, multi-label and widget closed");
   Check.Summary
 END TestImages.

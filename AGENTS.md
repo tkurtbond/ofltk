@@ -21,9 +21,9 @@ anything:
 
 ## Status
 
-As of 2026-10-06, Phases 0 to 8 of PLAN.md are done, and `README.md` is
-the user's guide. Phases 9 to 13 (planned 2026-10-07) port the rest of
-FLTK's `examples/` and bind what they need. `src/` has the `Fl`, `FlDraw`, `FlButtons`,
+As of 2026-10-07, Phases 0 to 10 of PLAN.md are done, and `README.md`
+is the user's guide. Phases 9 to 13 (planned 2026-10-07) port the rest
+of FLTK's `examples/` and bind what they need; 11 to 13 remain. `src/` has the `Fl`, `FlDraw`, `FlButtons`,
 `FlInputs`, `FlValuators`, `FlLayout`, `FlMenus`, `FlDialogs`, `FlText`,
 `FlBrowsers`, `FlImages`, `FlPreferences` and `FlTable` modules, and the
 tests pass. Also kept:
@@ -53,8 +53,13 @@ prefix of the C++ parts (`ofl::`, `ofl_`) was kept.
     `draw_label()` and `draw_focus()`;
   - `ofl::open`, which attaches a widget to its Oberon object;
   - the `Ref` user data, whose destructor is the deletion hook, and
-    which holds the images a widget shows;
-  - `ofl::Shared`, a reference count for what widgets share (images);
+    which holds the images and multi-label a widget shows (its slots),
+    and any number of things beside (`keep`, for a browser's line
+    icons and a menu's item labels), let go by `drop_unused`;
+  - `ofl::Shared`, a reference count for what widgets share (images,
+    multi-labels);
+  - `ofl::ItemLabel`, a menu item's image or multi-label, which keeps
+    the item's text (`doc/fltk-issues.md`, 54);
   - `ofl::label_text`, which every label goes through ("" is none);
   - the dispatch depth.
 - `src/Fl.Mod`, `src/Fl.cpp`: the core module. Its "For pofltk's modules
@@ -99,7 +104,8 @@ prefix of the C++ parts (`ofl::`, `ofl_`) was kept.
   - `Probe.Mod` and `Probe.cpp`, a test module with a C++ part: a
     widget's pixels, captured into an `Fl_Image_Surface`; mouse, wheel
     and key events sent as the window system would; the modal window (a
-    dialog) and keys sent to it; and whether FLTK uses Wayland.
+    dialog) and keys sent to it; whether FLTK uses Wayland; and how
+    many things a widget keeps (`Kept`, `Ref::keep`).
   - `images/`: one 4x2 image, red left and blue right, in each format
     `TestImages` reads.
 - `tools/gen-constants.py`: writes each module's constants and their
@@ -158,7 +164,8 @@ make clean      # rm -rf build
 
 - `make POC=/path/to/poc` uses another poc.
 - **A new test** needs its name added to `TESTS`, a halt test to
-  `HALTTESTS` (as `name:code`).
+  `HALTTESTS` (as `name:code`). `TestArgs` alone is given a command
+  line, `TESTARGS`, by both test loops.
 - **A new module** needs its name added to `MODULES`, and a new header to
   `HEADERS`. A test module with a C++ part goes in `TESTCXX`, an example
   in `EXAMPLES`.
@@ -407,7 +414,12 @@ held only in C++ memory**.
     a window without the focus is closed at once;
   - `Fl_Choice::value(int)` hides `Fl_Menu_`'s;
   - clearing a menu in its own callback is safe in 1.4.5, despite
-    FLTK's documentation.
+    FLTK's documentation;
+  - an item showing an image or a multi-label holds it in its `text`,
+    which `remove` and `replace` free and paths read as text (a bug,
+    54): each such item has an `ofl::ItemLabel` of its own, and
+    `FlMenus.cpp` swaps the item's text in around FLTK's calls;
+  - `find_index` takes a path with its labels' `&`s.
 - **Dialogs**: `fl_message` and the rest take a printf format, so pass
   text as `"%s"`; `fl_file_chooser`, and `Fl_Native_File_Chooser` using
   FLTK's chooser, keep their title pointer (`doc/fltk-issues.md`, 30,
@@ -428,6 +440,8 @@ held only in C++ memory**.
     no click: draw it first in a test (`Probe.Capture`);
   - `Fl_Browser::textsize` and `Fl_File_Browser::textsize` hide
     `Fl_Browser_`'s;
+  - `Fl_Browser::icon` keeps the image, and a line removed drops it
+    unseen (56): the browser keeps the images its lines show;
   - `Fl_Browser::load` adds an empty last line after a final newline;
     `Fl_File_Browser::load` returns the directory's entries;
   - a browser calls back on every release, changed or not, and a check
@@ -448,7 +462,12 @@ held only in C++ memory**.
     image: every label goes through `ofl::label_text`;
   - a binary PNM with a maxval under 255 is read unscaled (a bug): the
     shim scales it;
-  - XPM color names are read only on X11; Wayland has no window icons.
+  - XPM color names are read only on X11; Wayland has no window icons;
+  - `Fl_Multi_Label::label(Fl_Widget *)` leaves a copied label marked
+    to be freed, so the widget frees the multi-label (a bug, 55): the
+    shim clears the label first;
+  - `copy_label` keeps the label type, so text set on a widget showing
+    a multi-label sets the type back to `FL_NORMAL_LABEL`.
 - **The clipboard** (`doc/fltk-issues.md`, 48 to 50):
   - X11's `Fl::copy` before the display is open crashes (a bug): the
     shim opens it first;
@@ -462,6 +481,14 @@ held only in C++ memory**.
   `begin`, `end`, `children`, `child`, `add` and the rest, which reach
   the inner group holding the cells' widgets: Fl.cpp calls a table as
   an `Fl_Table`.
+- **Command-line options** (`doc/fltk-issues.md`, 57): FLTK keeps
+  pointers into `argv`, and poc's `Args.argv` is C's own, which lasts
+  the program's life. `Fl::args` returns 0 for an unknown option only
+  until it has once stopped at a word that isn't an option: the shim
+  decides from the word.
+- **Screens**: `Fl::screen_num` is 0 for a point on no screen.
+  xvfb-run's default screen is 640x480; `tools/with-sway.sh`'s output
+  is 1280x800.
 - **Name clashes with FLTK's keys**: the key constants take the prefix
   `Key`, since `FL_End` would be the keyword `END`. So `Fl::get_key` is
   `GetKey`, because `KeyDown` is the down arrow.

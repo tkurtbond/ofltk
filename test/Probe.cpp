@@ -2,6 +2,8 @@
 // give programs. Capturing a widget's drawing as pixels, and sending
 // events as if from the user (PLAN.md, "Build and test").
 
+#include "../src/pofltk.h"
+
 #include <FL/Fl.H>
 #include <FL/platform.H>
 #include <FL/Fl_Image_Surface.H>
@@ -31,6 +33,11 @@ extern "C" {
 
 // Draws w as FLTK would in its window, on white, into an image of w's
 // size, for ofltest_pixel. The window need not be shown.
+// How many resources w keeps beside its label images (ofl::Ref::keep).
+int32_t ofltest_kept(intptr_t w) {
+  return static_cast<int32_t>(ofl::ref_of(widget(w))->kept_count());
+}
+
 int32_t ofltest_capture(intptr_t w) {
   Fl_Widget *wd = widget(w);
   delete shot;

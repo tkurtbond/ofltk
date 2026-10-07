@@ -59,16 +59,19 @@ LIBDIR   = $(POC_OBERON_LIBRARIES)/$(LIBRARY)
 TRIPLE   = $(shell $(POC) -version | sed -n 's/^target \([^ ]*\).*/\1/p')
 
 # Test programs (test/<name>.Mod, each a main module).
-TESTS := TestLiveness TestDelete TestTimer TestConstants TestWidget TestDraw TestEvents TestButtons TestInputs TestValuators TestLayout TestMenus TestDialogs TestText TestBrowsers TestTree TestImages TestClipboard TestPreferences TestTable
+TESTS := TestLiveness TestDelete TestTimer TestConstants TestWidget TestDraw TestEvents TestButtons TestInputs TestValuators TestLayout TestMenus TestDialogs TestText TestBrowsers TestTree TestImages TestClipboard TestPreferences TestTable TestArgs
+# TestArgs's command line: options of its own and FLTK's, and words that
+# aren't options.
+TESTARGS := -o hello --help -g 120x80 -ti Title -s plastic -nokbd rest more
 # Programs that must halt (test/<name>.Mod), as name:ASSERT-code. poc's
 # ASSERT(x, n) prints "assertion failed (n)" on standard error and exits
 # with status 10, so `make test` requires both.
-HALTTESTS := HaltNotOpen:70 HaltDeleted:70 HaltOpenTwice:71 HaltNil:72 HaltIndex:74 HaltRepeat:75 HaltGridRange:74 HaltNotAChild:76 HaltMenuItem:74 HaltClosedBuffer:73 HaltNoBuffer:73 HaltBrowserLine:74 HaltTreeItem:73 HaltClosedImage:73 HaltSurfaceOrder:77 HaltClosedGroup:73 HaltTableRow:74
+HALTTESTS := HaltNotOpen:70 HaltDeleted:70 HaltOpenTwice:71 HaltNil:72 HaltIndex:74 HaltRepeat:75 HaltGridRange:74 HaltNotAChild:76 HaltMenuItem:74 HaltClosedBuffer:73 HaltNoBuffer:73 HaltBrowserLine:74 HaltTreeItem:73 HaltClosedImage:73 HaltSurfaceOrder:77 HaltClosedGroup:73 HaltTableRow:74 HaltBoxType:74 HaltMultiLabel:78
 ASSERTSTATUS := 10
 
 # Example programs (examples/<name>.Mod). They wait for the user, so make
 # builds them and make test doesn't run them.
-EXAMPLES := Hello Scribble Swatch Menus TableSimple TreeSimple TextEditorSimple BrowserSimple GridSimple FlexSimple TabsSimple WizardSimple ProgressSimple NativeFileChooserSimple SvgSimple Callbacks DrawAnX TextOverImageButton DragAndDrop TableAsContainer TableWithKeynav TableWithRightClickMenu TableWithRightColumnStretchFit TableSpreadsheetWithKeyboardNav TextDisplayWithColors TextEditorWithDynamicColors NativeFileChooserSimpleApp
+EXAMPLES := Hello Scribble Swatch Menus TableSimple TreeSimple TextEditorSimple BrowserSimple GridSimple FlexSimple TabsSimple WizardSimple ProgressSimple NativeFileChooserSimple SvgSimple Callbacks DrawAnX TextOverImageButton DragAndDrop TableAsContainer TableWithKeynav TableWithRightClickMenu TableWithRightColumnStretchFit TableSpreadsheetWithKeyboardNav TextDisplayWithColors TextEditorWithDynamicColors NativeFileChooserSimpleApp DraggableGroup TableSpreadsheet TreeCustomSort BrowserWithIcons MenuWithImages MenubarAdd ParseArgs
 
 TESTBINS := $(TESTS:%=$(BUILD)/%)
 HALTBINS := $(foreach h,$(HALTTESTS),$(BUILD)/$(firstword $(subst :, ,$(h))))
@@ -108,7 +111,7 @@ display:
 # it started, drew, and didn't crash.
 test: tests display
 	@status=0; for t in $(TESTS); do \
-	  echo "== $$t"; (cd test && timeout $(TIMEOUT) ../$(BUILD)/$$t) || status=1; \
+	  echo "== $$t"; (cd test && timeout $(TIMEOUT) ../$(BUILD)/$$t $$(test $$t = TestArgs && echo $(TESTARGS))) || status=1; \
 	done; \
 	for h in $(HALTTESTS); do \
 	  t=$${h%%:*}; code=$${h##*:}; echo "== $$t (must fail ASSERT code $$code)"; \
@@ -131,7 +134,7 @@ test: tests display
 valgrind: tests display
 	@status=0; for t in $(TESTS); do \
 	  echo "== valgrind $$t"; \
-	  (cd test && $(VALGRIND) --log-file=../$(BUILD)/$$t.vg ../$(BUILD)/$$t) || status=1; \
+	  (cd test && $(VALGRIND) --log-file=../$(BUILD)/$$t.vg ../$(BUILD)/$$t $$(test $$t = TestArgs && echo $(TESTARGS))) || status=1; \
 	  grep -E 'ERROR SUMMARY' $(BUILD)/$$t.vg; \
 	  test/vg-check.sh $(BUILD)/$$t.vg || { echo "FAIL - $$t: memory pofltk allocated was not freed"; status=1; }; \
 	done; exit $$status

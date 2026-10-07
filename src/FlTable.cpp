@@ -63,7 +63,7 @@ intptr_t ofl_table_new(int32_t kind, int32_t x, int32_t y, int32_t w,
 // column width, 12 row position, 13 column position, 14 table box, 15
 // scrollbar size, 16 callback row, 17 callback column, 18 callback
 // context, 19 being resized by the user, 20 (Fl_Table_Row) selection
-// mode.
+// mode, 21 Tab moves between cells.
 int32_t ofl_table_get(intptr_t t, int32_t what) {
   Fl_Table *tb = table(t);
   switch (what) {
@@ -87,11 +87,12 @@ int32_t ofl_table_get(intptr_t t, int32_t what) {
     case 17: return tb->callback_col();
     case 18: return tb->callback_context();
     case 19: return tb->is_interactive_resize();
+    case 21: return tb->tab_cell_nav();
     default: return row_table(t)->type();
   }
 }
 
-// The same numbers, set: 0 to 15, and 20.
+// The same numbers, set: 0 to 15, 20 and 21.
 void ofl_table_set(intptr_t t, int32_t what, int32_t v) {
   Fl_Table *tb = table(t);
   switch (what) {
@@ -111,6 +112,7 @@ void ofl_table_set(intptr_t t, int32_t what, int32_t v) {
     case 13: tb->col_position(v); break;
     case 14: tb->table_box(static_cast<Fl_Boxtype>(v)); break;
     case 15: tb->scrollbar_size(v); break;
+    case 21: tb->tab_cell_nav(v); break;
     default:
       row_table(t)->type(static_cast<Fl_Table_Row::TableRowSelectMode>(v));
   }
