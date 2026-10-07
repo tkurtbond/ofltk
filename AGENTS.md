@@ -21,8 +21,9 @@ anything:
 
 ## Status
 
-As of 2026-10-06, Phases 0 to 8 of PLAN.md are done: the roadmap is
-complete, and `README.md` is the user's guide. `src/` has the `Fl`, `FlDraw`, `FlButtons`,
+As of 2026-10-06, Phases 0 to 8 of PLAN.md are done, and `README.md` is
+the user's guide. Phases 9 to 13 (planned 2026-10-07) port the rest of
+FLTK's `examples/` and bind what they need. `src/` has the `Fl`, `FlDraw`, `FlButtons`,
 `FlInputs`, `FlValuators`, `FlLayout`, `FlMenus`, `FlDialogs`, `FlText`,
 `FlBrowsers`, `FlImages`, `FlPreferences` and `FlTable` modules, and the
 tests pass. Also kept:

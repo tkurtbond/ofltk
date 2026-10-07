@@ -954,6 +954,143 @@ findings written into this file and AGENTS.md.
    - No larger demo (an editor with files, a spreadsheet): the ports
      show each module, and `Menus` the dialogs.
 
+### Phases 9 to 13: every example FLTK ships
+
+Planned 2026-10-07. FLTK 1.4.5's `examples/` has 46 programs. Phase 8
+ported 11. Four use what "Scope" leaves out (OpenGL3test,
+OpenGL3-glut-test, simple-terminal, cairo-draw-x). These phases port the
+other 31, and bind what they need. The list came from comparing each
+example's classes, `Fl::` and `fl_` functions and methods with what the
+C++ parts call, so a port may still find a small gap. A gap goes into
+the phase that finds it.
+
+Each phase, as before, ends with every test passing, on
+`make test-headless` and `make test-sway`, and with
+`make valgrind-headless` and `make valgrind-sway` clean. Each binding
+gets its own test. `doc/fltk-issues.md` records each FLTK problem the
+phase finds. Each port:
+- is named for FLTK's file in CamelCase, without `howto-`
+  (`TableAsContainer`, `DrawAnX`), as `FlexSimple` was;
+- goes in `EXAMPLES`, so `make test` runs it;
+- is looked at under Xvfb against FLTK's own build of it (`examples/`
+  has the binaries).
+
+Order: the ports that need nothing come first, because writing them
+finds the small gaps cheaply. The bindings with new lifetime problems
+(trees, animated images) come last.
+
+9. **Ports that need nothing new** (12):
+   - Drawing and widgets: `callbacks`, `howto-draw-an-x`,
+     `howto-text-over-image-button`, `howto-drag-and-drop`.
+   - Tables: `table-as-container`, `table-with-keynav`,
+     `table-with-right-click-menu`,
+     `table-with-right-column-stretch-fit`,
+     `table-spreadsheet-with-keyboard-nav`.
+   - Text: `textdisplay-with-colors`, `texteditor-with-dynamic-colors`
+     (the buffer's `Modified`).
+   - Files: `nativefilechooser-simple-app`, reading and writing files
+     with poc's own I/O.
+   - `callbacks` shows FLTK's callback macros (`FL_FUNCTION_CALLBACK_3`
+     and the rest). Its port shows the Oberon way, a `Callback` method or
+     a procedure field, rather than the macros themselves.
+   - Drag and drop, bound in Phase 7 but untested, gets a test:
+     `FL_DND_ENTER`, `FL_DND_DRAG`, `FL_DND_RELEASE` and `FL_PASTE` sent
+     by `Probe`.
+10. **Small additions** (7 ports):
+    - `Fl.BoxDX`, `BoxDY`, `BoxDW`, `BoxDH` (`Fl::box_dx` and the rest),
+      for `draggable-group`.
+    - `Table.TabCellNav`/`SetTabCellNav`, for `table-spreadsheet`.
+    - `TreeItem.SwapChildren`, for `tree-custom-sort`. The tree's map of
+      live items is unchanged by a swap; the test checks the order and
+      the items' serials.
+    - A browser line's icon (`Fl_Browser::icon`), for
+      `howto-browser-with-icons`. FLTK keeps the image pointer, so the
+      browser's `Keeps` holds the image, counted, until the line or the
+      browser goes, as `Ref` does for a widget's image.
+    - Multi-labels (`Fl_Multi_Label`), for widgets and menu items, for
+      `howto-menu-with-images`. Each holds text or an image, or another
+      multi-label, and FLTK keeps all the pointers: the text is copied,
+      and the images and the label are held until the widget or item
+      no longer uses them.
+    - `fl_open_uri`, for `menubar-add`, returning `FALSE` with FLTK's
+      message rather than halting.
+    - Command-line options: `Fl::args`, `Fl::arg` and `Fl::help`, and
+      `Fl_Window::show(argc, argv)`, for `howto-parse-args`. FLTK keeps
+      pointers into `argv` (the display name, geometry, title), so the
+      shim builds its own `argv`, kept for the program's life, from
+      poc's `Args`. A program's own options come back from an Oberon
+      procedure, as `Fl_Args_Handler` does.
+    - Screen queries: `Fl::w`, `Fl::h`, `Fl::screen_count`,
+      `Fl::screen_xywh`, `Fl::screen_work_area`; and
+      `Fl::event_x_root`, `event_y_root`, and `event_shift` if
+      `GetKey` doesn't cover it. Under sway's headless output and Xvfb
+      the screen is the output's size, which the test checks.
+11. **The event loop** (3 ports):
+    - **Idle callbacks** (`Fl::add_idle`, `remove_idle`): an `Idle`
+      object, kept reachable while added as a pending `Timer` is
+      ("Lifetime and the collector"), with a `Run` method.
+    - **File descriptors** (`Fl::add_fd`, `remove_fd`, with `FL_READ`,
+      `FL_WRITE`, `FL_EXCEPT`): an `FdWatch` object, kept the same way,
+      with a `Ready(fd, when)` method. The test writes to a pipe
+      `Probe` makes, and waits for `Ready`.
+    - **The event dispatch** (`Fl::event_dispatch`): one Oberon
+      procedure that sees every event first, and `Fl.HandleDefault`
+      (`Fl::handle_`) to pass an event on. To remap a key the dispatch
+      sets the event's key and text, so `Fl` gains setters for the
+      event fields `Probe` already sets (`Fl::e_keysym`, `e_text`,
+      `e_length`). Check first that `Fl::handle_` inside a dispatch is
+      safe with pofltk's dispatch depth and deferred deletes.
+    - Running a command is not FLTK's (`popen`), so it isn't pofltk's:
+      `examples/Pipe.Mod` and `Pipe.cpp`, an example module with a C++
+      part (`popen`, `fileno`, `read`, `pclose`), as `test/Probe` is a
+      test module with one.
+    - Ports: `howto-add_fd-and-popen` (it runs `ping`, so the port runs
+      something slow that needs no network), `howto-remap-numpad-keyboard-keys`,
+      `table-sort` (its table is `ls -l`, through `Pipe`).
+12. **Trees** (3 ports):
+    - **Widgets in items** (`Fl_Tree_Item::widget`, the tree's
+      `item_draw_mode` and `widgetmarginleft`), for `tree-as-container`
+      and `tree-of-tables`. The widget is the tree's child, deleted with
+      the tree, and `~Fl_Tree_Item` leaves it alone ("Fl_Group will
+      handle destruction", `Fl_Tree_Item.cxx`). So removing an item
+      leaves its widget in the tree. Find out what FLTK then draws, and
+      whether `Item.Remove` should delete the widget, or halt while it
+      has one.
+    - **Items that draw themselves**, for `tree-custom-draw-items`: an
+      Oberon extension of `TreeItem` with a `DrawContent(render)` method,
+      FLTK's virtual `draw_item_content`. The C++ part's item class sends
+      it to Oberon through a dispatcher `FlBrowsers`' body registers, as
+      `FlTable` does for `draw_cell`. `Tree.AddItem(path, item)` adds it
+      (`Fl_Tree::add(path, newitem)`).
+      - Today the program can't make items. An Oberon item would be
+        reachable from FLTK alone, so it goes in the registry while its
+        C++ item lives. The C++ item's destructor drops it there, and
+        from the tree's map of live items, as `Ref` does for a widget.
+      - The example's `show_self` prints the tree to standard output for
+        debugging: the port walks the items itself.
+13. **New widgets and images** (6 ports):
+    - `Fl_Chart`, for `chart-simple`, in a new module `FlCharts` (or
+      `FlValuators`, if it stays alone). Each entry's label is copied
+      into the entry (`str[FL_CHART_LABEL_MAX + 1]`, `Fl_Chart.H`).
+    - Window shapes (`Fl_Window::shape`) and `Fl_Tiled_Image`, for
+      `shapedwindow`. X11 keeps a pixmap's pointer as the shape
+      (`Fl_X11_Window_Driver::shape`), so the window's `Ref` holds the
+      image. Find out whether the Wayland back end supports shapes at
+      all.
+    - Animated GIFs (`Fl_Anim_GIF_Image`), for the four `animgifimage`
+      examples, loaded from contents as `FlImages` loads every image.
+      The image redraws its canvas widget from FLTK timers, so a canvas
+      deleted first, or an image deleted while its timer is pending,
+      must be safe: test both under valgrind.
+    - `animgifimage` lists a directory (`fl_filename_list`,
+      `fl_alphasort`), which `FlDialogs` can bind, with the names copied
+      and FLTK's list freed (`fl_filename_free_list`).
+
+Not in these phases: FLTK's classes no example uses (`Fl_Clock`,
+`Fl_Positioner`, `Fl_Input_Choice`, `Fl_File_Input`, `Fl_Help_View`,
+`Fl_Overlay_Window` and others). Each is a small widget binding, for
+when a program needs it.
+
 ### poc 0.4.0 `[done]`
 
 When poc 0.4.0 was installed (2026-10-06), the 0.3.1 workarounds came out:
