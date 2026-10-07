@@ -21,9 +21,9 @@ anything:
 
 ## Status
 
-As of 2026-10-07, Phases 0 to 10 of PLAN.md are done, and `README.md`
+As of 2026-10-07, Phases 0 to 11 of PLAN.md are done, and `README.md`
 is the user's guide. Phases 9 to 13 (planned 2026-10-07) port the rest
-of FLTK's `examples/` and bind what they need; 11 to 13 remain. `src/` has the `Fl`, `FlDraw`, `FlButtons`,
+of FLTK's `examples/` and bind what they need; 12 and 13 remain. `src/` has the `Fl`, `FlDraw`, `FlButtons`,
 `FlInputs`, `FlValuators`, `FlLayout`, `FlMenus`, `FlDialogs`, `FlText`,
 `FlBrowsers`, `FlImages`, `FlPreferences` and `FlTable` modules, and the
 tests pass. Also kept:
@@ -105,7 +105,8 @@ prefix of the C++ parts (`ofl::`, `ofl_`) was kept.
     widget's pixels, captured into an `Fl_Image_Surface`; mouse, wheel
     and key events sent as the window system would; the modal window (a
     dialog) and keys sent to it; whether FLTK uses Wayland; and how
-    many things a widget keeps (`Kept`, `Ref::keep`).
+    many things a widget keeps (`Kept`, `Ref::keep`); and pipes
+    (`Pipe`, `Write`, `Read`, `Close`), for `TestLoop`'s fd watches.
   - `images/`: one 4x2 image, red left and blue right, in each format
     `TestImages` reads.
 - `tools/gen-constants.py`: writes each module's constants and their
@@ -122,7 +123,9 @@ prefix of the C++ parts (`ofl::`, `ofl_`) was kept.
   window manager a window sits 20 pixels below its y, so add 20 to a
   click's y. `make` builds them. They wait for the user, so
   `make test` runs each for `EXAMPLETIME` seconds and checks it is still
-  running then.
+  running then. `Pipe.Mod` and `Pipe.cpp` are an example module with a
+  C++ part (`popen`), listed in `EXAMPLECXX`; examples are built with
+  `-import-path examples` to find it.
 - `GNUmakefile`: build and test (Build, below).
 - `build/`: poc and clang output (ignored by git).
 - `PLAN.md`: design, decisions and findings, by section and phase.
@@ -168,7 +171,10 @@ make clean      # rm -rf build
   line, `TESTARGS`, by both test loops.
 - **A new module** needs its name added to `MODULES`, and a new header to
   `HEADERS`. A test module with a C++ part goes in `TESTCXX`, an example
-  in `EXAMPLES`.
+  in `EXAMPLES`, and an example's module with a C++ part in
+  `EXAMPLECXX`. `EXAMPLES` is one long line: edit it by matching its
+  text, as `sed 's/^\(EXAMPLES := .*Last\)$/\1 New/'`, not by line
+  number.
 - **Constants**: never edit the block of a module between
   `BEGIN generated constants` and `END generated constants`. Add the
   name and C expression to `SPEC` in `tools/gen-constants.py`, after

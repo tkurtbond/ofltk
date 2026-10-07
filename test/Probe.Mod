@@ -6,6 +6,10 @@ IMPORT SYSTEM, Fl;
 
 PROCEDURE ["C", "ofltest_capture"] CCapture(w: SYSTEM.ADDRESS): SYSTEM.INT32;
 PROCEDURE ["C", "ofltest_kept"] CKept(w: SYSTEM.ADDRESS): SYSTEM.INT32;
+PROCEDURE ["C", "ofltest_pipe"] CPipe(VAR fds: ARRAY OF SYSTEM.INT32): SYSTEM.INT32;
+PROCEDURE ["C", "ofltest_write"] CWrite(fd: SYSTEM.INT32; s: ARRAY OF CHAR): SYSTEM.INT32;
+PROCEDURE ["C", "ofltest_read"] CRead(fd: SYSTEM.INT32; VAR buf: ARRAY OF CHAR; n: SYSTEM.INT32): SYSTEM.INT32;
+PROCEDURE ["C", "ofltest_close"] CClose(fd: SYSTEM.INT32);
 PROCEDURE ["C", "ofltest_pixel"] CPixel(x, y: SYSTEM.INT32): SYSTEM.INT32;
 PROCEDURE ["C", "ofltest_release"] CRelease;
 PROCEDURE ["C", "ofltest_mouse"] CMouse(win: SYSTEM.ADDRESS; event, x, y, button, state, clicks: SYSTEM.INT32): SYSTEM.INT32;
@@ -90,5 +94,29 @@ END ModalKey;
 PROCEDURE Wayland*(): BOOLEAN;
 BEGIN RETURN CWayland() # 0
 END Wayland;
+
+(* A pipe, for Fl.FdWatch: its read end r and write end w; TRUE if it
+   was made. *)
+PROCEDURE Pipe*(VAR r, w: INTEGER): BOOLEAN;
+  VAR fds: ARRAY 2 OF SYSTEM.INT32; ok: BOOLEAN;
+BEGIN
+  ok := CPipe(fds) # 0; r := fds[0]; w := fds[1];
+  RETURN ok
+END Pipe;
+
+(* Writes s to fd; the bytes written, or -1. *)
+PROCEDURE Write*(fd: INTEGER; s-: ARRAY OF CHAR): INTEGER;
+BEGIN RETURN CWrite(fd, s)
+END Write;
+
+(* Reads what fd has, up to LEN(s) - 1 bytes, into s; the bytes read, or
+   -1. *)
+PROCEDURE Read*(fd: INTEGER; VAR s: ARRAY OF CHAR): INTEGER;
+BEGIN RETURN CRead(fd, s, SHORT(LEN(s)))
+END Read;
+
+PROCEDURE Close*(fd: INTEGER);
+BEGIN CClose(fd)
+END Close;
 
 END Probe.

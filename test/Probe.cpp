@@ -13,6 +13,7 @@
 #include <FL/fl_draw.H>
 #include <stdint.h>
 #include <string.h>
+#include <unistd.h>
 
 namespace {
 
@@ -188,5 +189,30 @@ int32_t ofltest_wayland(void) {
   fl_open_display();
   return fl_wl_display() != 0;
 }
+
+// A pipe, for FdWatch: its read and write ends in fds[0] and fds[1]; 1
+// if it was made.
+int32_t ofltest_pipe(int32_t *fds) {
+  int p[2];
+  if (pipe(p) != 0) return 0;
+  fds[0] = p[0];
+  fds[1] = p[1];
+  return 1;
+}
+
+// Writes s to fd; the bytes written, or -1.
+int32_t ofltest_write(int32_t fd, const char *s) {
+  return static_cast<int32_t>(write(fd, s, strlen(s)));
+}
+
+// Reads up to n - 1 bytes from fd into buf, ended with 0X; the bytes
+// read, or -1.
+int32_t ofltest_read(int32_t fd, char *buf, int32_t n) {
+  ssize_t r = read(fd, buf, n - 1);
+  buf[r > 0 ? r : 0] = 0;
+  return static_cast<int32_t>(r);
+}
+
+void ofltest_close(int32_t fd) { close(fd); }
 
 }  // extern "C"

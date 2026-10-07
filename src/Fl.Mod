@@ -16,7 +16,8 @@ MODULE Fl; (* pofltk's core: widgets, groups, windows, boxes, timers, the event 
    collector", has the reasons.
 
    Timers work the same way: a pending timer is kept reachable here until
-   it fires or is removed.
+   it fires or is removed; so is an idle callback while it is added, and
+   a file descriptor's watch while it watches.
 
    The C++ part is Fl.cpp, with pofltk.h. *)
 
@@ -377,6 +378,11 @@ CONST
   OptionPrinterUsesGtk* = 7;
   OptionShowScaling* = 8;
   OptionSimpleZoomShortcut* = 9;
+
+  (* what a watched file descriptor waits for (FdWatch, WatchFd) *)
+  FdRead* = {0};
+  FdWrite* = {2};
+  FdExcept* = {3};
 (* END generated constants *)
 
 TYPE
@@ -409,9 +415,37 @@ TYPE
     action*: PROCEDURE (t: Timer)
   END;
 
+  (* Runs whenever the event loop has nothing else to do, while added
+     (AddIdle): its Run, whose default calls its action. *)
+  Idle* = POINTER TO IdleDesc;
+  IdleDesc* = RECORD
+    added: BOOLEAN;
+    prev, next: Idle;    (* the idles added *)
+    action*: PROCEDURE (i: Idle)
+  END;
+
+  (* Watches a file descriptor, fd, for what when says (FdRead, FdWrite,
+     FdExcept), while it watches (WatchFd): its Ready, whose default
+     calls its action, runs when the descriptor is ready for one of them.
+     FLTK doesn't say which. *)
+  FdWatch* = POINTER TO FdWatchDesc;
+  FdWatchDesc* = RECORD
+    fd-: INTEGER;
+    when-: SET;          (* {} when it isn't watching *)
+    prev, next: FdWatch; (* the watches watching *)
+    action*: PROCEDURE (w: FdWatch)
+  END;
+
+  (* Sees every event first (SetEventDispatch), with its window: NIL for
+     one FLTK made itself, such as a menu's or a dialog's, or for an
+     event with none. It returns TRUE if the event was used, as
+     HandleDefault, which hands the event on, says. *)
+  EventDispatch* = PROCEDURE (event: INTEGER; w: Window): BOOLEAN;
+
   SelfProc = PROCEDURE (self: SYSTEM.ADDRESS);
   HandleProc = PROCEDURE (self: SYSTEM.ADDRESS; event: SYSTEM.INT32): SYSTEM.INT32;
   ResizeProc = PROCEDURE (self: SYSTEM.ADDRESS; x, y, w, h: SYSTEM.INT32);
+  DispatchProc = PROCEDURE (event: SYSTEM.INT32; self: SYSTEM.ADDRESS): SYSTEM.INT32;
   ArgProc = PROCEDURE (i: SYSTEM.INT32): SYSTEM.INT32;
 
   (* A program's own command-line options (ParseArgs): given argument i
@@ -425,6 +459,10 @@ VAR
   openCount, pendingCount: LONGINT;
   firing: Timer;    (* the timer whose Fire is running, or NIL *)
   argHandler: ArgHandler;  (* the handler of the ParseArgs running *)
+  idles: Idle;               (* every idle added *)
+  watches: FdWatch;          (* every watch watching *)
+  dispatch: EventDispatch;   (* the event dispatch, or NIL for FLTK's own *)
+  dispatching: INTEGER;      (* how many dispatch calls are running *)
 
 PROCEDURE ["C", "ofl_register"] CRegister(callback, draw: SelfProc; handle: HandleProc; resize: ResizeProc; deleted, timeout: SelfProc);
 PROCEDURE ["C", "ofl_group_new"] CGroupNew(x, y, w, h: SYSTEM.INT32; self: SYSTEM.ADDRESS): SYSTEM.ADDRESS;
@@ -492,8 +530,19 @@ PROCEDURE ["C", "ofl_focus"] CFocus(): SYSTEM.ADDRESS;
 PROCEDURE ["C", "ofl_belowmouse"] CBelowmouse(): SYSTEM.ADDRESS;
 PROCEDURE ["C", "ofl_pushed"] CPushed(): SYSTEM.ADDRESS;
 PROCEDURE ["C", "ofl_open_uri"] COpenURI(uri: ARRAY OF CHAR; VAR msg: ARRAY OF CHAR; n: SYSTEM.INT32): SYSTEM.INT32;
+PROCEDURE ["C", "ofl_register_loop"] CRegisterLoop(idle, fd: SelfProc; dispatch: DispatchProc);
+PROCEDURE ["C", "ofl_add_idle"] CAddIdle(self: SYSTEM.ADDRESS);
+PROCEDURE ["C", "ofl_remove_idle"] CRemoveIdle(self: SYSTEM.ADDRESS);
+PROCEDURE ["C", "ofl_add_fd"] CAddFd(fd, when: SYSTEM.INT32; self: SYSTEM.ADDRESS);
+PROCEDURE ["C", "ofl_remove_fd"] CRemoveFd(fd, when: SYSTEM.INT32);
+PROCEDURE ["C", "ofl_event_dispatch"] CEventDispatch(on: SYSTEM.INT32);
+PROCEDURE ["C", "ofl_handle_default"] CHandleDefault(event: SYSTEM.INT32): SYSTEM.INT32;
+PROCEDURE ["C", "ofl_set_event_key"] CSetEventKey(key: SYSTEM.INT32);
+PROCEDURE ["C", "ofl_set_event_text"] CSetEventText(s: ARRAY OF CHAR);
 PROCEDURE ["C", "ofl_screen"] CScreen(what: SYSTEM.INT32): SYSTEM.INT32;
 PROCEDURE ["C", "ofl_screen_count"] CScreenCount(): SYSTEM.INT32;
+PROCEDURE ["C", "ofl_scrollbar_size"] CScrollbarSize(): SYSTEM.INT32;
+PROCEDURE ["C", "ofl_set_scrollbar_size"] CSetScrollbarSize(n: SYSTEM.INT32);
 PROCEDURE ["C", "ofl_screen_xywh"] CScreenXYWH(n, work: SYSTEM.INT32; VAR x, y, w, h: SYSTEM.INT32);
 PROCEDURE ["C", "ofl_screen_num"] CScreenNum(x, y: SYSTEM.INT32): SYSTEM.INT32;
 PROCEDURE ["C", "ofl_args"] CArgs(argc: SYSTEM.INT32; argv: SYSTEM.ADDRESS; VAR i: SYSTEM.INT32; handler: ArgProc): SYSTEM.INT32;
@@ -1447,6 +1496,18 @@ BEGIN
   CScreenXYWH(n, 1, cx, cy, cw, ch); x := cx; y := cy; w := cw; h := ch
 END ScreenWorkArea;
 
+(* The width of scrollbars: of every widget's whose own is 0, as it is
+   unless set (Browser, Table, Tree and the rest have SetScrollbarSize).
+   FLTK's is 16. *)
+PROCEDURE ScrollbarSize*(): INTEGER;
+BEGIN RETURN CScrollbarSize()
+END ScrollbarSize;
+
+(* From 1 up, or it halts (IndexOutOfRange). *)
+PROCEDURE SetScrollbarSize*(n: INTEGER);
+BEGIN ASSERT(n >= 1, IndexOutOfRange); CSetScrollbarSize(n)
+END SetScrollbarSize;
+
 (* The screen the point x, y is on; 0 if it is on none. *)
 PROCEDURE ScreenAt*(x, y: INTEGER): INTEGER;
 BEGIN RETURN CScreenNum(x, y)
@@ -1560,6 +1621,122 @@ PROCEDURE PendingTimers*(): LONGINT;
 BEGIN RETURN pendingCount
 END PendingTimers;
 
+(* Idle callbacks *)
+
+(* What an idle callback does: its action, if set. *)
+PROCEDURE (i: Idle) Run*;
+BEGIN
+  IF i.action # NIL THEN i.action(i) END
+END Run;
+
+PROCEDURE (i: Idle) Added*(): BOOLEAN;
+BEGIN RETURN i.added
+END Added;
+
+(* Has i run whenever the event loop is idle, until RemoveIdle. While one
+   is added, Wait doesn't wait. Adding one added does nothing. *)
+PROCEDURE AddIdle*(i: Idle);
+BEGIN
+  ASSERT(i # NIL, NilArgument);
+  IF ~i.added THEN
+    i.prev := NIL; i.next := idles;
+    IF idles # NIL THEN idles.prev := i END;
+    idles := i; i.added := TRUE;
+    CAddIdle(SYSTEM.VAL(SYSTEM.ADDRESS, i))
+  END
+END AddIdle;
+
+(* i won't run again, even from its own Run; nothing if it isn't added. *)
+PROCEDURE RemoveIdle*(i: Idle);
+BEGIN
+  ASSERT(i # NIL, NilArgument);
+  IF i.added THEN
+    CRemoveIdle(SYSTEM.VAL(SYSTEM.ADDRESS, i));
+    IF i.prev = NIL THEN idles := i.next ELSE i.prev.next := i.next END;
+    IF i.next # NIL THEN i.next.prev := i.prev END;
+    i.prev := NIL; i.next := NIL; i.added := FALSE
+  END
+END RemoveIdle;
+
+(* File descriptors *)
+
+(* What a watch does when its descriptor is ready: its action, if set. *)
+PROCEDURE (w: FdWatch) Ready*;
+BEGIN
+  IF w.action # NIL THEN w.action(w) END
+END Ready;
+
+PROCEDURE (w: FdWatch) Watching*(): BOOLEAN;
+BEGIN RETURN w.when # {}
+END Watching;
+
+PROCEDURE Unwatch(w: FdWatch);
+BEGIN
+  IF w.prev = NIL THEN watches := w.next ELSE w.prev.next := w.next END;
+  IF w.next # NIL THEN w.next.prev := w.prev END;
+  w.prev := NIL; w.next := NIL; w.when := {}
+END Unwatch;
+
+(* w stops watching; nothing if it isn't. Ready may stop its own watch. *)
+PROCEDURE UnwatchFd*(w: FdWatch);
+BEGIN
+  ASSERT(w # NIL, NilArgument);
+  IF w.when # {} THEN CRemoveFd(w.fd, ORD(w.when)); Unwatch(w) END
+END UnwatchFd;
+
+(* Has w watch fd for when: one or more of FdRead, FdWrite and FdExcept,
+   or it halts (Unsupported). A watch watches one descriptor: watching
+   another stops the first. As in FLTK, a descriptor has one watch for
+   each of them, so another watch of fd stops watching for these. *)
+PROCEDURE WatchFd*(w: FdWatch; fd: INTEGER; when: SET);
+  VAR v, next: FdWatch;
+BEGIN
+  ASSERT(w # NIL, NilArgument); ASSERT(fd >= 0, IndexOutOfRange);
+  ASSERT((when # {}) & (when - (FdRead + FdWrite + FdExcept) = {}), Unsupported);
+  UnwatchFd(w);
+  v := watches;
+  WHILE v # NIL DO
+    next := v.next;
+    IF (v.fd = fd) & (v.when * when # {}) THEN
+      v.when := v.when - when;           (* FLTK's add_fd took these from it *)
+      IF v.when = {} THEN Unwatch(v) END
+    END;
+    v := next
+  END;
+  w.fd := fd; w.when := when;
+  w.prev := NIL; w.next := watches;
+  IF watches # NIL THEN watches.prev := w END;
+  watches := w;
+  CAddFd(fd, ORD(when), SYSTEM.VAL(SYSTEM.ADDRESS, w))
+END WatchFd;
+
+(* The event dispatch *)
+
+(* d sees every event first, and hands it on with HandleDefault; NIL for
+   FLTK's own dispatch. *)
+PROCEDURE SetEventDispatch*(d: EventDispatch);
+BEGIN
+  dispatch := d;
+  IF d = NIL THEN CEventDispatch(0) ELSE CEventDispatch(1) END
+END SetEventDispatch;
+
+(* In the event dispatch only (NotFiring): FLTK's own handling of the
+   event, for the dispatch's window; TRUE if a widget used it. *)
+PROCEDURE HandleDefault*(event: INTEGER): BOOLEAN;
+BEGIN ASSERT(dispatching > 0, NotFiring); RETURN CHandleDefault(event) # 0
+END HandleDefault;
+
+(* The event's key (EventKey) and text (EventText) become these, for
+   what handles it next: as the event dispatch remaps a key. EventLength
+   is the text's length. *)
+PROCEDURE SetEventKey*(key: INTEGER);
+BEGIN CSetEventKey(key)
+END SetEventKey;
+
+PROCEDURE SetEventText*(text-: ARRAY OF CHAR);
+BEGIN CSetEventText(text)
+END SetEventText;
+
 (* The event loop *)
 
 (* Handles events until no window is shown. *)
@@ -1618,6 +1795,28 @@ BEGIN
   outer := firing; firing := t; t.Fire; firing := outer
 END TimeoutD;
 
+PROCEDURE IdleD(self: SYSTEM.ADDRESS);
+  VAR i: Idle;
+BEGIN i := SYSTEM.VAL(Idle, self); i.Run
+END IdleD;
+
+PROCEDURE FdD(self: SYSTEM.ADDRESS);
+  VAR w: FdWatch;
+BEGIN w := SYSTEM.VAL(FdWatch, self); w.Ready
+END FdD;
+
+(* self is the event's window's object, or 0. *)
+PROCEDURE DispatchD(event: SYSTEM.INT32; self: SYSTEM.ADDRESS): SYSTEM.INT32;
+  VAR w: Window; used: BOOLEAN;
 BEGIN
-  CRegister(CallbackD, DrawD, HandleD, ResizeD, DeletedD, TimeoutD)
+  IF self = 0 THEN w := NIL ELSE w := SYSTEM.VAL(Window, self) END;
+  INC(dispatching);
+  IF dispatch # NIL THEN used := dispatch(event, w) ELSE used := CHandleDefault(event) # 0 END;
+  DEC(dispatching);
+  IF used THEN RETURN 1 ELSE RETURN 0 END
+END DispatchD;
+
+BEGIN
+  CRegister(CallbackD, DrawD, HandleD, ResizeD, DeletedD, TimeoutD);
+  CRegisterLoop(IdleD, FdD, DispatchD)
 END Fl.

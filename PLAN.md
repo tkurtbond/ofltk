@@ -244,10 +244,10 @@ Programmer errors halt, as in polibfyaml. poc's `ASSERT(x, n)` prints
 | 72 | a NIL argument where a widget or timer is required (`Fl.NilArgument`) |
 | 73 | a closed resource used, or one missing where it is needed: a closed `TextBuffer`, a display with no buffer, a removed `TreeItem`, a closed `Image` or `Surface`, a closed or deleted `Preferences` (`Fl.ClosedResource`) |
 | 74 | an index out of range: group child, grid row or column, browser line, menu item (`Fl.IndexOutOfRange`) |
-| 75 | `RepeatTimeout` outside its own timer's `Fire` (`Fl.NotFiring`) |
+| 75 | `RepeatTimeout` outside its own timer's `Fire`, `HandleDefault` outside the event dispatch (`Fl.NotFiring`) |
 | 76 | a widget that must be a group's child isn't: a grid's cell, a flex's fixed size, a tab or wizard page, a tile's size range (`Fl.NotAChild`) |
 | 77 | a `Begin` and `End` out of order: an image surface's `End` that doesn't match the last `Begin` (`Fl.OutOfOrder`) |
-| 78 | an argument a call can't take: a multi-label for a window, a multi-label put in itself, a label type that needs an image (`Fl.Unsupported`) |
+| 78 | an argument a call can't take: a multi-label for a window, a multi-label put in itself, a label type that needs an image, a file descriptor's conditions empty or unknown (`Fl.Unsupported`) |
 
 Bad data from outside the program is never a halt: an image that fails
 to load, a file chooser cancelled. Those come back as `BOOLEAN` results.
@@ -1168,7 +1168,7 @@ every interaction tried; what they print matched too.
   output, each its own work area. `EventState` already covers
   `event_shift`.
 
-### Phase 11: The event loop
+### Phase 11: The event loop `[done]`
 
 Three ports, and what they need of the event loop:
 
@@ -1193,6 +1193,70 @@ Three ports, and what they need of the event loop:
 - Ports: `howto-add_fd-and-popen` (it runs `ping`, so the port runs
   something slow that needs no network), `howto-remap-numpad-keyboard-keys`,
   `table-sort` (its table is `ls -l`, through `Pipe`).
+
+Done 2026-10-07, with poc 0.4.1 and FLTK 1.4.5: three ports, and the
+event loop they need. Each port was checked as Phase 9's were, against
+FLTK's own build under Xvfb.
+
+- Ported: `AddFdAndPopen`, `RemapNumpadKeyboardKeys`, `TableSort`.
+  - `AddFdAndPopen` runs `ping -i 2 -c 10 localhost`, as FLTK's does:
+    it needs only the loopback, so the plan's other slow command was
+    not needed. Its screens differ from FLTK's only in ping's times,
+    and both end with `<<DONE>>`.
+  - `RemapNumpadKeyboardKeys` matched pixel for pixel, remapping on
+    and off.
+  - `TableSort` matched pixel for pixel as drawn, sorted by file name,
+    reversed, and sorted by size, both run in `examples/`. FLTK sorts
+    with `std::sort`, which isn't stable, and the port with an
+    insertion sort, which is, so they are compared on columns whose
+    values differ.
+- **Idle callbacks**: `Fl.Idle` (`Run`, whose default calls its
+  `action`), `AddIdle` (a second time does nothing), `RemoveIdle` and
+  `Idle.Added`. An idle added is in `Fl`'s list, so kept from the
+  collector, until removed. `remove_idle` inside the idle's own
+  callback is safe (`call_idle` in `Fl_add_idle.cxx` moves on before calling it),
+  and `TestLoop` removes one there.
+- **File descriptors**: `Fl.FdWatch` (`Ready`, whose default calls its
+  `action`; `fd` and `when` read-only), `WatchFd`, `UnwatchFd` and
+  `FdWatch.Watching`, with the generated constants `FdRead`, `FdWrite`
+  and `FdExcept`. Kept in `Fl`'s list as idles are.
+  - `Fl::add_fd` for an fd already watched takes the conditions given
+    from the other entry for that fd (`Fl_Unix_System_Driver::add_fd`, the
+    system driver of both back ends). So `WatchFd` does the same to the
+    Oberon watches: the conditions are taken from any other watch of
+    that fd, and one left with none stops watching. `TestLoop` checks
+    a second watch of a pipe taking over from the first.
+  - FLTK's fd list is walked by index, and `select` is level-triggered,
+    so a watch may unwatch itself in `Ready`: `AddFdAndPopen` does at
+    the end of ping's output.
+  - A negative fd halts with `IndexOutOfRange`; conditions empty or
+    outside the three, with `Unsupported`.
+  - `Probe.Pipe`, `Write`, `Read` and `Close` give the test a pipe.
+- **The event dispatch**: `Fl.SetEventDispatch` (NIL for FLTK's own),
+  an `EventDispatch` procedure given the event and its window (NIL for
+  none, or a window not pofltk's), and `Fl.HandleDefault`
+  (`Fl::handle_`), which hands the event on. The trampoline runs under
+  `ofl::Dispatch`, so a widget deleted in the dispatch is deleted
+  after it (`TestLoop`), and `HandleDefault` outside a dispatch halts
+  with 75, `NotFiring` (`HaltHandleDefault`), which now covers it as
+  well as `RepeatTimeout`.
+  - `Fl.SetEventKey` and `SetEventText` (`Fl::e_keysym`, and `e_text`
+    and `e_length`, the text copied into the shim's buffer) let a
+    dispatch remap a key; `TestLoop` makes a keypad key type its digit
+    into an input.
+  - Under Wayland the dispatch also sees FLTK's own events such as
+    `FL_SCREEN_CONFIGURATION_CHANGED` (24), so `TestLoop` counts only
+    the events it sends.
+- **`Fl.ScrollbarSize`/`SetScrollbarSize`** (`Fl::scrollbar_size`, 16
+  by default), for `TableSort`, whose window is sized for its columns
+  and the scrollbar.
+- **`Pipe`** (`examples/Pipe.Mod`, `Pipe.cpp`): `popen` and `pclose`,
+  read a line at a time (`fgets`). The makefile's `EXAMPLECXX` lists
+  examples' modules with a C++ part, and examples are built with
+  `-import-path examples`, since poc doesn't search the main module's
+  directory.
+- `gen-constants.py` rewrote `FlTable`'s generated block, which held
+  the hand-written `Area` constants: they are now after its end.
 
 ### Phase 12: Trees
 

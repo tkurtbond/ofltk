@@ -322,6 +322,9 @@ BEGIN
   Same(Fl.OptionPrinterUsesGtk, "Fl::OPTION_PRINTER_USES_GTK");
   Same(Fl.OptionShowScaling, "Fl::OPTION_SHOW_SCALING");
   Same(Fl.OptionSimpleZoomShortcut, "Fl::OPTION_SIMPLE_ZOOM_SHORTCUT");
+  Same(ORD(Fl.FdRead), "FL_READ");
+  Same(ORD(Fl.FdWrite), "FL_WRITE");
+  Same(ORD(Fl.FdExcept), "FL_EXCEPT");
   Same(FlDraw.Solid, "FL_SOLID");
   Same(FlDraw.Dash, "FL_DASH");
   Same(FlDraw.Dot, "FL_DOT");
@@ -476,6 +479,6 @@ BEGIN
   Same(Fl.RGB(255, 0, 0), "fl_rgb_color(255, 0, 0)");
   Same(Fl.RGB(1, 2, 3), "fl_rgb_color(1, 2, 3)");
   Same(Fl.RGB(0, 0, 255), "fl_rgb_color(0, 0, 255)");
-  Check.Check((wrong = 0) & (checked = 457), "each of 457 constants and values is FLTK's");
+  Check.Check((wrong = 0) & (checked = 460), "each of 460 constants and values is FLTK's");
   Check.Summary
 END TestConstants.

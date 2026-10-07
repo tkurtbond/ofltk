@@ -154,6 +154,9 @@ add("int", [("Option" + camel(o), "Fl::OPTION_" + o) for o in
             FNFC_USES_ZENITY FNFC_USES_KDIALOG PRINTER_USES_GTK SHOW_SCALING
             SIMPLE_ZOOM_SHORTCUT""".split()])
 
+section("what a watched file descriptor waits for (FdWatch, WatchFd)")
+add("set", [("FdRead", "FL_READ"), ("FdWrite", "FL_WRITE"), ("FdExcept", "FL_EXCEPT")])
+
 module("FlDraw")
 WORDS.update({"DASHDOT": "DashDot", "DASHDOTDOT": "DashDotDot"})
 section("line styles (LineStyle): a dash pattern, plus a cap and a join")

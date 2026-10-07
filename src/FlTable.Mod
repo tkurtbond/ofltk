@@ -31,16 +31,16 @@ CONST
   ContextTable* = 32;
   ContextRCResize* = 64;
 
-  (* a table's areas (Table.Area) *)
-  AreaWidget* = 0;      (* inside the table's box *)
-  AreaCells* = 1;       (* the cells', with their box, beside headers and scrollbars *)
-  AreaCellsInner* = 2;  (* inside the cells' box *)
-
   (* how a table row's rows are selected (TableRow.SetSelectMode) *)
   SelectNone* = 0;
   SelectSingle* = 1;
   SelectMulti* = 2;
 (* END generated constants *)
+
+  (* a table's areas (Table.Area) *)
+  AreaWidget* = 0;      (* inside the table's box *)
+  AreaCells* = 1;       (* the cells', with their box, beside headers and scrollbars *)
+  AreaCellsInner* = 2;  (* inside the cells' box *)
 
   (* the classes, as ofl_table_new numbers them *)
   table = 0; tableRow = 1;

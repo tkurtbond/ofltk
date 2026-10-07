@@ -12,6 +12,9 @@
 #include <FL/Fl_Window.H>
 #include <FL/filename.H>
 #include <FL/platform.H>
+#include <string.h>
+
+#include <vector>
 
 namespace ofl {
 
@@ -38,9 +41,82 @@ void timeout_trampoline(void *self) {
   on_timeout(reinterpret_cast<intptr_t>(self));
 }
 
+// Idle callbacks and watched file descriptors: the data is the Oberon
+// Idle's or FdWatch's address, which Fl keeps reachable while FLTK has it.
+ofl::SelfFn on_idle, on_fd;
+
+void idle_trampoline(void *self) {
+  ofl::Dispatch d;
+  on_idle(reinterpret_cast<intptr_t>(self));
+}
+
+void fd_trampoline(FL_SOCKET, void *self) {
+  ofl::Dispatch d;
+  on_fd(reinterpret_cast<intptr_t>(self));
+}
+
+// The event dispatch: Fl's, given each event and its window's Oberon
+// object (0 for a window FLTK made, or none), with the window kept for
+// ofl_handle_default. A dispatch, so a widget deleted in it is deleted
+// later, not under Fl::handle_.
+int32_t (*on_dispatch)(int32_t, intptr_t);
+Fl_Window *dispatch_window;
+
+int dispatch_trampoline(int event, Fl_Window *w) {
+  ofl::Dispatch d;
+  Fl_Window *outer = dispatch_window;
+  dispatch_window = w;
+  int r = on_dispatch(event, ofl::object_of(w));
+  dispatch_window = outer;
+  return r;
+}
+
+// The text an event is given (ofl_set_event_text): FLTK keeps the
+// pointer until the next event.
+std::vector<char> event_text;
+
 }  // namespace
 
 extern "C" {
+
+void ofl_register_loop(ofl::SelfFn idle, ofl::SelfFn fd,
+                       int32_t (*dispatch)(int32_t, intptr_t)) {
+  on_idle = idle;
+  on_fd = fd;
+  on_dispatch = dispatch;
+}
+
+void ofl_add_idle(intptr_t self) {
+  Fl::add_idle(idle_trampoline, reinterpret_cast<void *>(self));
+}
+
+void ofl_remove_idle(intptr_t self) {
+  Fl::remove_idle(idle_trampoline, reinterpret_cast<void *>(self));
+}
+
+void ofl_add_fd(int32_t fd, int32_t when, intptr_t self) {
+  Fl::add_fd(fd, when, fd_trampoline, reinterpret_cast<void *>(self));
+}
+
+void ofl_remove_fd(int32_t fd, int32_t when) { Fl::remove_fd(fd, when); }
+
+void ofl_event_dispatch(int32_t on) {
+  Fl::event_dispatch(on ? dispatch_trampoline : 0);
+}
+
+// FLTK's own handling of the dispatch's event, for its window.
+int32_t ofl_handle_default(int32_t event) {
+  return Fl::handle_(event, dispatch_window);
+}
+
+void ofl_set_event_key(int32_t key) { Fl::e_keysym = key; }
+
+void ofl_set_event_text(const char *s) {
+  size_t n = strlen(s);
+  event_text.assign(s, s + n + 1);
+  Fl::e_text = event_text.data();
+  Fl::e_length = static_cast<int>(n);
+}
 
 void ofl_register(ofl::SelfFn callback, ofl::SelfFn draw,
                   ofl::HandleFn handle, ofl::ResizeFn resize,
@@ -440,6 +516,10 @@ int32_t ofl_screen(int32_t what) {
 }
 
 int32_t ofl_screen_count() { return Fl::screen_count(); }
+
+int32_t ofl_scrollbar_size() { return Fl::scrollbar_size(); }
+
+void ofl_set_scrollbar_size(int32_t n) { Fl::scrollbar_size(n); }
 
 // Screen n's place and size, or its work area if work is 1.
 void ofl_screen_xywh(int32_t n, int32_t work, int32_t *x, int32_t *y,

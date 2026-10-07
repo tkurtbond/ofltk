@@ -123,13 +123,18 @@ END Hello.
   - `DraggableGroup`, `TableSpreadsheet`, `TreeCustomSort`;
   - images in lists and menus: `BrowserWithIcons`, `MenuWithImages`;
   - `MenubarAdd`, and `ParseArgs`: a program's own command-line
-    options beside FLTK's.
+    options beside FLTK's;
+  - the event loop: `AddFdAndPopen` (a command's output, read as it
+    comes), `RemapNumpadKeyboardKeys` (an event dispatch), `TableSort`
+    (a table of `ls -l`, sorted by the column clicked). The first and
+    last run commands through `examples/Pipe`, an example module with
+    a C++ part, since running a command isn't FLTK's.
 
 ## Modules
 
 | Module | Contents |
 |---|---|
-| `Fl` | `Widget`, `Group`, `Window`, `DoubleWindow`, `Box`; the event loop, timers, events, colors, fonts, box and label types, schemes, options, the clipboard, command-line options, screens, opening URIs |
+| `Fl` | `Widget`, `Group`, `Window`, `DoubleWindow`, `Box`; the event loop, timers, idle callbacks, file descriptors' watches, the event dispatch, events, colors, fonts, box and label types, schemes, options, the clipboard, command-line options, screens, opening URIs |
 | `FlDraw` | `fl_draw.H`: lines, shapes, paths, transformations, text, fonts, clipping, boxes and symbols |
 | `FlButtons` | `Button` and its kinds: check, light, round, radio, return, repeat, toggle |
 | `FlInputs` | `Input` and its kinds, `Output`, `MultilineOutput` |
@@ -167,8 +172,9 @@ widgets opened until its `End`.
 **Lifetime.** FLTK deletes a group's children with it, and a window
 the user closes may be deleted by the program's callback. pofltk hears of
 every deletion: a deleted widget's `IsOpen()` is FALSE, and using it
-halts. Every open widget is kept reachable for poc's collector, which
-can't see FLTK's pointers. Delete a widget with `Delete`. Inside a
+halts. Every open widget, and every timer, idle and file descriptor's watch
+FLTK may call, is kept reachable for poc's collector, which can't see
+FLTK's pointers. Delete a widget with `Delete`. Inside a
 callback, or a `Draw` or `Handle`, FLTK deletes it later, when its
 event loop next runs (`Fl::delete_widget`), since FLTK may still be
 using it.
@@ -194,10 +200,10 @@ prints `assertion failed (n)`:
 | 72 | NIL where a widget or timer is needed (`Fl.NilArgument`) |
 | 73 | a closed resource used, or one missing: a closed buffer, image or preferences, a removed tree item (`Fl.ClosedResource`) |
 | 74 | an index out of range: a group's child, a grid cell, a browser line, a menu item, a table row (`Fl.IndexOutOfRange`) |
-| 75 | `RepeatTimeout` outside its timer's `Fire` (`Fl.NotFiring`) |
+| 75 | `RepeatTimeout` outside its timer's `Fire`, `HandleDefault` outside the event dispatch (`Fl.NotFiring`) |
 | 76 | a widget that must be a group's child isn't (`Fl.NotAChild`) |
 | 77 | a surface's `Begin` and `End` out of order (`Fl.OutOfOrder`) |
-| 78 | an argument a call can't take: a multi-label for a window, or put in itself (`Fl.Unsupported`) |
+| 78 | an argument a call can't take: a multi-label for a window, or put in itself; a file descriptor's conditions empty or unknown (`Fl.Unsupported`) |
 
 ## FLTK's problems
 
