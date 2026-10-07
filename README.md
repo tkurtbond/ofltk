@@ -128,7 +128,9 @@ END Hello.
     comes), `RemapNumpadKeyboardKeys` (an event dispatch), `TableSort`
     (a table of `ls -l`, sorted by the column clicked). The first and
     last run commands through `examples/Pipe`, an example module with
-    a C++ part, since running a command isn't FLTK's.
+    a C++ part, since running a command isn't FLTK's;
+  - trees: `TreeAsContainer` and `TreeOfTables` (widgets in items),
+    `TreeCustomDrawItems` (items that draw themselves).
 
 ## Modules
 
@@ -140,10 +142,10 @@ END Hello.
 | `FlInputs` | `Input` and its kinds, `Output`, `MultilineOutput` |
 | `FlValuators` | sliders, `Counter`, `Dial`, `Roller`, `Spinner`, `Adjuster`, `ValueInput`, `ValueOutput`, `Scrollbar`, `Progress` |
 | `FlLayout` | `Flex`, `Grid`, `Pack`, `Scroll`, `Tabs`, `Tile`, `Wizard` |
-| `FlMenus` | `MenuBar`, `MenuButton`, `Choice`, menu items |
+| `FlMenus` | `MenuBar`, `MenuButton`, `Choice`, `SchemeChoice`, menu items |
 | `FlDialogs` | messages, questions, input, colors, file choosers, `NativeFileChooser` |
 | `FlText` | `TextBuffer`, `TextDisplay`, `TextEditor`, styles |
-| `FlBrowsers` | `Browser` and its kinds, `CheckBrowser`, `FileBrowser`, `Tree`, `TreeItem` |
+| `FlBrowsers` | `Browser` and its kinds, `CheckBrowser`, `FileBrowser`, `Tree`, `TreeItem` (FLTK's, or the program's own, which draw themselves; widgets in items) |
 | `FlImages` | `Image` (loaded, decoded, or from pixels), `MultiLabel`; images on widgets, browser lines and menu items; `Surface` (offscreen drawing) |
 | `FlPreferences` | `Preferences`: FLTK's settings databases |
 | `FlTable` | `Table`, `TableRow`: cells the program draws |
@@ -167,7 +169,9 @@ widgets opened until its `End`.
 - `Callback` is called when the widget acts. Its default calls the
   widget's `action` field, a procedure, if one is set, so simple
   programs need no extension.
-- A table's `DrawCell` draws its cells.
+- A table's `DrawCell` draws its cells, and a tree item's
+  `DrawContent` the item, for an extension of `TreeItem` the program
+  adds itself (`Tree.AddItem`, `TreeItem.Replace`).
 
 **Lifetime.** FLTK deletes a group's children with it, and a window
 the user closes may be deleted by the program's callback. pofltk hears of
@@ -177,7 +181,8 @@ FLTK may call, is kept reachable for poc's collector, which can't see
 FLTK's pointers. Delete a widget with `Delete`. Inside a
 callback, or a `Draw` or `Handle`, FLTK deletes it later, when its
 event loop next runs (`Fl::delete_widget`), since FLTK may still be
-using it.
+using it. A widget a tree item shows (`TreeItem.SetWidget`) is
+deleted with the item.
 
 **Resources.** `TextBuffer`, `Image`, `MultiLabel`, `Surface`,
 `Preferences` and `NativeFileChooser` belong to the program: `Close`
@@ -196,14 +201,14 @@ prints `assertion failed (n)`:
 | Code | Mistake |
 |---|---|
 | 70 | a widget not open: never opened, or deleted (`Fl.NotOpen`) |
-| 71 | a widget opened twice (`Fl.OpenedTwice`) |
+| 71 | a widget opened twice, or a tree item added twice (`Fl.OpenedTwice`) |
 | 72 | NIL where a widget or timer is needed (`Fl.NilArgument`) |
 | 73 | a closed resource used, or one missing: a closed buffer, image or preferences, a removed tree item (`Fl.ClosedResource`) |
 | 74 | an index out of range: a group's child, a grid cell, a browser line, a menu item, a table row (`Fl.IndexOutOfRange`) |
 | 75 | `RepeatTimeout` outside its timer's `Fire`, `HandleDefault` outside the event dispatch (`Fl.NotFiring`) |
 | 76 | a widget that must be a group's child isn't (`Fl.NotAChild`) |
 | 77 | a surface's `Begin` and `End` out of order (`Fl.OutOfOrder`) |
-| 78 | an argument a call can't take: a multi-label for a window, or put in itself; a file descriptor's conditions empty or unknown (`Fl.Unsupported`) |
+| 78 | an argument a call can't take: a multi-label for a window, or put in itself; a file descriptor's conditions empty or unknown; a tree's root replaced (`Fl.Unsupported`) |
 
 ## FLTK's problems
 

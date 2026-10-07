@@ -62,19 +62,19 @@ LIBDIR   = $(POC_OBERON_LIBRARIES)/$(LIBRARY)
 TRIPLE   = $(shell $(POC) -version | sed -n 's/^target \([^ ]*\).*/\1/p')
 
 # Test programs (test/<name>.Mod, each a main module).
-TESTS := TestLiveness TestDelete TestTimer TestConstants TestWidget TestDraw TestEvents TestButtons TestInputs TestValuators TestLayout TestMenus TestDialogs TestText TestBrowsers TestTree TestImages TestClipboard TestPreferences TestTable TestArgs TestLoop
+TESTS := TestLiveness TestDelete TestTimer TestConstants TestWidget TestDraw TestEvents TestButtons TestInputs TestValuators TestLayout TestMenus TestDialogs TestText TestBrowsers TestTree TestImages TestClipboard TestPreferences TestTable TestArgs TestLoop TestTreeItems
 # TestArgs's command line: options of its own and FLTK's, and words that
 # aren't options.
 TESTARGS := -o hello --help -g 120x80 -ti Title -s plastic -nokbd rest more
 # Programs that must halt (test/<name>.Mod), as name:ASSERT-code. poc's
 # ASSERT(x, n) prints "assertion failed (n)" on standard error and exits
 # with status 10, so `make test` requires both.
-HALTTESTS := HaltNotOpen:70 HaltDeleted:70 HaltOpenTwice:71 HaltNil:72 HaltIndex:74 HaltRepeat:75 HaltGridRange:74 HaltNotAChild:76 HaltMenuItem:74 HaltClosedBuffer:73 HaltNoBuffer:73 HaltBrowserLine:74 HaltTreeItem:73 HaltClosedImage:73 HaltSurfaceOrder:77 HaltClosedGroup:73 HaltTableRow:74 HaltBoxType:74 HaltMultiLabel:78 HaltHandleDefault:75
+HALTTESTS := HaltNotOpen:70 HaltDeleted:70 HaltOpenTwice:71 HaltNil:72 HaltIndex:74 HaltRepeat:75 HaltGridRange:74 HaltNotAChild:76 HaltMenuItem:74 HaltClosedBuffer:73 HaltNoBuffer:73 HaltBrowserLine:74 HaltTreeItem:73 HaltClosedImage:73 HaltSurfaceOrder:77 HaltClosedGroup:73 HaltTableRow:74 HaltBoxType:74 HaltMultiLabel:78 HaltHandleDefault:75 HaltAddItem:71
 ASSERTSTATUS := 10
 
 # Example programs (examples/<name>.Mod). They wait for the user, so make
 # builds them and make test doesn't run them.
-EXAMPLES := Hello Scribble Swatch Menus TableSimple TreeSimple TextEditorSimple BrowserSimple GridSimple FlexSimple TabsSimple WizardSimple ProgressSimple NativeFileChooserSimple SvgSimple Callbacks DrawAnX TextOverImageButton DragAndDrop TableAsContainer TableWithKeynav TableWithRightClickMenu TableWithRightColumnStretchFit TableSpreadsheetWithKeyboardNav TextDisplayWithColors TextEditorWithDynamicColors NativeFileChooserSimpleApp DraggableGroup TableSpreadsheet TreeCustomSort BrowserWithIcons MenuWithImages MenubarAdd ParseArgs AddFdAndPopen RemapNumpadKeyboardKeys TableSort
+EXAMPLES := Hello Scribble Swatch Menus TableSimple TreeSimple TextEditorSimple BrowserSimple GridSimple FlexSimple TabsSimple WizardSimple ProgressSimple NativeFileChooserSimple SvgSimple Callbacks DrawAnX TextOverImageButton DragAndDrop TableAsContainer TableWithKeynav TableWithRightClickMenu TableWithRightColumnStretchFit TableSpreadsheetWithKeyboardNav TextDisplayWithColors TextEditorWithDynamicColors NativeFileChooserSimpleApp DraggableGroup TableSpreadsheet TreeCustomSort BrowserWithIcons MenuWithImages MenubarAdd ParseArgs AddFdAndPopen RemapNumpadKeyboardKeys TableSort TreeAsContainer TreeOfTables TreeCustomDrawItems
 
 TESTBINS := $(TESTS:%=$(BUILD)/%)
 HALTBINS := $(foreach h,$(HALTTESTS),$(BUILD)/$(firstword $(subst :, ,$(h))))

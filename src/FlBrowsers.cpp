@@ -15,6 +15,7 @@
 #include <string.h>
 
 #include <unordered_map>
+#include <vector>
 
 namespace {
 
@@ -70,17 +71,85 @@ Fl_File_Browser *files(intptr_t b) { return ofl::as<Fl_File_Browser>(b); }
 // map before FLTK deletes it, and the user can't delete items, so a
 // TreeItem is live exactly when its pointer is in the map with its
 // serial: a pointer FLTK reused for a new item has a new serial.
+//
+// The tree also keeps which item shows each widget (TreeItem.SetWidget).
 class Items {
 public:
-  Items() : next(0) {}
+  Items() : next(0), removals(0) {}
   virtual ~Items() {}
   std::unordered_map<Fl_Tree_Item *, uint32_t> map;
   uint32_t next;
+  std::unordered_map<Fl_Widget *, Fl_Tree_Item *> widgets;
+  uint32_t removals;  // items pofltk has removed, for Tr::handle
 };
+
+// Fl_Tree's private _lastselect, reached through an explicit
+// instantiation, which may name a private member ([temp.explicit]).
+template <class Tag, typename Tag::type M> struct Reach {
+  friend typename Tag::type member(Tag) { return M; }
+};
+struct LastSelect {
+  typedef Fl_Tree_Item *Fl_Tree::*type;
+  friend type member(LastSelect);
+};
+template struct Reach<LastSelect, &Fl_Tree::_lastselect>;
 
 class Tr : public Items, public ofl::W<Fl_Tree> {
 public:
   using ofl::W<Fl_Tree>::W;
+  // An item's widget leaving the tree, deleted or added to another group,
+  // is no longer the item's: FLTK would draw it, deleted or not.
+  void on_remove(int index) FL_OVERRIDE {
+    auto i = widgets.find(Fl_Group::child(index));
+    if (i != widgets.end()) {
+      i->second->widget(0);
+      widgets.erase(i);
+      recalc_tree();
+    }
+    ofl::W<Fl_Tree>::on_remove(index);
+  }
+  // Fl_Tree::handle makes the item pushed the last one clicked after the
+  // callback, which may have removed it, and a drag then moves it
+  // (doc/fltk-issues.md, 59). So after an event in which items were
+  // removed, the last one clicked is forgotten unless still in the tree.
+  int handle(int event) FL_OVERRIDE {
+    uint32_t before = removals;
+    int r = ofl::W<Fl_Tree>::handle(event);
+    if (removals != before) {
+      Fl_Tree_Item *&last = this->*member(LastSelect());
+      Fl_Tree_Item *i = Fl_Tree::first();
+      while (i != 0 && i != last) i = Fl_Tree::next(i);
+      if (i == 0) last = 0;
+    }
+    return r;
+  }
+};
+
+// The Oberon dispatchers, which FlBrowsers' body registers.
+typedef int32_t (*DrawItemFn)(intptr_t self, int32_t render);
+typedef void (*ItemGoneFn)(intptr_t self);
+DrawItemFn on_draw_item;
+ItemGoneFn on_item_gone;
+
+// An item the program made (Tree.AddItem, TreeItem.Replace), of an Oberon
+// TreeItem extension: its draw_item_content is the object's DrawContent.
+// Only FLTK holds it, so Oberon keeps the object reachable until the
+// destructor says it is gone.
+class Mine : public Fl_Tree_Item {
+public:
+  Mine(Fl_Tree *t, intptr_t self) : Fl_Tree_Item(t), self(self) {}
+  ~Mine() { on_item_gone(self); }
+  int draw_item_content(int render) FL_OVERRIDE {
+    ofl::Dispatch d;
+    return on_draw_item(self, render);
+  }
+  intptr_t self;
+};
+
+// An item's protected drawfgcolor() and drawbgcolor(), for DrawContent.
+struct Colors : Fl_Tree_Item {
+  static Fl_Color fg(Fl_Tree_Item *i) { return (i->*&Colors::drawfgcolor)(); }
+  static Fl_Color bg(Fl_Tree_Item *i) { return (i->*&Colors::drawbgcolor)(); }
 };
 
 Fl_Tree *tree(intptr_t t) { return ofl::as<Fl_Tree>(t); }
@@ -99,12 +168,32 @@ intptr_t hand(intptr_t t, Fl_Tree_Item *p, int32_t *serial) {
 
 Fl_Tree_Item *item(intptr_t p) { return reinterpret_cast<Fl_Tree_Item *>(p); }
 
+// Deletes item it's widget, if it has one, later inside a dispatch, as
+// ofl_widget_delete does. FLTK leaves the widget in the tree, where it is
+// no longer drawn but still takes events where it last was
+// (doc/fltk-issues.md, 58), so it goes with its item, as a group's
+// children go with the group.
+void drop_widget(Items *k, Fl_Tree_Item *it) {
+  Fl_Widget *w = it->widget();
+  if (w == 0) return;
+  k->widgets.erase(w);
+  it->widget(0);
+  w->hide();
+  if (ofl::depth > 0) {
+    Fl::delete_widget(w);
+  } else {
+    delete w;
+  }
+}
+
 // Removes item's descendants, and then item, last first. Fl_Tree::remove
 // forgets the item it removes as the last one clicked, but not that
 // item's descendants (doc/fltk-issues.md, 41), so each goes through it.
 void remove(Fl_Tree *t, Items *k, Fl_Tree_Item *it) {
   while (it->children() > 0) remove(t, k, it->child(it->children() - 1));
+  drop_widget(k, it);
   k->map.erase(it);
+  ++k->removals;
   if (t->callback_item() == it) t->callback_item(0);
   t->remove(it);
 }
@@ -409,12 +498,46 @@ intptr_t ofl_tree_add(intptr_t t, const char *path, int32_t *serial) {
   return hand(t, tree(t)->add(path), serial);
 }
 
+// Adds the program's item self, labelled label, at path: a new Mine, which
+// Fl_Tree::add puts under the path's parents (made if missing), or, if
+// the whole path is there, under that item. 0, and the item deleted, if
+// the path is empty.
+intptr_t ofl_tree_add_item(intptr_t t, const char *path, const char *label,
+                           intptr_t self, int32_t *serial) {
+  Fl_Tree *tr = tree(t);
+  Mine *m = new Mine(tr, self);
+  m->label(label);
+  if (tr->add(path, m) == 0) {
+    delete m;
+    *serial = 0;
+    return 0;
+  }
+  tr->redraw();
+  return hand(t, m, serial);
+}
+
+// The Oberon object of the program's item p, or 0 for FLTK's own.
+intptr_t ofl_tree_self(intptr_t p) {
+  Mine *m = dynamic_cast<Mine *>(item(p));
+  return m ? m->self : 0;
+}
+
 intptr_t ofl_tree_find(intptr_t t, const char *path, int32_t *serial) {
   return hand(t, tree(t)->find_item(path), serial);
 }
 
-// Fl_Tree::clear deletes the root too.
+void ofl_tree_register(DrawItemFn draw_item, ItemGoneFn item_gone) {
+  on_draw_item = draw_item;
+  on_item_gone = item_gone;
+}
+
+// Fl_Tree::clear deletes the root too, and the items' widgets go with
+// them (drop_widget).
 void ofl_tree_clear(intptr_t t) {
+  Items *k = items(t);
+  std::vector<Fl_Tree_Item *> shown;
+  for (auto &i : k->widgets) shown.push_back(i.second);
+  for (Fl_Tree_Item *it : shown) drop_widget(k, it);
   tree(t)->clear();
   items(t)->map.clear();
   tree(t)->callback_item(0);
@@ -425,7 +548,8 @@ void ofl_tree_clear(intptr_t t) {
 // connectorstyle, 5 item_reselect_mode, 6 item label font, 7 size, 8
 // foreground, 9 background, 10 connector color, 11 scrollbar size, 12
 // vposition, 13 hposition, 14 showcollapse, 15 marginleft, 16 margintop,
-// 17 linespacing, 18 connectorwidth, 19 selectbox.
+// 17 linespacing, 18 connectorwidth, 19 selectbox, 20 item_draw_mode, 21
+// widgetmarginleft.
 int32_t ofl_tree_get(intptr_t t, int32_t what) {
   Fl_Tree *tr = tree(t);
   switch (what) {
@@ -448,6 +572,8 @@ int32_t ofl_tree_get(intptr_t t, int32_t what) {
     case 17: return tr->linespacing();
     case 18: return tr->connectorwidth();
     case 19: return tr->selectbox();
+    case 20: return tr->item_draw_mode();
+    case 21: return tr->widgetmarginleft();
     default: return tr->callback_reason();
   }
 }
@@ -476,6 +602,8 @@ void ofl_tree_set(intptr_t t, int32_t what, int32_t v) {
     case 17: tr->linespacing(v); break;
     case 18: tr->connectorwidth(v); break;
     case 19: tr->selectbox(static_cast<Fl_Boxtype>(v)); break;
+    case 20: tr->item_draw_mode(v); tr->recalc_tree(); break;
+    case 21: tr->widgetmarginleft(v); tr->recalc_tree(); break;
     default: break;
   }
   tr->redraw();
@@ -537,6 +665,62 @@ intptr_t ofl_tree_item_add(intptr_t t, intptr_t p, int32_t what,
   return hand(t, r, serial);
 }
 
+// Puts the program's item self, labelled label, in p's place, and
+// removes p and its children (remove). Not Fl_Tree_Item::replace, which
+// deletes them without Fl_Tree::remove forgetting them as the last one
+// clicked (doc/fltk-issues.md, 41). The caller checks that p isn't the
+// root.
+intptr_t ofl_tree_item_replace(intptr_t t, intptr_t p, const char *label,
+                               intptr_t self, int32_t *serial) {
+  Fl_Tree *tr = tree(t);
+  Fl_Tree_Item *old = item(p), *parent = old->parent();
+  Mine *m = new Mine(tr, self);
+  m->label(label);
+  parent->reparent(m, parent->find_child(old));
+  remove(tr, items(t), old);
+  tr->recalc_tree();
+  tr->redraw();
+  return hand(t, m, serial);
+}
+
+// FLTK's own drawing of item p's content (TreeItem.DrawContent's default).
+int32_t ofl_tree_item_draw_content(intptr_t p, int32_t render) {
+  return item(p)->Fl_Tree_Item::draw_item_content(render);
+}
+
+// The Oberon object of item p's widget, or 0 for none.
+intptr_t ofl_tree_item_widget(intptr_t p) {
+  return ofl::object_of(item(p)->widget());
+}
+
+// Gives item p the widget w (0 for none), which becomes the tree's
+// child. A widget p had leaves the tree, still open; w leaves any item
+// that had it.
+void ofl_tree_item_set_widget(intptr_t t, intptr_t p, intptr_t w) {
+  Fl_Tree *tr = tree(t);
+  Items *k = items(t);
+  Fl_Tree_Item *it = item(p);
+  Fl_Widget *old = it->widget(), *nw = w ? ofl::widget(w) : 0;
+  if (old == nw) return;
+  if (old) {
+    k->widgets.erase(old);
+    it->widget(0);
+    static_cast<Fl_Group *>(tr)->remove(old);  // Fl_Tree::remove hides it
+  }
+  if (nw) {
+    auto i = k->widgets.find(nw);
+    if (i != k->widgets.end()) {
+      i->second->widget(0);
+      k->widgets.erase(i);
+    }
+    static_cast<Fl_Group *>(tr)->add(nw);  // Fl_Tree::add hides it
+    it->widget(nw);
+    k->widgets[nw] = it;
+  }
+  tr->recalc_tree();
+  tr->redraw();
+}
+
 void ofl_tree_item_remove(intptr_t t, intptr_t p) {
   remove(tree(t), items(t), item(p));
   tree(t)->redraw();
@@ -568,7 +752,8 @@ int32_t ofl_tree_item_path(intptr_t t, intptr_t p, char *buf, int32_t n) {
 
 // what: 0 children, 1 depth, 2 is_root, 3 is_open, 4 is_selected, 5
 // is_active, 6 is_visible_r, 7 label font, 8 size, 9 foreground, 10
-// background, 11 displayed.
+// background, 11 displayed, 12 to 15 the label's x, y, w and h as last
+// drawn, 16 and 17 the colors to draw its foreground and background in.
 int32_t ofl_tree_item_get(intptr_t t, intptr_t p, int32_t what) {
   Fl_Tree_Item *it = item(p);
   switch (what) {
@@ -583,6 +768,12 @@ int32_t ofl_tree_item_get(intptr_t t, intptr_t p, int32_t what) {
     case 9: return static_cast<int32_t>(it->labelfgcolor());
     case 10: return static_cast<int32_t>(it->labelbgcolor());
     case 11: return tree(t)->displayed(it);
+    case 12: return it->label_x();
+    case 13: return it->label_y();
+    case 14: return it->label_w();
+    case 15: return it->label_h();
+    case 16: return static_cast<int32_t>(Colors::fg(it));
+    case 17: return static_cast<int32_t>(Colors::bg(it));
     default: return it->children();
   }
 }

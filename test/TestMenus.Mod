@@ -11,6 +11,7 @@ VAR
   win: Fl.Window;
   bar, other: FlMenus.MenuBar;
   choice: FlMenus.Choice;
+  schemes: FlMenus.SchemeChoice;
   button: FlMenus.MenuButton;
   answer: Answer;
   last: Fl.Widget;
@@ -184,6 +185,16 @@ BEGIN
     i := button.Popup();
     Check.Check((i = -1) & (opened = 3), "or -1, closed")
   END;
+
+  (* A choice of schemes, FLTK's names in FLTK's order *)
+  ok := Fl.SetScheme("plastic");
+  NEW(schemes); FlMenus.OpenSchemeChoice(schemes, 0, 0, 100, 25, "");
+  schemes.ItemLabel(2, s);
+  Check.Check((schemes.Value() = 1) & (s = "gtk+"), "a scheme choice: FLTK's schemes, showing the one in use");
+  ok := schemes.SetValue(3); schemes.DoCallback;
+  Fl.GetScheme(s);
+  Check.Check(s = "gleam", "and sets the one chosen");
+  schemes.Delete;
 
   win.Delete;
   Check.Check(Fl.OpenWidgets() = 0, "every widget deleted");

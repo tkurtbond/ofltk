@@ -257,6 +257,9 @@ add("int", [("SelectableOnce", "FL_TREE_SELECTABLE_ONCE"),
 section("why a tree called back (Tree.CallbackReason)")
 add("int", [("Reason" + camel(k), "FL_TREE_REASON_" + k) for k in
             "NONE SELECTED DESELECTED RESELECTED OPENED CLOSED DRAGGED".split()])
+section("how an item with a widget is drawn (Tree.SetItemDrawMode); {} draws the widget alone")
+add("set", [("ItemDrawLabelAndWidget", "FL_TREE_ITEM_DRAW_LABEL_AND_WIDGET"),
+            ("ItemHeightFromWidget", "FL_TREE_ITEM_HEIGHT_FROM_WIDGET")])
 
 module("FlTable")
 WORDS.update({"STARTPAGE": "StartPage", "ENDPAGE": "EndPage", "RC": "RC"})

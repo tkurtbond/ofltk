@@ -295,6 +295,34 @@ Unless an entry says otherwise, the version is FLTK 1.4.5 (Fedora's
   then 1. `TestArgs` parses its command line twice, the second time
   without the handler that takes `-o`.
 
+### 59. An item removed in `Fl_Tree`'s callback as it is pushed is dragged after it is freed
+
+- **What happens**: in a tree whose select mode is
+  `FL_TREE_SELECT_SINGLE_DRAGGABLE`, an item removed (or replaced) in
+  the tree's callback, which a push on it calls, becomes the tree's
+  last item clicked after it is deleted; the drag that follows reads
+  it, and moves it, from freed memory. Found 2026-10-07, on X11.
+- **Cause**: `Fl_Tree::handle` (`src/Fl_Tree.cxx`), on `FL_PUSH`,
+  calls `select_only(item, when())`, which calls back, and then sets
+  `_lastselect = item` whatever the callback did; `FL_DRAG` then calls
+  `_lastselect->move_into` and the rest. `Fl_Tree::remove` clears
+  `_lastselect` only for the item it is given, and `~Fl_Tree_Item`
+  clears the focus item but not `_lastselect` (41).
+  `Fl_Tree_Item::replace` deletes the old item without either.
+- **Effect on pofltk**: `Tr` (`src/FlBrowsers.cpp`) counts the items
+  pofltk removes, and after an event in which any were removed, clears
+  `_lastselect` unless it is still in the tree. `_lastselect` is
+  private, so it is reached through an explicit instantiation
+  (`Reach`). `TreeItem.Replace` adds the new item beside the old one
+  (`Fl_Tree_Item::reparent`), and removes the old one as `Remove` does.
+- **Confirmed**: a scratch C++ program (a draggable tree a, b, c; the
+  callback replacing b as it is pushed, by `replace`, or by
+  `reparent` and `Fl_Tree::remove`; then a drag to c and a release):
+  valgrind showed two invalid reads, at `Fl_Tree.cxx:531` and in
+  `Fl_Tree_Item::move`, either way. `TestTree` removes an item in its
+  callback as it is pushed and drags: valgrind finds 4 errors without
+  the clearing, none with it.
+
 ## Pitfalls
 
 ### 5. FLTK keeps the label pointer it is given
@@ -802,3 +830,27 @@ Unless an entry says otherwise, the version is FLTK 1.4.5 (Fedora's
 - **Confirmed**: `TestImages` counts the images a browser holds
   (`Probe.Kept`) as icons are set, lines removed and the browser
   cleared; with the release after `clear` taken out, its check fails.
+
+### 58. An item's widget stays in the tree when the item goes
+
+- An `Fl_Tree_Item`'s `widget()` is a child of the tree, which FLTK
+  draws only through its item, but which `Fl_Group::handle` still
+  sends events to. Removing the item leaves the widget in the tree,
+  where it was last drawn: no longer drawn, but visible to FLTK, and
+  taking clicks there. Found 2026-10-07, on X11.
+- **Cause**: `~Fl_Tree_Item` (`src/Fl_Tree_Item.cxx`) sets `_widget`
+  to 0, "Fl_Group will handle destruction": the tree's children are
+  deleted with the tree. `Fl_Tree::handle` passes every event to
+  `Fl_Group::handle` first.
+- **Effect on pofltk**: an item's widget goes with the item, as a
+  group's children go with the group: `drop_widget`
+  (`src/FlBrowsers.cpp`) deletes it when pofltk removes the item, or
+  clears the tree, later inside a dispatch. And the other way round: a
+  widget deleted, or added to another group, leaves its item (`Tr`'s
+  `on_remove`), since FLTK would otherwise draw a widget no longer
+  there.
+- **Confirmed**: a scratch C++ program (an item showing a button,
+  drawn; the item removed with `Fl_Tree::remove`; a push where the
+  button was) called the button's callback, its parent still the tree
+  and `visible()` 1. `TestTreeItems` clicks where a removed item's
+  button was, and checks it is deleted and calls nothing back.

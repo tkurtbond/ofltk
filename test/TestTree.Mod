@@ -167,6 +167,18 @@ BEGIN
   removeInCallback := TRUE; t.SetSelectMode(FlBrowsers.TreeSelectSingle); t.DeselectAll;
   Click(1, {});
   Check.Check(~d.IsLive() & (root.Children() = 2), "an item removed in its own callback");
+
+  (* The same as the item is pushed, in a draggable tree, and then a drag:
+     FLTK makes the item the last one clicked after the callback, and the
+     drag moves it (doc/fltk-issues.md, 59), which valgrind sees. Rows are
+     c, e. *)
+  t.SetSelectMode(FlBrowsers.TreeSelectSingleDraggable); t.DeselectAll;
+  ok := Probe.Capture(t); Probe.Release;
+  ok := Probe.Mouse(win, Fl.EvPush, 60, 35, Fl.LeftMouse, Fl.Button1, 0);
+  ok := Probe.Mouse(win, Fl.EvDrag, 60, 12, Fl.LeftMouse, Fl.Button1, 0);
+  ok := Probe.Mouse(win, Fl.EvRelease, 60, 12, Fl.LeftMouse, {}, 0);
+  Check.Check(~e.IsLive() & c.IsLive() & (root.Children() = 1),
+    "an item removed in its callback as it is pushed, and a drag");
   removeInCallback := FALSE;
 
   t.Clear;

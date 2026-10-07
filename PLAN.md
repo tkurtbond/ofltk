@@ -240,14 +240,14 @@ Programmer errors halt, as in polibfyaml. poc's `ASSERT(x, n)` prints
 | Code | Meaning |
 |---|---|
 | 70 | a method of a widget that isn't open: never opened, or deleted (`Fl.NotOpen`) |
-| 71 | a widget opened twice (`Fl.OpenedTwice`) |
+| 71 | a widget opened twice, or a tree item added twice (`Fl.OpenedTwice`) |
 | 72 | a NIL argument where a widget or timer is required (`Fl.NilArgument`) |
 | 73 | a closed resource used, or one missing where it is needed: a closed `TextBuffer`, a display with no buffer, a removed `TreeItem`, a closed `Image` or `Surface`, a closed or deleted `Preferences` (`Fl.ClosedResource`) |
 | 74 | an index out of range: group child, grid row or column, browser line, menu item (`Fl.IndexOutOfRange`) |
 | 75 | `RepeatTimeout` outside its own timer's `Fire`, `HandleDefault` outside the event dispatch (`Fl.NotFiring`) |
 | 76 | a widget that must be a group's child isn't: a grid's cell, a flex's fixed size, a tab or wizard page, a tile's size range (`Fl.NotAChild`) |
 | 77 | a `Begin` and `End` out of order: an image surface's `End` that doesn't match the last `Begin` (`Fl.OutOfOrder`) |
-| 78 | an argument a call can't take: a multi-label for a window, a multi-label put in itself, a label type that needs an image, a file descriptor's conditions empty or unknown (`Fl.Unsupported`) |
+| 78 | an argument a call can't take: a multi-label for a window, a multi-label put in itself, a label type that needs an image, a file descriptor's conditions empty or unknown; a tree's root replaced (`Fl.Unsupported`) |
 
 Bad data from outside the program is never a halt: an image that fails
 to load, a file chooser cancelled. Those come back as `BOOLEAN` results.
@@ -1258,7 +1258,7 @@ FLTK's own build under Xvfb.
 - `gen-constants.py` rewrote `FlTable`'s generated block, which held
   the hand-written `Area` constants: they are now after its end.
 
-### Phase 12: Trees
+### Phase 12: Trees `[done]`
 
 Three ports, and what they need of trees:
 
@@ -1282,6 +1282,81 @@ Three ports, and what they need of trees:
     from the tree's map of live items, as `Ref` does for a widget.
   - The example's `show_self` prints the tree to standard output for
     debugging: the port walks the items itself.
+
+Done 2026-10-07, with poc 0.4.1 and FLTK 1.4.5: three ports, and the
+tree's widgets and items of the program's own. Each port was checked
+against FLTK's own build under Xvfb, as Phase 9's were.
+
+- Ported: `TreeAsContainer`, `TreeOfTables`, `TreeCustomDrawItems`.
+  - `TreeAsContainer` (20000 items, each showing a group of five
+    inputs: 120000 widgets) matched pixel for pixel as drawn, scrolled,
+    typed into, and with the items' parent closed. It shows its window
+    in 1.6 s; FLTK's in 1.1 s.
+  - `TreeOfTables` matched pixel for pixel as drawn and scrolled. Its
+    cells are written as printf writes them (`%d`, `%.2f`, `%g`), from
+    `RealDigits`' exact digits, which round ties to even as glibc
+    does: all 363 numbers its tables can show were compared with
+    printf's, and matched, ties and `-0.00` included. A cell divides in
+    `REAL`, as C's `float`, and a power is exact in `LONGREAL`, rounded
+    once to `REAL`, as `powf` gives it.
+  - `TreeCustomDrawItems`: run with `TZ=UTC`, its screens differed from
+    FLTK's only in the seconds of the time, as drawn, with items
+    selected, and with a scheme chosen. Its local time is
+    `Platform.GetClock`'s; GMT is worked out from `GetTimeOfDay`'s
+    seconds (checked in New York time: four hours apart). The tree it
+    prints matches FLTK's `show_self` without the addresses.
+- **Widgets in items**: `TreeItem.SetWidget` and `Widget`,
+  `Tree.SetItemDrawMode` and `ItemDrawMode` (the generated
+  `ItemDrawLabelAndWidget` and `ItemHeightFromWidget`; `{}` draws the
+  widget alone) and `SetWidgetMarginLeft`. The open questions, answered:
+  - FLTK leaves a removed item's widget in the tree, where it is no
+    longer drawn but still takes clicks (`doc/fltk-issues.md`, 58). So
+    an item's widget is deleted with it, by `Remove`, `ClearChildren`
+    and `Clear`, as a group's children are, later inside a dispatch;
+    `TestTreeItems` removes one in its widget's own callback.
+  - The widget becomes the tree's child (`Fl_Group::add`, which
+    `Fl_Tree::add` hides). A widget the item had leaves the tree, still
+    open, as `Group.Remove` leaves one; a widget given to another item
+    leaves the first.
+  - The other way round, a widget deleted, or added to another group,
+    leaves its item: the tree's class overrides `Fl_Group::on_remove`
+    (virtual in 1.4), with a map from widgets to items.
+  - `Widget.Parent` of an item's widget is NIL: the tree isn't a
+    `Group` in Oberon.
+- **Items the program makes**: `Tree.AddItem(path, item, label)` and
+  `TreeItem.Replace(item, label)`, of the program's own extension of
+  `TreeItem`, whose `DrawContent(render): INTEGER` is FLTK's
+  `draw_item_content`, with `LabelXYWH`, `DrawFgColor` and
+  `DrawBgColor` (protected in FLTK) for it. The C++ item (`Mine`)
+  sends `draw_item_content` to Oberon through a dispatcher FlBrowsers'
+  body registers, and its destructor tells Oberon it is gone; until
+  then the object is in FlBrowsers' list (`made`), so kept from the
+  collector (`TestTreeItems` collects with one only the tree holds).
+  - Every `TreeItem` the tree hands out for such an item is the
+    object itself (`ofl_tree_self`), so `CallbackItem` returns it, and
+    a type test finds the program's type.
+  - An item is added once (`Fl.OpenedTwice`); the root can't be
+    replaced (`Fl.Unsupported`). `AddItem` returns `FALSE` for an empty
+    path. `Fl_Tree::add(path, item)` keeps the item's own label, and
+    puts it under the whole path if that is there already, as
+    `TestTreeItems` checks.
+  - `Fl_Tree_Item::replace` deletes the old item without the tree
+    forgetting it, so `Replace` adds the new item at the old one's
+    place (`Fl_Tree_Item::reparent`) and removes the old one as
+    `Remove` does.
+- **An item removed in the tree's callback as it is pushed** became
+  the tree's last item clicked after it was freed, and a drag then
+  moved it (`doc/fltk-issues.md`, 59): a bug pofltk's `Remove` had
+  since Phase 6, now fixed. The tree counts the items pofltk removes,
+  and after an event in which any were, clears the private
+  `_lastselect` (reached through an explicit instantiation) unless it
+  is still in the tree. `TestTree` drags after such a removal: 4
+  valgrind errors without the fix, none with it.
+- **`FlMenus.SchemeChoice`** (`Fl_Scheme_Choice`), for
+  `TreeCustomDrawItems`, which the plan didn't list. FLTK's choice sets
+  the scheme in its own callback, which pofltk's replaces, so its
+  `Callback` calls FLTK's (protected) unless an action is set.
+  `TestMenus` checks its items, its value, and the scheme it sets.
 
 ### Phase 13: New widgets and images
 

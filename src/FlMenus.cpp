@@ -15,6 +15,7 @@
 #include <FL/Fl_Menu_Bar.H>
 #include <FL/Fl_Menu_Button.H>
 #include <FL/Fl_Menu_Item.H>
+#include <FL/Fl_Scheme_Choice.H>
 #include <FL/Fl_Window.H>
 #include <string.h>
 
@@ -141,20 +142,30 @@ int after(Fl_Menu_ *m, int i) {
   return static_cast<int>(items[i].next() - items);
 }
 
+// Fl_Scheme_Choice's own callback, which pofltk's replaces: sets the
+// scheme chosen (SchemeChoice.Callback's default). It is protected.
+struct Scheme : Fl_Scheme_Choice {
+  static void chosen(Fl_Widget *w) { scheme_cb_(w, 0); }
+};
+
 }  // namespace
 
 extern "C" {
 
-// kind is 0 Fl_Menu_Bar, 1 Fl_Menu_Button, 2 Fl_Choice, as FlMenus
-// numbers them.
+// kind is 0 Fl_Menu_Bar, 1 Fl_Menu_Button, 2 Fl_Choice, 3
+// Fl_Scheme_Choice, as FlMenus numbers them.
 intptr_t ofl_menu_new(int32_t kind, int32_t x, int32_t y, int32_t w,
                       int32_t h, const char *label, intptr_t self) {
   switch (kind) {
     case 1: return make<Fl_Menu_Button>(x, y, w, h, label, self);
     case 2: return make<Fl_Choice>(x, y, w, h, label, self);
+    case 3: return make<Fl_Scheme_Choice>(x, y, w, h, label, self);
     default: return make<Fl_Menu_Bar>(x, y, w, h, label, self);
   }
 }
+
+// Sets the scheme chosen (SchemeChoice.Callback's default).
+void ofl_menu_scheme_chosen(intptr_t m) { Scheme::chosen(menu(m)); }
 
 // The array's length, with the ends of the menu and its submenus.
 int32_t ofl_menu_size(intptr_t m) { return menu(m)->size(); }

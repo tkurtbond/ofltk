@@ -460,6 +460,8 @@ BEGIN
   Same(FlBrowsers.ReasonOpened, "FL_TREE_REASON_OPENED");
   Same(FlBrowsers.ReasonClosed, "FL_TREE_REASON_CLOSED");
   Same(FlBrowsers.ReasonDragged, "FL_TREE_REASON_DRAGGED");
+  Same(ORD(FlBrowsers.ItemDrawLabelAndWidget), "FL_TREE_ITEM_DRAW_LABEL_AND_WIDGET");
+  Same(ORD(FlBrowsers.ItemHeightFromWidget), "FL_TREE_ITEM_HEIGHT_FROM_WIDGET");
   Same(FlTable.ContextNone, "Fl_Table::CONTEXT_NONE");
   Same(FlTable.ContextStartPage, "Fl_Table::CONTEXT_STARTPAGE");
   Same(FlTable.ContextEndPage, "Fl_Table::CONTEXT_ENDPAGE");
@@ -479,6 +481,6 @@ BEGIN
   Same(Fl.RGB(255, 0, 0), "fl_rgb_color(255, 0, 0)");
   Same(Fl.RGB(1, 2, 3), "fl_rgb_color(1, 2, 3)");
   Same(Fl.RGB(0, 0, 255), "fl_rgb_color(0, 0, 255)");
-  Check.Check((wrong = 0) & (checked = 460), "each of 460 constants and values is FLTK's");
+  Check.Check((wrong = 0) & (checked = 462), "each of 462 constants and values is FLTK's");
   Check.Summary
 END TestConstants.

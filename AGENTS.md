@@ -21,9 +21,9 @@ anything:
 
 ## Status
 
-As of 2026-10-07, Phases 0 to 11 of PLAN.md are done, and `README.md`
+As of 2026-10-07, Phases 0 to 12 of PLAN.md are done, and `README.md`
 is the user's guide. Phases 9 to 13 (planned 2026-10-07) port the rest
-of FLTK's `examples/` and bind what they need; 12 and 13 remain. `src/` has the `Fl`, `FlDraw`, `FlButtons`,
+of FLTK's `examples/` and bind what they need; 13 remains. `src/` has the `Fl`, `FlDraw`, `FlButtons`,
 `FlInputs`, `FlValuators`, `FlLayout`, `FlMenus`, `FlDialogs`, `FlText`,
 `FlBrowsers`, `FlImages`, `FlPreferences` and `FlTable` modules, and the
 tests pass. Also kept:
@@ -81,6 +81,14 @@ prefix of the C++ parts (`ofl::`, `ofl_`) was kept.
   contents, not their names, or from RGB pixels, which are copied),
   widgets' images, image surfaces, and images on the clipboard. It
   links `-lfltk_images`.
+- `src/FlBrowsers.cpp`'s tree: `Tr` is the tree's class, which hears
+  a widget leave it (`on_remove`) and forgets a removed last-clicked
+  item after each event (`handle`); `Mine` is an item the program
+  made, whose `draw_item_content` is sent to Oberon through a
+  dispatcher FlBrowsers' body registers (`ofl_tree_register`), and
+  whose destructor drops the Oberon object from FlBrowsers' `made`
+  list. A private member is reached, where nothing else will do, by an
+  explicit instantiation (`Reach`, for `Fl_Tree::_lastselect`).
 - `src/FlPreferences.Mod`, `src/FlPreferences.cpp`: `Fl_Preferences`. A
   group is its database and a path, not an `Fl_Preferences` kept.
 - `src/FlTable.Mod`, `src/FlTable.cpp`: `Fl_Table` and `Fl_Table_Row`.
@@ -91,7 +99,8 @@ prefix of the C++ parts (`ofl::`, `ofl_`) was kept.
   class listed before `ofl::W<B>`, so it is destroyed after FLTK's
   object, and is reached by `dynamic_cast`: `Holds` (`FlText`: the
   buffers a display shows), `Keeps` (`FlBrowsers`: copies of pointers
-  FLTK keeps), `Items` (`FlBrowsers`: a tree's live items). Never
+  FLTK keeps), `Items` (`FlBrowsers`: a tree's live items, and which
+  item shows each widget). Never
   `static_cast` an `ofl::widget` to a template class: the kind decides
   which instance it is.
 - `test/`:
@@ -452,7 +461,7 @@ held only in C++ memory**.
     `Fl_File_Browser::load` returns the directory's entries;
   - a browser calls back on every release, changed or not, and a check
     browser not at all, to start with.
-- **Trees** (`doc/fltk-issues.md`, 41 to 43):
+- **Trees** (`doc/fltk-issues.md`, 41 to 43, 58, 59):
   - FLTK makes and deletes items itself, so a `TreeItem` is checked
     against the tree's map of live items before every use;
   - `Fl_Tree::remove` leaves a descendant of the item as the last one
@@ -460,7 +469,15 @@ held only in C++ memory**.
     descendants one by one, and clears the callback item;
   - `clear()` deletes the root;
   - `Fl_Tree_Item::is_visible()` is the item's own flag;
-    `is_visible_r()` is whether its parents are open.
+    `is_visible_r()` is whether its parents are open;
+  - an item's widget is the tree's child, which FLTK leaves in the tree
+    when the item goes, still taking clicks (58): the shim deletes it
+    with the item;
+  - an item removed in the tree's callback as it is pushed becomes the
+    last one clicked after it is freed, and a drag moves it (a bug,
+    59): the tree clears that after an event with removals;
+  - `Fl_Tree::add`, `insert`, `remove` and `clear` hide `Fl_Group`'s;
+    `Fl_Group::on_remove` is virtual in 1.4.
 - **Images** (`doc/fltk-issues.md`, 44 to 47):
   - a widget keeps the image it is given, so `Ref` holds it, counted,
     until the widget dies;

@@ -46,7 +46,7 @@ CONST
 (* END generated constants *)
 
   (* the classes, as ofl_menu_new numbers them *)
-  menuBar = 0; menuButton = 1; choice = 2;
+  menuBar = 0; menuButton = 1; choice = 2; schemeChoice = 3;
 
   (* what ofl_menu_style reads or sets *)
   textFont = 0; textSize = 1; textColor = 2; downBox = 3; menuBox = 4;
@@ -76,7 +76,13 @@ TYPE
   Choice* = POINTER TO ChoiceDesc;
   ChoiceDesc* = RECORD (MenuDesc) END;
 
+  (* a choice of FLTK's schemes, its items their names, showing the one
+     in use, which sets the scheme chosen (Fl.SetScheme) *)
+  SchemeChoice* = POINTER TO SchemeChoiceDesc;
+  SchemeChoiceDesc* = RECORD (ChoiceDesc) END;
+
 PROCEDURE ["C", "ofl_menu_new"] CNew(class, x, y, w, h: SYSTEM.INT32; label: ARRAY OF CHAR; self: SYSTEM.ADDRESS): SYSTEM.ADDRESS;
+PROCEDURE ["C", "ofl_menu_scheme_chosen"] CSchemeChosen(m: SYSTEM.ADDRESS);
 PROCEDURE ["C", "ofl_menu_size"] CSize(m: SYSTEM.ADDRESS): SYSTEM.INT32;
 PROCEDURE ["C", "ofl_menu_is_item"] CIsItem(m: SYSTEM.ADDRESS; i: SYSTEM.INT32): SYSTEM.INT32;
 PROCEDURE ["C", "ofl_menu_insert"] CInsert(m: SYSTEM.ADDRESS; index: SYSTEM.INT32; label: ARRAY OF CHAR; shortcut: SYSTEM.INT32; action: SYSTEM.ADDRESS; flags: SYSTEM.INT32): SYSTEM.INT32;
@@ -119,6 +125,10 @@ END OpenMenuButton;
 PROCEDURE OpenChoice*(m: Choice; x, y, w, h: INTEGER; label-: ARRAY OF CHAR);
 BEGIN Open(m, choice, x, y, w, h, label)
 END OpenChoice;
+
+PROCEDURE OpenSchemeChoice*(m: SchemeChoice; x, y, w, h: INTEGER; label-: ARRAY OF CHAR);
+BEGIN Open(m, schemeChoice, x, y, w, h, label)
+END OpenSchemeChoice;
 
 (* m's handle, halting unless i is an item of m. *)
 PROCEDURE Item(m: Menu; i: INTEGER): SYSTEM.ADDRESS;
@@ -275,6 +285,13 @@ BEGIN
   h := Fl.Live(m); i := CValue(h); a := NIL;
   IF i >= 0 THEN a := SYSTEM.VAL(Action, CAction(h, i)) END;
   IF a # NIL THEN a(m) ELSE m.Callback^ END
+END Callback;
+
+(* Sets the scheme chosen, as FLTK's own callback for the choice does;
+   or calls the action, if one is set, instead. *)
+PROCEDURE (m: SchemeChoice) Callback*;
+BEGIN
+  IF m.action # NIL THEN m.action(m) ELSE CSchemeChosen(Fl.Live(m)) END
 END Callback;
 
 (* Makes m's shortcuts work in every window, as long as m is open and no

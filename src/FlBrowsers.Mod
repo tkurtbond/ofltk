@@ -71,6 +71,10 @@ CONST
   ReasonOpened* = 4;
   ReasonClosed* = 5;
   ReasonDragged* = 6;
+
+  (* how an item with a widget is drawn (Tree.SetItemDrawMode); {} draws the widget alone *)
+  ItemDrawLabelAndWidget* = {0};
+  ItemHeightFromWidget* = {1};
 (* END generated constants *)
 
   (* the classes, as ofl_browser_new numbers them *)
@@ -116,13 +120,25 @@ TYPE
   (* One of a tree's items. The tree makes and deletes its items, so a
      TreeItem is a reference to one, good until the item is removed:
      used after, it halts (Fl.ClosedResource). Two TreeItems may refer to
-     the same item: compare them with Same. *)
+     the same item: compare them with Same.
+
+     The program may make an item itself, of its own extension, and add
+     it once (Tree.AddItem, TreeItem.Replace): then the tree's every
+     reference to that item is the object itself, whose DrawContent
+     draws it. *)
   TreeItem* = POINTER TO TreeItemDesc;
   TreeItemDesc* = RECORD
     tree-: Tree;
     p: SYSTEM.ADDRESS;
-    serial: INTEGER
+    serial: INTEGER;
+    prev, next: TreeItem   (* the program's items in trees (made) *)
   END;
+
+  DrawItemProc = PROCEDURE (self: SYSTEM.ADDRESS; render: SYSTEM.INT32): SYSTEM.INT32;
+  ItemGoneProc = PROCEDURE (self: SYSTEM.ADDRESS);
+
+VAR
+  made: TreeItem;   (* the program's items in trees, which FLTK alone holds *)
 
 PROCEDURE ["C", "ofl_browser_new"] CNew(class, x, y, w, h: SYSTEM.INT32; label: ARRAY OF CHAR; self: SYSTEM.ADDRESS): SYSTEM.ADDRESS;
 PROCEDURE ["C", "ofl_browser_get"] CGet(b: SYSTEM.ADDRESS; what: SYSTEM.INT32): SYSTEM.INT32;
@@ -185,6 +201,13 @@ PROCEDURE ["C", "ofl_tree_item_set_label"] CItemSetLabel(t, p: SYSTEM.ADDRESS; s
 PROCEDURE ["C", "ofl_tree_item_path"] CItemPath(t, p: SYSTEM.ADDRESS; VAR buf: ARRAY OF CHAR; n: SYSTEM.INT32): SYSTEM.INT32;
 PROCEDURE ["C", "ofl_tree_item_get"] CItemGet(t, p: SYSTEM.ADDRESS; what: SYSTEM.INT32): SYSTEM.INT32;
 PROCEDURE ["C", "ofl_tree_item_set"] CItemSet(t, p: SYSTEM.ADDRESS; what, v: SYSTEM.INT32);
+PROCEDURE ["C", "ofl_tree_register"] CTreeRegister(drawItem: DrawItemProc; itemGone: ItemGoneProc);
+PROCEDURE ["C", "ofl_tree_add_item"] CTreeAddItem(t: SYSTEM.ADDRESS; path, label: ARRAY OF CHAR; self: SYSTEM.ADDRESS; VAR serial: SYSTEM.INT32): SYSTEM.ADDRESS;
+PROCEDURE ["C", "ofl_tree_self"] CTreeSelf(p: SYSTEM.ADDRESS): SYSTEM.ADDRESS;
+PROCEDURE ["C", "ofl_tree_item_replace"] CItemReplace(t, p: SYSTEM.ADDRESS; label: ARRAY OF CHAR; self: SYSTEM.ADDRESS; VAR serial: SYSTEM.INT32): SYSTEM.ADDRESS;
+PROCEDURE ["C", "ofl_tree_item_draw_content"] CItemDrawContent(p: SYSTEM.ADDRESS; render: SYSTEM.INT32): SYSTEM.INT32;
+PROCEDURE ["C", "ofl_tree_item_widget"] CItemWidget(p: SYSTEM.ADDRESS): SYSTEM.ADDRESS;
+PROCEDURE ["C", "ofl_tree_item_set_widget"] CItemSetWidget(t, p, w: SYSTEM.ADDRESS);
 
 PROCEDURE Int(b: BOOLEAN): SYSTEM.INT32;
 BEGIN IF b THEN RETURN 1 ELSE RETURN 0 END
@@ -556,14 +579,26 @@ PROCEDURE OpenTree*(t: Tree; x, y, w, h: INTEGER; label-: ARRAY OF CHAR);
 BEGIN Fl.EndOpen(t, CTreeNew(x, y, w, h, label, Fl.BeginOpen(t)))
 END OpenTree;
 
-(* The TreeItem for p, NIL if p is 0. *)
+(* The TreeItem for p, NIL if p is 0: the program's own object for an
+   item it made. *)
 PROCEDURE Item(t: Tree; p: SYSTEM.ADDRESS; serial: SYSTEM.INT32): TreeItem;
-  VAR i: TreeItem;
+  VAR i: TreeItem; self: SYSTEM.ADDRESS;
 BEGIN
   IF p = 0 THEN RETURN NIL END;
+  self := CTreeSelf(p);
+  IF self # 0 THEN RETURN SYSTEM.VAL(TreeItem, self) END;
   NEW(i); i.tree := t; i.p := p; i.serial := serial;
   RETURN i
 END Item;
+
+(* Keeps item i, which the program made, from the collector while FLTK
+   holds it. *)
+PROCEDURE Hold(i: TreeItem);
+BEGIN
+  i.prev := NIL; i.next := made;
+  IF made # NIL THEN made.prev := i END;
+  made := i
+END Hold;
 
 (* i's tree's handle, halting unless i is still in it. *)
 PROCEDURE T(i: TreeItem): SYSTEM.ADDRESS;
@@ -822,6 +857,43 @@ PROCEDURE (t: Tree) SetConnectorWidth*(n: INTEGER);
 BEGIN TSet(t, 18, n)
 END SetConnectorWidth;
 
+(* How an item with a widget is drawn: {} for the widget in place of the
+   label, or ItemDrawLabelAndWidget, and ItemHeightFromWidget for the
+   item as high as its widget. *)
+PROCEDURE (t: Tree) ItemDrawMode*(): SET;
+BEGIN RETURN SYSTEM.VAL(SET, TGet(t, 20))
+END ItemDrawMode;
+
+PROCEDURE (t: Tree) SetItemDrawMode*(m: SET);
+BEGIN TSet(t, 20, ORD(m))
+END SetItemDrawMode;
+
+(* The space between an item's label and its widget. *)
+PROCEDURE (t: Tree) WidgetMarginLeft*(): INTEGER;
+BEGIN RETURN TGet(t, 21)
+END WidgetMarginLeft;
+
+PROCEDURE (t: Tree) SetWidgetMarginLeft*(n: INTEGER);
+BEGIN TSet(t, 21, n)
+END SetWidgetMarginLeft;
+
+(* Adds i, an item the program made, labelled label, at path, as Add
+   adds an item, making the parents missing; if the whole path is there
+   already, i becomes that item's child, labelled label all the same.
+   Returns FALSE, and adds nothing, for an empty path. An item is added
+   once (Fl.OpenedTwice), and lasts until removed: from then on, every
+   TreeItem the tree hands out for it is i. *)
+PROCEDURE (t: Tree) AddItem*(path-: ARRAY OF CHAR; i: TreeItem; label-: ARRAY OF CHAR): BOOLEAN;
+  VAR h: SYSTEM.ADDRESS; serial: SYSTEM.INT32;
+BEGIN
+  h := Fl.Live(t);
+  ASSERT(i # NIL, Fl.NilArgument); ASSERT(i.p = 0, Fl.OpenedTwice);
+  Hold(i); i.tree := t;
+  i.p := CTreeAddItem(h, path, label, SYSTEM.VAL(SYSTEM.ADDRESS, i), serial);
+  i.serial := serial;
+  RETURN i.p # 0
+END AddItem;
+
 (* The box drawn behind a selected item: a box type of Fl's. *)
 PROCEDURE (t: Tree) SelectBox*(): INTEGER;
 BEGIN RETURN TGet(t, 19)
@@ -939,6 +1011,68 @@ PROCEDURE (i: TreeItem) ClearChildren*;
 BEGIN CItemClearChildren(T(i), i.p)
 END ClearChildren;
 
+(* Puts new, an item the program made, labelled label, in i's place, and
+   removes i and its children. The root can't be replaced
+   (Fl.Unsupported); new is added once, as Tree.AddItem adds it. *)
+PROCEDURE (i: TreeItem) Replace*(new: TreeItem; label-: ARRAY OF CHAR);
+  VAR h: SYSTEM.ADDRESS; serial: SYSTEM.INT32;
+BEGIN
+  h := T(i);
+  ASSERT(new # NIL, Fl.NilArgument); ASSERT(new.p = 0, Fl.OpenedTwice);
+  ASSERT(CItemGet(h, i.p, 2) = 0, Fl.Unsupported);
+  Hold(new); new.tree := i.tree;
+  new.p := CItemReplace(h, i.p, label, SYSTEM.VAL(SYSTEM.ADDRESS, new), serial);
+  new.serial := serial
+END Replace;
+
+(* Draws i's content, right of its connectors and icons, in the label's
+   place (LabelXYWH), if render; else only measures it. Returns the right
+   edge of what it draws, for the tree's horizontal scrollbar. FLTK
+   calls it for an item the program made; the default draws the label,
+   or the widget, as for any item. *)
+PROCEDURE (i: TreeItem) DrawContent*(render: BOOLEAN): INTEGER;
+  VAR h: SYSTEM.ADDRESS; r: SYSTEM.INT32;
+BEGIN
+  h := T(i); r := 0;
+  IF render THEN r := 1 END;
+  RETURN CItemDrawContent(i.p, r)
+END DrawContent;
+
+(* Where i's label is drawn, as last drawn: the area DrawContent draws in. *)
+PROCEDURE (i: TreeItem) LabelXYWH*(VAR x, y, w, h: INTEGER);
+BEGIN x := IGet(i, 12); y := IGet(i, 13); w := IGet(i, 14); h := IGet(i, 15)
+END LabelXYWH;
+
+(* The colors for DrawContent to draw i's text and background in, which
+   allow for its being selected or inactive. *)
+PROCEDURE (i: TreeItem) DrawFgColor*(): INTEGER;
+BEGIN RETURN IGet(i, 16)
+END DrawFgColor;
+
+PROCEDURE (i: TreeItem) DrawBgColor*(): INTEGER;
+BEGIN RETURN IGet(i, 17)
+END DrawBgColor;
+
+(* i's widget, NIL for none. *)
+PROCEDURE (i: TreeItem) Widget*(): Fl.Widget;
+  VAR h, self: SYSTEM.ADDRESS;
+BEGIN h := T(i); self := CItemWidget(i.p); RETURN SYSTEM.VAL(Fl.Widget, self)
+END Widget;
+
+(* Shows w, in i's place or beside its label (Tree.SetItemDrawMode), or
+   nothing for NIL. w becomes the tree's child, which the tree moves to
+   where i is drawn; a widget i had leaves the tree, still open; w leaves
+   any item that had it. w is deleted with i, by Remove, Clear and the
+   rest, as a group's children are; w deleted, or added to another group,
+   leaves i. *)
+PROCEDURE (i: TreeItem) SetWidget*(w: Fl.Widget);
+  VAR h, wh: SYSTEM.ADDRESS;
+BEGIN
+  h := T(i); wh := 0;
+  IF w # NIL THEN wh := Fl.Live(w) END;
+  CItemSetWidget(h, i.p, wh)
+END SetWidget;
+
 (* i's label, truncated to fit. *)
 PROCEDURE (i: TreeItem) GetLabel*(VAR label: ARRAY OF CHAR);
 VAR h: SYSTEM.ADDRESS;
@@ -1049,4 +1183,22 @@ PROCEDURE (i: TreeItem) SetLabelBgColor*(c: INTEGER);
 BEGIN ISet(i, 7, c)
 END SetLabelBgColor;
 
+PROCEDURE DrawItemD(self: SYSTEM.ADDRESS; render: SYSTEM.INT32): SYSTEM.INT32;
+  VAR i: TreeItem;
+BEGIN i := SYSTEM.VAL(TreeItem, self); RETURN i.DrawContent(render # 0)
+END DrawItemD;
+
+(* An item the program made is gone, deleted by FLTK: the collector may
+   have it once the program lets go. *)
+PROCEDURE ItemGoneD(self: SYSTEM.ADDRESS);
+  VAR i: TreeItem;
+BEGIN
+  i := SYSTEM.VAL(TreeItem, self);
+  IF i.prev # NIL THEN i.prev.next := i.next ELSE made := i.next END;
+  IF i.next # NIL THEN i.next.prev := i.prev END;
+  i.prev := NIL; i.next := NIL
+END ItemGoneD;
+
+BEGIN
+  CTreeRegister(DrawItemD, ItemGoneD)
 END FlBrowsers.
