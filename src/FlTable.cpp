@@ -165,7 +165,38 @@ int32_t ofl_table_move_cursor(intptr_t t, int32_t r, int32_t c,
 struct Protected : Fl_Table {
   using Fl_Table::find_cell;
   using Fl_Table::redraw_range;
+  using Fl_Table::wix;
+  using Fl_Table::wiy;
+  using Fl_Table::wiw;
+  using Fl_Table::wih;
+  using Fl_Table::tox;
+  using Fl_Table::toy;
+  using Fl_Table::tow;
+  using Fl_Table::toh;
+  using Fl_Table::tix;
+  using Fl_Table::tiy;
+  using Fl_Table::tiw;
+  using Fl_Table::tih;
 };
+
+// One of the table's areas, which it computes as it is resized: which 0,
+// inside its own box (wix, wiy, wiw, wih); 1, the cells' area with its
+// box, beside the headers and scrollbars (tox and the rest); 2, inside
+// that box (tix and the rest).
+void ofl_table_area(intptr_t t, int32_t which, int32_t *x, int32_t *y,
+                    int32_t *w, int32_t *h) {
+  typedef int Fl_Table::*Field;
+  static const Field fields[3][4] = {
+      {&Protected::wix, &Protected::wiy, &Protected::wiw, &Protected::wih},
+      {&Protected::tox, &Protected::toy, &Protected::tow, &Protected::toh},
+      {&Protected::tix, &Protected::tiy, &Protected::tiw, &Protected::tih}};
+  Fl_Table *tb = table(t);
+  const Field *f = fields[which];
+  *x = tb->*f[0];
+  *y = tb->*f[1];
+  *w = tb->*f[2];
+  *h = tb->*f[3];
+}
 
 // 1, and the cell's box, if it is on screen.
 int32_t ofl_table_find_cell(intptr_t t, int32_t context, int32_t r,

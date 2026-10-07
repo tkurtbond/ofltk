@@ -503,6 +503,17 @@ void ofl_group_clear(intptr_t g) {
   if (dynamic_cast<Fl_Pack *>(group)) group->resizable(0);
 }
 
+// Forgets the sizes g saved of itself and its children, so that the next
+// resize starts from where they are now. Fl_Table::init_sizes reaches
+// its inner group, but hides Fl_Group's.
+void ofl_group_init_sizes(intptr_t g) {
+  if (Fl_Table *t = table(g)) {
+    t->init_sizes();
+  } else {
+    ofl::as<Fl_Group>(g)->init_sizes();
+  }
+}
+
 // w is 0 for none.
 void ofl_group_set_resizable(intptr_t g, intptr_t w) {
   ofl::as<Fl_Group>(g)->resizable(ofl::widget(w));

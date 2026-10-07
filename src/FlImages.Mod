@@ -47,6 +47,7 @@ VAR
 
 PROCEDURE ["C", "ofl_image_load"] CLoad(name: ARRAY OF CHAR): SYSTEM.ADDRESS;
 PROCEDURE ["C", "ofl_image_load_data"] CLoadData(data: ARRAY OF CHAR; n: SYSTEM.INT32): SYSTEM.ADDRESS;
+PROCEDURE ["C", "ofl_image_xpm"] CXPM(lines: ARRAY OF ARRAY OF CHAR; n, stride: SYSTEM.INT32): SYSTEM.ADDRESS;
 PROCEDURE ["C", "ofl_image_rgb"] CRGB(bits: ARRAY OF CHAR; w, h, d, ld: SYSTEM.INT32): SYSTEM.ADDRESS;
 PROCEDURE ["C", "ofl_image_close"] CClose(i: SYSTEM.ADDRESS);
 PROCEDURE ["C", "ofl_image_get"] CGet(i: SYSTEM.ADDRESS; what: SYSTEM.INT32): SYSTEM.INT32;
@@ -119,6 +120,17 @@ BEGIN
   New(i); ASSERT((n >= 0) & (n <= LEN(data)), Fl.IndexOutOfRange);
   RETURN Opened(i, CLoadData(data, n))
 END LoadData;
+
+(* Makes i the pixmap in the first n of lines, which are copied: the
+   strings of an XPM file, without their quotes. The first holds the
+   width, height, number of colors and characters a pixel (1 or 2); one
+   line a color follows, then one a row of pixels. FALSE, and i not open,
+   if the lines don't match the first, or can't be decoded. *)
+PROCEDURE OpenXPM*(i: Image; lines-: ARRAY OF ARRAY OF CHAR; n: INTEGER): BOOLEAN;
+BEGIN
+  New(i); ASSERT((n >= 0) & (n <= LEN(lines)), Fl.IndexOutOfRange);
+  RETURN Opened(i, CXPM(lines, n, SHORT(LEN(lines, 1))))
+END OpenXPM;
 
 (* Makes i an image of w by h pixels, from bits, which are copied: d
    bytes a pixel (1 gray, 2 gray and alpha, 3 red, green and blue, 4 those

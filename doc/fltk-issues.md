@@ -204,6 +204,28 @@ Unless an entry says otherwise, the version is FLTK 1.4.5 (Fedora's
   `XSetSelectionOwner` (gdb) at its first `Fl.Copy`; without the paste
   check, its first check printed `X_ConvertSelection: BadWindow` twice.
 
+### 53. `FL_DND_LEAVE` crashes an input when no window is shown
+
+- **What happens**: `Fl::handle(FL_DND_LEAVE, window)` segfaults in
+  `Fl_Widget::window()`, from `Fl_Window::cursor`, from
+  `Fl_Input::handle`, when the window holds an `Fl_Input` and no window
+  is shown. Found 2026-10-07, sending synthesized drag and drop events
+  to a window never shown, on X11 and on Wayland.
+- **Cause**: `Fl_Input::handle` (`src/Fl_Input.cxx`), `case
+  FL_DND_LEAVE`, calls `Fl::first_window()->cursor(FL_CURSOR_MOVE)`,
+  and `first_window()` is 0 with no window shown. The input gets the
+  event though the drag never entered it: `Fl::handle_` sends
+  `FL_DND_LEAVE` to the below-mouse widget, the window, and
+  `Fl_Group::handle`'s default case passes it to every child that takes
+  events.
+- **Effect on pofltk**: none on programs, since a real drag only
+  reaches a window that is shown. `TestClipboard` tests drag and drop
+  in a window of its own, with no input.
+- **Confirmed**: `TestClipboard` crashed this way (backtrace above); a
+  scratch C++ program with an `Fl_Input` and an `Fl_Box` in a window
+  crashed on the `FL_DND_LEAVE`, unshown, on Xvfb and on headless sway,
+  and didn't with the window shown.
+
 ## Pitfalls
 
 ### 5. FLTK keeps the label pointer it is given

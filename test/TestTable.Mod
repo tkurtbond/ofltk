@@ -15,7 +15,7 @@ VAR
   t: Grid;
   plain: FlTable.Table;
   b, b2: FlButtons.Button;
-  x, y, w, h, r1, r2, c1, c2: INTEGER;
+  x, y, w, h, r1, r2, c1, c2, ax, ay, aw, ah: INTEGER;
   ok: BOOLEAN;
 
 PROCEDURE (g: Grid) DrawCell*(context, r, c, x, y, w, h: INTEGER);
@@ -90,6 +90,12 @@ BEGIN
   Check.Check(ok & (t.cells > 0) & (t.headers > 0) & (t.pages = 2), "DrawCell: cells, headers, start and end");
   Check.Check(t.FindCell(FlTable.ContextCell, 0, 0, x, y, w, h)
     & (x = 41) & (y = 26) & (w = 50) & (h = 20), "FindCell: past the headers and the frame");
+  t.Area(FlTable.AreaWidget, ax, ay, aw, ah);
+  Check.Check((ax = 1) & (ay = 1) & (aw = 298) & (ah = 198), "Area: inside the table's frame");
+  t.Area(FlTable.AreaCells, ax, ay, aw, ah);
+  Check.Check((ax = 41) & (ay = 26) & (aw = 258) & (ah = 173), "Area: the cells', beside the headers");
+  t.Area(FlTable.AreaCellsInner, ax, ay, aw, ah);
+  Check.Check((ax = 41) & (ay = 26) & (aw = 258) & (ah = 173), "Area: inside the cells' box, NoBox");
   Check.Check((Probe.Pixel(x + 25, y + 10) = Fl.RGB(255, 0, 0))
     & (Probe.Pixel(x + 75, y + 30) = Fl.RGB(0, 0, 255))
     & (Probe.Pixel(x + 75, y + 10) = Fl.RGB(255, 255, 255)), "DrawCell draws each cell where it is");
@@ -97,6 +103,13 @@ BEGIN
   Probe.Release;
   t.VisibleCells(r1, r2, c1, c2);
   Check.Check((r1 = 0) & (r2 = 4) & (c1 = 0) & (c2 = 3), "VisibleCells");
+  t.SetTableBox(Fl.ThinDownFrame);
+  t.Area(FlTable.AreaCellsInner, ax, ay, aw, ah);
+  Check.Check((ax = 42) & (ay = 27) & (aw = 256) & (ah = 171), "Area: inside the cells' box");
+  t.SetRows(50);
+  t.Area(FlTable.AreaCells, ax, ay, aw, ah);
+  Check.Check((ax = 41) & (aw = 258 - 12), "Area: beside the scrollbar");
+  t.SetRows(5); t.SetTableBox(Fl.NoBox);
 
   (* A click in a cell selects its row and calls back. *)
   Click(x + 75, y + 30);

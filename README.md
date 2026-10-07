@@ -107,10 +107,19 @@ END Hello.
 - `Scribble`: a custom widget drawn and driven by the mouse.
 - `Swatch`: a custom-drawn box.
 - `Menus`: a menu bar, a choice and the dialogs.
-- Ports of FLTK's own `examples/` programs, each a module's simplest
-  use: `TableSimple`, `TreeSimple`, `TextEditorSimple`, `BrowserSimple`,
-  `GridSimple`, `FlexSimple`, `TabsSimple`, `WizardSimple`,
-  `ProgressSimple`, `NativeFileChooserSimple`, `SvgSimple`.
+- Ports of FLTK's own `examples/` programs, each named for FLTK's file
+  in CamelCase, without `howto-`:
+  - each module's simplest use: `TableSimple`, `TreeSimple`,
+    `TextEditorSimple`, `BrowserSimple`, `GridSimple`, `FlexSimple`,
+    `TabsSimple`, `WizardSimple`, `ProgressSimple`,
+    `NativeFileChooserSimple`, `SvgSimple`;
+  - `Callbacks` (a callback's own arguments, as a widget's fields),
+    `DrawAnX`, `TextOverImageButton`, `DragAndDrop`;
+  - tables: `TableAsContainer`, `TableWithKeynav`,
+    `TableWithRightClickMenu`, `TableWithRightColumnStretchFit`,
+    `TableSpreadsheetWithKeyboardNav`;
+  - text: `TextDisplayWithColors`, `TextEditorWithDynamicColors`;
+  - `NativeFileChooserSimpleApp`: File/Open, Save and Save As.
 
 ## Modules
 
@@ -139,7 +148,8 @@ flattens FLTK to C functions; `src/pofltk.h` is what they share.
 then opens as the FLTK class it extends:
 `NEW(b); FlButtons.OpenButton(b, x, y, w, h, "label")`. So a program's
 own extension, with fields and methods of its own, is opened the same
-way. FLTK's current group is kept: a group (or window) collects the
+way. (Its fields can't be called `h`: every widget has the read-only
+`h`, its handle.) FLTK's current group is kept: a group (or window) collects the
 widgets opened until its `End`.
 
 **Overriding.**

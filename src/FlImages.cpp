@@ -22,6 +22,7 @@
 #include <string.h>
 
 #include <new>
+#include <vector>
 
 namespace {
 
@@ -185,6 +186,32 @@ intptr_t ofl_image_load_data(const unsigned char *data, int32_t n) {
     case svgf: return make(new Fl_SVG_Image(0, data, static_cast<size_t>(n)));
     default: return 0;
   }
+}
+
+// The pixmap in the n XPM lines at lines, each in stride bytes ending in
+// a 0: the values, the colors, then the rows of pixels, as the strings of
+// an XPM file. Fl_Pixmap keeps the lines and trusts the values, so a
+// short line or array would be read past its end: they are checked
+// against the values first, and the pixmap copies them (copy_data). 0
+// if they don't match, or FLTK's own form (fewer than 1 color) is used.
+intptr_t ofl_image_xpm(const char *lines, int32_t n, int32_t stride) {
+  if (n < 1 || stride < 1) return 0;
+  for (int32_t i = 0; i < n; i++) {
+    if (!memchr(lines + static_cast<size_t>(i) * stride, 0, stride)) return 0;
+  }
+  int w, h, colors, cpp;
+  if (sscanf(lines, "%d %d %d %d", &w, &h, &colors, &cpp) != 4) return 0;
+  if (w < 1 || h < 1 || colors < 1 || cpp < 1 || cpp > 2) return 0;
+  if (static_cast<long>(n) != 1L + colors + h) return 0;
+  std::vector<const char *> p(n);
+  for (int32_t i = 0; i < n; i++) {
+    p[i] = lines + static_cast<size_t>(i) * stride;
+    size_t need = i == 0 ? 0 : i <= colors ? static_cast<size_t>(cpp)
+                                           : static_cast<size_t>(w) * cpp;
+    if (strlen(p[i]) < need) return 0;
+  }
+  Fl_Pixmap given(p.data());
+  return make(given.copy());
 }
 
 // An RGB image of w by h pixels of d bytes each (1 gray, 2 gray and alpha,

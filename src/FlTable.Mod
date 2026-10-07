@@ -31,6 +31,11 @@ CONST
   ContextTable* = 32;
   ContextRCResize* = 64;
 
+  (* a table's areas (Table.Area) *)
+  AreaWidget* = 0;      (* inside the table's box *)
+  AreaCells* = 1;       (* the cells', with their box, beside headers and scrollbars *)
+  AreaCellsInner* = 2;  (* inside the cells' box *)
+
   (* how a table row's rows are selected (TableRow.SetSelectMode) *)
   SelectNone* = 0;
   SelectSingle* = 1;
@@ -60,6 +65,7 @@ PROCEDURE ["C", "ofl_table_is_selected"] CIsSelected(t: SYSTEM.ADDRESS; r, c: SY
 PROCEDURE ["C", "ofl_table_get_selection"] CGetSelection(t: SYSTEM.ADDRESS; VAR top, left, bottom, right: SYSTEM.INT32);
 PROCEDURE ["C", "ofl_table_set_selection"] CSetSelection(t: SYSTEM.ADDRESS; top, left, bottom, right: SYSTEM.INT32);
 PROCEDURE ["C", "ofl_table_move_cursor"] CMoveCursor(t: SYSTEM.ADDRESS; r, c, shift: SYSTEM.INT32): SYSTEM.INT32;
+PROCEDURE ["C", "ofl_table_area"] CArea(t: SYSTEM.ADDRESS; which: SYSTEM.INT32; VAR x, y, w, h: SYSTEM.INT32);
 PROCEDURE ["C", "ofl_table_find_cell"] CFindCell(t: SYSTEM.ADDRESS; context, r, c: SYSTEM.INT32; VAR x, y, w, h: SYSTEM.INT32): SYSTEM.INT32;
 PROCEDURE ["C", "ofl_table_redraw_range"] CRedrawRange(t: SYSTEM.ADDRESS; r1, r2, c1, c2: SYSTEM.INT32);
 PROCEDURE ["C", "ofl_table_row_selected"] CRowSelected(t: SYSTEM.ADDRESS; r: SYSTEM.INT32): SYSTEM.INT32;
@@ -328,6 +334,16 @@ BEGIN
   IF CFindCell(Fl.Live(t), context, r, c, a, b, cc, d) = 0 THEN RETURN FALSE END;
   x := a; y := b; w := cc; h := d; RETURN TRUE
 END FindCell;
+
+(* Where one of t's areas is, AreaWidget, AreaCells or AreaCellsInner:
+   FLTK's wix, tox and tix and the rest, as of t's last resize, or change
+   of its rows, columns or headers. *)
+PROCEDURE (t: Table) Area*(which: INTEGER; VAR x, y, w, h: INTEGER);
+  VAR a, b, c, d: SYSTEM.INT32;
+BEGIN
+  ASSERT((which >= AreaWidget) & (which <= AreaCellsInner), Fl.IndexOutOfRange);
+  CArea(Fl.Live(t), which, a, b, c, d); x := a; y := b; w := c; h := d
+END Area;
 
 (* Redraws the cells of rows r1 to r2, columns c1 to c2. *)
 PROCEDURE (t: Table) RedrawRange*(r1, r2, c1, c2: INTEGER);

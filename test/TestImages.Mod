@@ -14,6 +14,7 @@ VAR
   s, t: FlImages.Surface;
   bits: ARRAY 64 OF CHAR;
   data: ARRAY 4096 OF CHAR;
+  xpm: ARRAY 5, 16 OF CHAR;
   n, white, red, blue: INTEGER;
   ok: BOOLEAN;
 
@@ -139,6 +140,24 @@ BEGIN
   Check.Check((n > 0) & FlImages.LoadData(j, data, n) & IsRedBlue(j), "SVG text");
   j.Close;
   Check.Check(~FlImages.LoadData(j, data, 10) & ~j.IsOpen(), "data cut short is FALSE");
+
+  (* An XPM's lines, from an Oberon array *)
+  xpm[0] := "4 2 2 1"; xpm[1] := "r c #FF0000"; xpm[2] := "b c #0000FF";
+  xpm[3] := "rrbb"; xpm[4] := "rrbb";
+  NEW(j); Check.Check(FlImages.OpenXPM(j, xpm, 5) & IsRedBlue(j), "OpenXPM");
+  xpm[3] := "xxxx";
+  Check.Check(IsRedBlue(j), "OpenXPM copies the lines");
+  j.Close;
+  xpm[3] := "rrbb";
+  NEW(j); Check.Check(~FlImages.OpenXPM(j, xpm, 4) & ~j.IsOpen(), "OpenXPM: too few lines is FALSE");
+  xpm[4] := "rrb";
+  Check.Check(~FlImages.OpenXPM(j, xpm, 5), "OpenXPM: a short row is FALSE");
+  FOR n := 0 TO LEN(xpm, 1) - 1 DO xpm[4, n] := "r" END;
+  Check.Check(~FlImages.OpenXPM(j, xpm, 5), "OpenXPM: a row without its 0X is FALSE");
+  xpm[4] := "rrbb"; xpm[0] := "4 2 2 3";
+  Check.Check(~FlImages.OpenXPM(j, xpm, 5), "OpenXPM: 3 characters a pixel is FALSE");
+  xpm[0] := "4 2";
+  Check.Check(~FlImages.OpenXPM(j, xpm, 5) & ~j.IsOpen(), "OpenXPM: a short first line is FALSE");
 
   (* Changing pixels *)
   NEW(j); i.Copy(j, 4, 2);

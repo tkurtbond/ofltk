@@ -108,8 +108,13 @@ prefix of the C++ parts (`ofl::`, `ofl_`) was kept.
   test-sway`, below).
 - `examples/`: example programs (`Hello`, FLTK's hello; `Scribble`,
   drawing with the mouse; `Swatch`, the prototype's demo; `Menus`, a
-  menu bar, a choice and the dialogs; and the `...Simple` ports of
-  FLTK's `examples/`). `make` builds them. They wait for the user, so
+  menu bar, a choice and the dialogs; and ports of FLTK's `examples/`,
+  named for FLTK's file in CamelCase without `howto-`). A port is
+  checked against FLTK's own build of it (in FLTK's `examples/`): both
+  run under Xvfb, driven by the same `xdotool` input, and their screens
+  compared (`magick compare -metric AE -fuzz 1%`). On Xvfb with no
+  window manager a window sits 20 pixels below its y, so add 20 to a
+  click's y. `make` builds them. They wait for the user, so
   `make test` runs each for `EXAMPLETIME` seconds and checks it is still
   running then.
 - `GNUmakefile`: build and test (Build, below).
@@ -249,6 +254,10 @@ widgets never shown; `make test` stops with a message without one.
   - a key goes to the focus widget alone. Through `Fl::handle`, a key no
     widget uses crashes FLTK 1.4.5 when no window is shown and
     `BelowMouse` is set (`doc/fltk-issues.md`, 3);
+  - drag and drop events go through `Probe.Mouse`. A window passes
+    `EvDndLeave` to every child, and with no window shown an `Fl_Input`
+    crashes on it (`doc/fltk-issues.md`, 53): test in a window with
+    no input;
   - a key must carry the text the window system would give it
     (BackSpace `08X`, Enter `0DX`): under Wayland, FLTK takes a key with
     no text as composed text;
@@ -371,7 +380,8 @@ held only in C++ memory**.
   it** (`Fl::handle_`, "raise windows that are clicked on").
 - **Synthesized events work in a window never shown**: set `Fl::e_x`
   and the rest (public statics), then call `Fl::handle(event, window)`.
-  Except keys no widget uses (above).
+  Except keys no widget uses, and `FL_DND_LEAVE` to a window with an
+  input (above).
 - **Non-virtual methods hidden by a subclass** (`Fl_Window::copy_label`,
   `Fl_Slider::bounds`, `Fl_Spinner::color`, `Fl_Flex::end`,
   `Fl_Scroll::clear`, `Fl_Table`'s child methods and others): calling

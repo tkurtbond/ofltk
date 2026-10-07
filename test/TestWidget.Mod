@@ -87,6 +87,20 @@ BEGIN
   Check.Check((g.Children() = 0) & ~a.IsOpen() & ~b.IsOpen() & ~c.IsOpen() & ~d.IsOpen()
     & (Fl.OpenWidgets() = 2), "Clear closes them");
 
+  (* A group resizes its children from the sizes it saved: a child the
+     program moved goes back, unless InitSizes forgets them. *)
+  NEW(a); Fl.OpenBox(a, 20, 20, 10, 10, ""); g.Add(a);
+  g.Resize(10, 10, 400, 150);
+  Check.Check((a.X() = 30) & (a.W() = 20), "a group scales its children");
+  a.Resize(100, 20, 10, 10);
+  g.Resize(10, 10, 200, 150);
+  Check.Check(a.X() = 20, "from the sizes it saved");
+  a.Resize(100, 20, 10, 10);
+  g.InitSizes;
+  g.Resize(10, 10, 400, 150);
+  Check.Check((a.X() = 190) & (a.W() = 20), "InitSizes: from where they are");
+  g.Resize(10, 10, 200, 150); g.Clear;
+
   (* window modes *)
   win.SetNonModal;
   Check.Check(~win.Modal(), "non-modal isn't modal");

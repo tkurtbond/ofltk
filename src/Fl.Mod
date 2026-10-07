@@ -527,6 +527,7 @@ PROCEDURE ["C", "ofl_group_insert"] CInsert(g, w: SYSTEM.ADDRESS; i: SYSTEM.INT3
 PROCEDURE ["C", "ofl_group_remove"] CRemove(g, w: SYSTEM.ADDRESS);
 PROCEDURE ["C", "ofl_group_find"] CFind(g, w: SYSTEM.ADDRESS): SYSTEM.INT32;
 PROCEDURE ["C", "ofl_group_clear"] CClear(g: SYSTEM.ADDRESS);
+PROCEDURE ["C", "ofl_group_init_sizes"] CInitSizes(g: SYSTEM.ADDRESS);
 PROCEDURE ["C", "ofl_group_set_resizable"] CSetResizable(g, w: SYSTEM.ADDRESS);
 PROCEDURE ["C", "ofl_group_resizable"] CResizable(g: SYSTEM.ADDRESS): SYSTEM.ADDRESS;
 PROCEDURE ["C", "ofl_window_shown"] CShown(w: SYSTEM.ADDRESS): SYSTEM.INT32;
@@ -966,6 +967,13 @@ END Find;
 PROCEDURE (g: Group) Clear*;
 BEGIN CClear(Live(g))
 END Clear;
+
+(* Makes g forget the sizes it saved of itself and its children, after
+   the program moves or resizes them: else the next resize of g puts them
+   back where they were. *)
+PROCEDURE (g: Group) InitSizes*;
+BEGIN CInitSizes(Live(g))
+END InitSizes;
 
 (* The child, or g itself, that grows and shrinks when g is resized; NIL
    for none, so nothing does. *)

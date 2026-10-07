@@ -979,23 +979,69 @@ Order: the ports that need nothing come first, because writing them
 finds the small gaps cheaply. The bindings with new lifetime problems
 (trees, animated images) come last.
 
-9. **Ports that need nothing new** (12):
-   - Drawing and widgets: `callbacks`, `howto-draw-an-x`,
-     `howto-text-over-image-button`, `howto-drag-and-drop`.
-   - Tables: `table-as-container`, `table-with-keynav`,
-     `table-with-right-click-menu`,
-     `table-with-right-column-stretch-fit`,
-     `table-spreadsheet-with-keyboard-nav`.
-   - Text: `textdisplay-with-colors`, `texteditor-with-dynamic-colors`
-     (the buffer's `Modified`).
-   - Files: `nativefilechooser-simple-app`, reading and writing files
-     with poc's own I/O.
-   - `callbacks` shows FLTK's callback macros (`FL_FUNCTION_CALLBACK_3`
-     and the rest). Its port shows the Oberon way, a `Callback` method or
-     a procedure field, rather than the macros themselves.
-   - Drag and drop, bound in Phase 7 but untested, gets a test:
-     `FL_DND_ENTER`, `FL_DND_DRAG`, `FL_DND_RELEASE` and `FL_PASTE` sent
-     by `Probe`.
+9. **`[done]` Ports that needed little new** (2026-10-07, poc 0.4.1, FLTK
+   1.4.5). Planned as needing nothing; writing them found three small
+   gaps, bound here.
+   - Ported: `Callbacks`, `DrawAnX`, `TextOverImageButton`,
+     `DragAndDrop`, `TableAsContainer`, `TableWithKeynav`,
+     `TableWithRightClickMenu`, `TableWithRightColumnStretchFit`,
+     `TableSpreadsheetWithKeyboardNav`, `TextDisplayWithColors`,
+     `TextEditorWithDynamicColors`, `NativeFileChooserSimpleApp`.
+   - **How a port was checked**: it and FLTK's own build (FLTK's
+     `examples/` has the binaries) were run under Xvfb, given the same
+     clicks, drags and keys with `xdotool`, and their screens compared
+     pixel by pixel (`magick compare -metric AE`). Every port matched
+     exactly, or within faint antialiasing (no pixel 1% off): as drawn,
+     and after each interaction tried, such as a dialog from each kind of
+     callback, a drag between windows, a column resized, cells selected
+     by mouse and keys, a cell edited, rows added until the scrollbar
+     shows, the window resized, text typed and deleted. What they print
+     matched too (FLTK's run with `stdbuf -oL`, since it is killed).
+     `NativeFileChooserSimpleApp` saved with Ctrl+S and Return wrote the
+     same file as FLTK's, and both showed an error for an unwritable
+     directory.
+   - **New: `FlImages.OpenXPM`**, for `TextOverImageButton`'s gradient:
+     an XPM's strings as an Oberon `ARRAY OF ARRAY OF CHAR`. A 2-D open
+     array reaches C as its first element's address, its rows `LEN(a,
+     1)` bytes apart (the test sees each row). `Fl_Pixmap` keeps the
+     lines and trusts the first line's numbers, so the shim checks the
+     line count, each row's length and its 0X against them, then copies
+     the pixmap (`copy_data`). Tested in `TestImages`, with each bad form
+     refused.
+   - **New: `Group.InitSizes`** (`Fl_Group::init_sizes`), for
+     `TableAsContainer`, which moves its cells' widgets as columns are
+     resized. `Fl_Table::init_sizes` hides `Fl_Group`'s (52), so a table
+     is called as one. Tested in `TestWidget`: a child moved goes back on
+     the group's next resize, and stays after `InitSizes`.
+   - **New: `Table.Area`**, for `TableWithRightColumnStretchFit`:
+     `Fl_Table`'s protected `wix`, `tox` and `tix` rectangles, reached
+     through pointers to members named in a subclass, as `find_cell` is.
+     Tested in `TestTable` against `recalc_dimensions`' arithmetic.
+   - **Drag and drop is tested** (`TestClipboard`), with events sent
+     by `Probe.Mouse` through FLTK's routing: enter, drag, release, and
+     leave both by dragging off and from the window system. A real drag
+     between two windows was tried in `DragAndDrop` under Xvfb.
+     - Sending `FL_DND_LEAVE` to a window never shown crashed the test in
+       an `Fl_Input`, which calls `Fl::first_window()->cursor()`
+       (`doc/fltk-issues.md`, 53), so the test uses a window with no
+       input.
+     - `Fl::handle` returns 0 for a drag off a widget the window has no
+       use for, though the widget gets `FL_DND_LEAVE`; a window passes
+       `FL_DND_LEAVE` to each child again.
+   - **Found writing them**:
+     - An extension of a widget can't have a field named `h`: the base's
+       read-only handle `h-` is visible, and poc reports the clash.
+     - poc has no string concatenation, so a label with line breaks is
+       built with `OutStr.Ln`.
+     - poc's `Files` halts when it can't create a file (`Fail`), so
+       `NativeFileChooserSimpleApp` writes through a text buffer's
+       `SaveFile`, which returns `FALSE`; its message can't say why.
+     - `exit(0)` in FLTK's examples (Escape) is `win.Hide` here, which
+       ends `Fl.Run`.
+     - On Xvfb with no window manager, a window sits 20 pixels below
+       its y.
+   - `EventXRoot` and `EventYRoot` were bound already (Phase 2), so
+     Phase 10 needn't add them.
 10. **Small additions** (7 ports):
     - `Fl.BoxDX`, `BoxDY`, `BoxDW`, `BoxDH` (`Fl::box_dx` and the rest),
       for `draggable-group`.
@@ -1021,9 +1067,9 @@ finds the small gaps cheaply. The bindings with new lifetime problems
       poc's `Args`. A program's own options come back from an Oberon
       procedure, as `Fl_Args_Handler` does.
     - Screen queries: `Fl::w`, `Fl::h`, `Fl::screen_count`,
-      `Fl::screen_xywh`, `Fl::screen_work_area`; and
-      `Fl::event_x_root`, `event_y_root`, and `event_shift` if
-      `GetKey` doesn't cover it. Under sway's headless output and Xvfb
+      `Fl::screen_xywh`, `Fl::screen_work_area`; and `event_shift` if
+      `EventState` doesn't cover it (`event_x_root` and `event_y_root`
+      are `EventXRoot` and `EventYRoot` already). Under sway's headless output and Xvfb
       the screen is the output's size, which the test checks.
 11. **The event loop** (3 ports):
     - **Idle callbacks** (`Fl::add_idle`, `remove_idle`): an `Idle`
