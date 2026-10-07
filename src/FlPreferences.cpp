@@ -1,4 +1,4 @@
-// The C++ part of FlPreferences: Fl_Preferences. See ofltk.h for the
+// The C++ part of FlPreferences: Fl_Preferences. See pofltk.h for the
 // conventions.
 //
 // Only a database's root is an Fl_Preferences kept here. Deleting it
@@ -9,7 +9,7 @@
 // group b in a); FlPreferences checks it with ofl_prefs_exists before
 // every other call, and each call makes it a short-lived Fl_Preferences.
 
-#include "ofltk.h"
+#include "pofltk.h"
 
 #include <FL/Fl_Preferences.H>
 #include <string.h>

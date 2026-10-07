@@ -1,6 +1,6 @@
-# FLTK issues found while writing ofltk
+# FLTK issues found while writing pofltk
 
-Problems in FLTK 1.4 found while building ofltk: bugs, which crash or
+Problems in FLTK 1.4 found while building pofltk: bugs, which crash or
 contradict FLTK's documentation, and pitfalls, which are FLTK working as
 intended in a way a binding must allow for. Each was seen in a program
 that ran, and where possible traced in FLTK's source
@@ -11,7 +11,7 @@ Record each new one here as it is found, in the same form:
 - **What happens**, with the FLTK version and back end (Wayland, X11)
   it was seen on, and the date.
 - **Cause**, with the source file and function, if found.
-- **Effect on ofltk**, and the workaround, with where it lives.
+- **Effect on pofltk**, and the workaround, with where it lives.
 - **How it was confirmed**: the test or scratch program.
 
 Entries keep their numbers, since comments in the code cite them; a
@@ -32,7 +32,7 @@ Unless an entry says otherwise, the version is FLTK 1.4.5 (Fedora's
   and it is 0 until a font is set. `height()` and `width()` check it,
   and set a font or return -1, so the driver is inconsistent with
   itself.
-- **Effect on ofltk**: every `FlDraw` text procedure sets FLTK's normal
+- **Effect on pofltk**: every `FlDraw` text procedure sets FLTK's normal
   font first if none is set (`ensure_font` in `src/FlDraw.cpp`).
 - **Confirmed**: the prototype's crash; source read 2026-10-06.
 
@@ -48,7 +48,7 @@ Unless an entry says otherwise, the version is FLTK 1.4.5 (Fedora's
   (`src/drivers/Cairo/Fl_Cairo_Graphics_Driver.cxx`) sets its result by
   comparing the box with the clip rectangle, not the result with the
   box. It returns as soon as `W < 0`, before setting `H`.
-- **Effect on ofltk**: `FlDraw.ClipBox` is a proper procedure, giving
+- **Effect on pofltk**: `FlDraw.ClipBox` is a proper procedure, giving
   only the rectangle; `ofl_draw_clip_box` drops FLTK's result and zeroes
   its outputs before the call.
 - **Confirmed**: a C++ program in the scratchpad (on Wayland and on
@@ -66,7 +66,7 @@ Unless an entry says otherwise, the version is FLTK 1.4.5 (Fedora's
   isn't `first_window()`, it calls `send_event(FL_SHORTCUT,
   first_window(), first_window())`. With no window shown,
   `first_window()` is 0, and `send_event` calls `handle()` through it.
-- **Effect on ofltk**: none on programs, since a real key can't arrive
+- **Effect on pofltk**: none on programs, since a real key can't arrive
   while no window is shown. The tests' `Probe.Key` (`test/Probe.cpp`)
   sends a key to the focus widget alone, as `Fl::handle_` does first,
   not through `Fl::handle`.
@@ -84,7 +84,7 @@ Unless an entry says otherwise, the version is FLTK 1.4.5 (Fedora's
   calls `Fl_Wayland_Screen_Driver::insertion_point_location`, which uses
   the screen driver's `seat` without checking it, and the seat is only
   set up when the display is opened.
-- **Effect on ofltk**: `Widget.TakeFocus` and `Fl.SetFocus` call
+- **Effect on pofltk**: `Widget.TakeFocus` and `Fl.SetFocus` call
   `fl_open_display()` first (`src/Fl.cpp`), which does nothing if the
   display is open.
 - **Confirmed**: the C++ program (Wayland crash, X11 fine), and
@@ -102,7 +102,7 @@ Unless an entry says otherwise, the version is FLTK 1.4.5 (Fedora's
   Fl_Grid_Align)` (`src/Fl_Grid.cxx`) checks `row > rows_` and
   `col > cols_` where `cell()` checks `>=`, then `add_cell(row, col)`
   indexes `Rows_[row]`.
-- **Effect on ofltk**: `Grid.PlaceSpan` and `Grid.Place` halt with
+- **Effect on pofltk**: `Grid.PlaceSpan` and `Grid.Place` halt with
   `IndexOutOfRange` unless the whole span is inside the grid, before
   calling FLTK.
 - **Confirmed**: a C++ program placing a box at row 2 of a 2 by 2 grid,
@@ -120,7 +120,7 @@ Unless an entry says otherwise, the version is FLTK 1.4.5 (Fedora's
   not yet configured, a protocol error the compositor answers by
   disconnecting. FLTK waits for the menu window itself to be exposed
   (`Fl_Wayland_Window_Driver::makeWindow`), but not for its parent.
-- **Effect on ofltk**: `MenuButton.Popup` calls `wait_for_expose()` on
+- **Effect on pofltk**: `MenuButton.Popup` calls `wait_for_expose()` on
   the button's window first, which returns at once once the window is
   there, and on X11; `Window.WaitForExpose` binds it for programs.
 - **Confirmed**: a C++ program that shows a window and pops up a menu
@@ -138,7 +138,7 @@ Unless an entry says otherwise, the version is FLTK 1.4.5 (Fedora's
   `memcmp(sp, address(bp), l)`, `bp` running on past `length()`;
   `search_backward` does the same. The case-insensitive path reads
   through `char_at`, which checks.
-- **Effect on ofltk**: `ofl_buffer_search` (`src/FlText.cpp`) does its
+- **Effect on pofltk**: `ofl_buffer_search` (`src/FlText.cpp`) does its
   own byte search, through `byte_at`, when matching case, and calls
   FLTK's otherwise.
 - **Confirmed**: valgrind reported invalid reads in `TestText`'s search
@@ -154,7 +154,7 @@ Unless an entry says otherwise, the version is FLTK 1.4.5 (Fedora's
 - **Cause**: `Fl_PNM_Image::Fl_PNM_Image` (`src/Fl_PNM_Image.cxx`)
   reads P5 and P6 samples with `fread` when maxval is under 256, without
   the `255 * val / maxval` it uses elsewhere.
-- **Effect on ofltk**: `ofl_image_load` (`src/FlImages.cpp`) reads the
+- **Effect on pofltk**: `ofl_image_load` (`src/FlImages.cpp`) reads the
   maxval from the header itself, and scales the samples after FLTK.
 - **Confirmed**: `test/images/rb.ppm` (P6, maxval 1) read as 1, 0, 0;
   `TestImages` fails without the scaling.
@@ -171,7 +171,7 @@ Unless an entry says otherwise, the version is FLTK 1.4.5 (Fedora's
   (`src/drivers/Wayland/fl_wayland_clipboard_dnd.cxx`): the branch for
   `fl_i_own_selection[1]` calls `receiver.handle(FL_PASTE)` and returns,
   without the `delete` its other branch and the X11 driver's have.
-- **Effect on ofltk**: `W<B>::handle` (`src/ofltk.h`,
+- **Effect on pofltk**: `W<B>::handle` (`src/pofltk.h`,
   `drop_pasted_image`) deletes the image after the Oberon `Handle`,
   whatever it returned, unless `FlImages.TakePastedImage` took it (it
   sets `Fl::e_clipboard_data` to 0). FLTK then finds none to delete.
@@ -195,7 +195,7 @@ Unless an entry says otherwise, the version is FLTK 1.4.5 (Fedora's
   program's data asks the X server with `fl_xid(Fl::first_window())`,
   which is 0 with no window shown, and the server's `BadWindow` error is
   printed.
-- **Effect on ofltk**: `ofl_copy`, `ofl_paste`, `ofl_clipboard_contains`
+- **Effect on pofltk**: `ofl_copy`, `ofl_paste`, `ofl_clipboard_contains`
   (`src/Fl.cpp`) and `ofl_image_copy_to_clipboard` (`src/FlImages.cpp`)
   call `fl_open_display()` first. Under X11 with no window shown,
   `ofl_paste` asks only for what the program owns (FLTK's exported
@@ -211,14 +211,14 @@ Unless an entry says otherwise, the version is FLTK 1.4.5 (Fedora's
 - `Fl_Widget::label(const char *)` (and `tooltip()`, and menu item text)
   stores the pointer, not a copy. An Oberon string may live on the stack
   or the collected heap.
-- **ofltk** always uses `copy_label()` and `copy_tooltip()`.
+- **pofltk** always uses `copy_label()` and `copy_tooltip()`.
 
 ### 6. `Fl_Window::copy_label` hides `Fl_Widget::copy_label`
 
 - It is not virtual. `Fl_Window`'s version also sets a shown window's
   title, but calling a window through an `Fl_Widget *` reaches
   `Fl_Widget`'s, and the title doesn't change.
-- **ofltk**: `ofl_widget_copy_label` (`src/Fl.cpp`) calls a window as a
+- **pofltk**: `ofl_widget_copy_label` (`src/Fl.cpp`) calls a window as a
   window, through `as_window()`.
 
 ### 7. Replacing auto-deleted user data deletes the old data
@@ -227,7 +227,7 @@ Unless an entry says otherwise, the version is FLTK 1.4.5 (Fedora's
   `Fl_Callback_User_Data` when the widget dies (in every way: explicitly,
   with its parent, by `Fl::delete_widget`, a shown window with its
   children), but also when the user data or callback is replaced.
-- **ofltk** uses that deletion as its hook (`Ref` in `src/ofltk.h`), so
+- **pofltk** uses that deletion as its hook (`Ref` in `src/pofltk.h`), so
   replacing the data would unregister a live widget. `ofl::open` sets it
   once, and no C++ code may set the user data or callback again.
 
@@ -237,7 +237,7 @@ Unless an entry says otherwise, the version is FLTK 1.4.5 (Fedora's
   `fl_define_FL_ROUND_UP_BOX()` and so on, which register the type's
   drawing code. Their plain values, as an Oberon constant holds them,
   draw nothing until that has been called.
-- **ofltk**: `ofl_register` (`src/Fl.cpp`) calls every `fl_define_FL_*`
+- **pofltk**: `ofl_register` (`src/Fl.cpp`) calls every `fl_define_FL_*`
   function when `Fl` starts.
 
 ### 9. A click no widget uses shows the window and becomes `pushed()`
@@ -246,7 +246,7 @@ Unless an entry says otherwise, the version is FLTK 1.4.5 (Fedora's
   window before offering the push to its widgets. If none uses it, it
   calls `window->show()` ("raise windows that are clicked on"). A window
   never shown is then shown, and its widgets get `FL_SHOW`.
-- **ofltk**: nothing to change; `TestEvents` checks it, last, since it
+- **pofltk**: nothing to change; `TestEvents` checks it, last, since it
   shows the window.
 
 ### 10. `changed()` is cleared after every callback but FLTK's default
@@ -255,7 +255,7 @@ Unless an entry says otherwise, the version is FLTK 1.4.5 (Fedora's
   `clear_changed()` after the callback returns, unless the callback is
   `Fl_Widget::default_callback`. A program with its own callbacks sees
   `changed()` only inside them.
-- **ofltk** sets its own callback on every widget, so `Widget.Changed`
+- **pofltk** sets its own callback on every widget, so `Widget.Changed`
   is TRUE only inside a `Callback`; its comment says so. Confirmed
   2026-10-06 by `TestButtons`.
 
@@ -271,7 +271,7 @@ Unless an entry says otherwise, the version is FLTK 1.4.5 (Fedora's
 - It is not virtual. `Fl_Slider`'s version also asks for a redraw
   (`damage(FL_DAMAGE_EXPOSE)`); called through an `Fl_Valuator *`, a
   slider's new bounds aren't drawn until something else redraws it.
-- **ofltk**: `ofl_valuator_bounds` (`src/FlValuators.cpp`) calls a
+- **pofltk**: `ofl_valuator_bounds` (`src/FlValuators.cpp`) calls a
   slider as a slider. `TestValuators` checks the damage, and fails
   without it.
 
@@ -282,7 +282,7 @@ Unless an entry says otherwise, the version is FLTK 1.4.5 (Fedora's
   `format(const char *)` keeps the pointer, and passes the string to
   `snprintf` as a format, so the string must outlive the spinner and be
   a safe format.
-- **ofltk**: `FlValuators.Spinner` overrides `Color`, `SetColor`,
+- **pofltk**: `FlValuators.Spinner` overrides `Color`, `SetColor`,
   `SelectionColor` and `SetSelectionColor`, and its `Kind` calls the
   spinner's `type()`. The format is not bound.
 
@@ -293,7 +293,7 @@ Unless an entry says otherwise, the version is FLTK 1.4.5 (Fedora's
   modifier, function or cursor key. The window system gives BackSpace
   the text `"\b"`, so a real one works, but a synthesized BackSpace
   with no text deletes nothing. On X11 it works either way.
-- **ofltk**: only tests synthesize keys; `TestInputs` sends BackSpace
+- **pofltk**: only tests synthesize keys; `TestInputs` sends BackSpace
   with `08X`, as the window system does.
 
 ### 15. Enter in an `Fl_Input` calls back only if changed, and selects all
@@ -303,21 +303,21 @@ Unless an entry says otherwise, the version is FLTK 1.4.5 (Fedora's
   either way puts the cursor at the end and the mark at the start
   (`insert_position(size(), 0)`), so the next key typed replaces all
   the text.
-- **ofltk**: nothing to change; `TestInputs` checks both.
+- **pofltk**: nothing to change; `TestInputs` checks both.
 
 ### 16. Fl_Value_Input gives the focus to a field FLTK made
 
-- Its `Fl_Input` is a member, not an ofltk widget, so after
-  `TakeFocus`, `Fl.Focus()` is NIL (ofltk returns NIL for a widget FLTK
+- Its `Fl_Input` is a member, not an pofltk widget, so after
+  `TakeFocus`, `Fl.Focus()` is NIL (pofltk returns NIL for a widget FLTK
   made). Keys typed go to the field, and set the value.
-- **ofltk**: nothing to change; `TestValuators` checks it.
+- **pofltk**: nothing to change; `TestValuators` checks it.
 
 ### 17. FLTK needs a display even for widgets never shown
 
 - FLTK opens the display even to draw a widget never shown into an
   `Fl_Image_Surface` (PLAN.md, Phase 0). With none, FLTK prints "Can't
   open display" and exits 1.
-- **ofltk**: `make test` refuses to run without `DISPLAY` or
+- **pofltk**: `make test` refuses to run without `DISPLAY` or
   `WAYLAND_DISPLAY`; `make test-headless` uses Xvfb.
 
 ### 18. FLTK prefers Wayland whenever `WAYLAND_DISPLAY` is set
@@ -326,7 +326,7 @@ Unless an entry says otherwise, the version is FLTK 1.4.5 (Fedora's
   in a Wayland session, FLTK uses the Wayland desktop. With
   `WAYLAND_DISPLAY` unset it uses X11 by itself; `FLTK_BACKEND=x11`
   forces X11.
-- **ofltk**: `make test-headless` and `make valgrind-headless` unset it.
+- **pofltk**: `make test-headless` and `make valgrind-headless` unset it.
 
 ### 19. The display stack leaks by design
 
@@ -335,8 +335,8 @@ Unless an entry says otherwise, the version is FLTK 1.4.5 (Fedora's
   All are allocated by fontconfig and Pango's font cache, and under
   Wayland by GTK's window decorations (libdecor). There are no memory
   errors, on either back end.
-- **ofltk**: leaks aren't valgrind errors in `make valgrind`;
-  `test/vg-check.sh` fails instead on any leak allocated by ofltk's own
+- **pofltk**: leaks aren't valgrind errors in `make valgrind`;
+  `test/vg-check.sh` fails instead on any leak allocated by pofltk's own
   code.
 
 ### 20. `fltk-config --cxxflags` gives more than FLTK's flags
@@ -344,7 +344,7 @@ Unless an entry says otherwise, the version is FLTK 1.4.5 (Fedora's
 - It includes `-I/usr/include`, which, searched ahead of the C++
   library's own directories, breaks its `#include_next`. It also
   includes Fedora's own build flags (`-specs=...` hardening files).
-- **ofltk**: the makefile and `tools/gen-constants.py` pass only its
+- **pofltk**: the makefile and `tools/gen-constants.py` pass only its
   `-I` and `-D` flags, without `-I/usr/include`.
 
 ### 22. `Fl_Flex::end` hides `Fl_Group::end`
@@ -352,7 +352,7 @@ Unless an entry says otherwise, the version is FLTK 1.4.5 (Fedora's
 - It isn't virtual, and it asks for a layout (`need_layout(1)`), so a
   flex ended through an `Fl_Group *` doesn't lay its children out when
   first drawn.
-- **ofltk**: `ofl_group_end` (`src/Fl.cpp`) calls a flex as a flex.
+- **pofltk**: `ofl_group_end` (`src/Fl.cpp`) calls a flex as a flex.
   `TestLayout` draws a flex row after `End`, and fails without it.
 
 ### 23. `Fl_Group::clear` deletes the parts some groups are made of
@@ -363,8 +363,8 @@ Unless an entry says otherwise, the version is FLTK 1.4.5 (Fedora's
   scrollbars out first, and `Fl_Pack::clear` also clears the pack's
   `resizable()`, but neither is virtual, so through an `Fl_Group *`
   `Fl_Group::clear` runs instead.
-- **ofltk**: `Group.Clear` (`ofl_group_clear` in `src/Fl.cpp`) deletes
-  only the children ofltk opened, and clears a pack's `resizable()`.
+- **pofltk**: `Group.Clear` (`ofl_group_clear` in `src/Fl.cpp`) deletes
+  only the children pofltk opened, and clears a pack's `resizable()`.
   `TestLayout` clears a scroll, a spinner and a pack, and checks what
   is left; it fails without the pack's case.
 
@@ -377,7 +377,7 @@ Unless an entry says otherwise, the version is FLTK 1.4.5 (Fedora's
   they were first. A plain C++ program: after moving the border from
   150 to 100, setting a range and moving it from 100 to 20 left it at
   150. With the range set first, it stopped at the range, 80.
-- **ofltk**: `Tile.SizeRange` and `Tile.InitSizeRange` call
+- **pofltk**: `Tile.SizeRange` and `Tile.InitSizeRange` call
   `init_sizes()` first (`src/FlLayout.cpp`). With ranges, FLTK saves
   the sizes after every move anyway, so that changes nothing else.
   `TestLayout` moves a border, sets a range, and moves it again; it
@@ -390,7 +390,7 @@ Unless an entry says otherwise, the version is FLTK 1.4.5 (Fedora's
   height becomes theirs, plus the spacing. So its size before it is
   first drawn isn't the size it will have, and an image of it made at
   its old size doesn't match it.
-- **ofltk**: nothing to change; `TestLayout` allows for it.
+- **pofltk**: nothing to change; `TestLayout` allows for it.
 
 ### 26. Inserting or removing menu items moves the item chosen
 
@@ -401,7 +401,7 @@ Unless an entry says otherwise, the version is FLTK 1.4.5 (Fedora's
   removing it leaves it naming the item that took its place. A C++
   program: a choice with "A" and "B", "B" chosen, then "Z" inserted at
   0, had value 1, "A".
-- **ofltk**: `ofl_menu_insert`, `ofl_menu_remove` and
+- **pofltk**: `ofl_menu_insert`, `ofl_menu_remove` and
   `ofl_menu_clear_submenu` (`src/FlMenus.cpp`) find the item chosen
   again afterwards by its text pointer, each item's own copy, which
   neither moves nor is freed by the change unless it is the item
@@ -415,7 +415,7 @@ Unless an entry says otherwise, the version is FLTK 1.4.5 (Fedora's
   takes. FLTK's documentation says not to destroy the menu. Deleted, it
   is used anyway: valgrind showed invalid reads in the handler
   (`src/Fl_Menu_global.cxx`), in a C++ program.
-- **ofltk**: `Menu.Global` uses ofltk's own handler and pointer
+- **pofltk**: `Menu.Global` uses pofltk's own handler and pointer
   (`src/FlMenus.cpp`), which the menu's class clears in its destructor.
   `TestMenus` deletes a global menu and types its shortcut; without the
   clearing it crashes.
@@ -427,7 +427,7 @@ Unless an entry says otherwise, the version is FLTK 1.4.5 (Fedora's
   (`popup_done`, in `Fl_Wayland_Window_Driver.cxx`) before it can be
   used, and `popup()` returns NULL. FLTK's own comment there notes that
   sway does the same when an application loses the focus.
-- **ofltk**: nothing to change; a real program pops up a menu in answer
+- **pofltk**: nothing to change; a real program pops up a menu in answer
   to the user. `TestMenus` checks `Popup` only on X11 (`Probe.Wayland`),
   where `make test-headless` runs it.
 - **Confirmed**: a C++ program, after `wait_for_expose()`: under
@@ -441,7 +441,7 @@ Unless an entry says otherwise, the version is FLTK 1.4.5 (Fedora's
   `Fl_Window::label`: it keeps the pointer, so the title outlives the
   call in the hidden window (`src/fl_file_dir.cxx`,
   `src/Fl_File_Chooser.cxx`). The pattern and file name are copied.
-- **ofltk**: `ofl_file_chooser` (`src/FlDialogs.cpp`) copies the title
+- **pofltk**: `ofl_file_chooser` (`src/FlDialogs.cpp`) copies the title
   into a static buffer first. Found in the source; no failure seen.
 - `Fl_Native_File_Chooser` does the same when it uses FLTK's chooser
   (zenity, kdialog and GTK off or missing):
@@ -458,7 +458,7 @@ Unless an entry says otherwise, the version is FLTK 1.4.5 (Fedora's
 - `fl_message`, `fl_alert`, `fl_choice`, `fl_input` and `fl_password`
   take a printf format and arguments, so a message holding a `%` would
   be read as one.
-- **ofltk**: `src/FlDialogs.cpp` passes every text as the argument of
+- **pofltk**: `src/FlDialogs.cpp` passes every text as the argument of
   `"%s"`. Found in the header (`__printf__` attributes); `TestDialogs`
   shows "100% done", but doesn't read the text back.
 
@@ -470,7 +470,7 @@ Unless an entry says otherwise, the version is FLTK 1.4.5 (Fedora's
   does: `fl_show_colormap` handled the Escape but never returned.
   Wayland's compositor sends events that wake it, and a real key is an
   event, so only programs answering their own dialogs meet this.
-- **ofltk**: nothing to change. `TestDialogs` fires its timer once more
+- **pofltk**: nothing to change. `TestDialogs` fires its timer once more
   after its keys.
 
 ### 33. `Fl_Choice::value(int)` hides `Fl_Menu_::value(int)`
@@ -478,7 +478,7 @@ Unless an entry says otherwise, the version is FLTK 1.4.5 (Fedora's
 - It isn't virtual, and the choice's also redraws, since a choice shows
   its value. Through an `Fl_Menu_ *` a choice shows its old value until
   something else redraws it.
-- **ofltk**: `set_value` (`src/FlMenus.cpp`) calls a choice as a
+- **pofltk**: `set_value` (`src/FlMenus.cpp`) calls a choice as a
   choice. `TestMenus` checks the damage, and fails without it.
 
 ### 34. A text buffer deleted before its displays is used after it is freed
@@ -491,7 +491,7 @@ Unless an entry says otherwise, the version is FLTK 1.4.5 (Fedora's
   arrays without calling them (`src/Fl_Text_Buffer.cxx`);
   `Fl_Text_Display::~Fl_Text_Display` calls `mBuffer->remove_modify_callback`
   (`src/Fl_Text_Display.cxx`).
-- **Effect on ofltk**: a buffer is reference counted
+- **Effect on pofltk**: a buffer is reference counted
   (`src/FlText.cpp`): `TextBuffer.Close` (or its finalizer) only marks
   it, and it is deleted when the last display holding it lets it go.
   A display lets go in the destructor of `Holds`, a base class
@@ -507,7 +507,7 @@ Unless an entry says otherwise, the version is FLTK 1.4.5 (Fedora's
 - **Cause**: `Fl_Text_Display` indexes `mStyleTable[style - 'A']` after
   clamping the style to `mNStyles - 1`, which is -1
   (`src/Fl_Text_Display.cxx`, near lines 2373, 2528 and 2687).
-- **Effect on ofltk**: `set_highlight` (`src/FlText.cpp`) gives FLTK
+- **Effect on pofltk**: `set_highlight` (`src/FlText.cpp`) gives FLTK
   the style buffer only once there is at least one style.
 - **Confirmed**: by mutation: without the guard, valgrind reports
   invalid reads in `TestText`.
@@ -519,7 +519,7 @@ Unless an entry says otherwise, the version is FLTK 1.4.5 (Fedora's
   they draw or load again.
 - **Cause**: they assign the pointer to `column_widths_`, `pattern_` and
   `directory_` (`FL/Fl_Browser.H`, `src/Fl_File_Browser.cxx`).
-- **Effect on ofltk**: every browser keeps its own copies, in the base
+- **Effect on pofltk**: every browser keeps its own copies, in the base
   class `Keeps` (`src/FlBrowsers.cpp`), freed after FLTK's browser.
   `Fl_File_Browser` has no `directory()` accessor in 1.4.5, so FlBrowsers
   has none either.
@@ -535,7 +535,7 @@ Unless an entry says otherwise, the version is FLTK 1.4.5 (Fedora's
   never drawn has none, so a push on it selects nothing (`handle`
   checks `top_`).
 - **Cause**: `src/Fl_Browser_.cxx`, `update_top`, `handle` (`FL_PUSH`).
-- **Effect on ofltk**: `ofl_browser_topline` and the `displayed` case of
+- **Effect on pofltk**: `ofl_browser_topline` and the `displayed` case of
   `ofl_browser_line` (`src/FlBrowsers.cpp`) call the protected
   `find_item` first, which updates it. Clicks need nothing: a user can
   only click a browser that has been drawn. A test sending clicks draws
@@ -549,7 +549,7 @@ Unless an entry says otherwise, the version is FLTK 1.4.5 (Fedora's
 - None is virtual. `Fl_Browser`'s also measures its lines again;
   `Fl_File_Browser`'s also sets the icon size to one and a half times
   the text size. Through an `Fl_Browser_ *`, neither happens.
-- **Effect on ofltk**: `ofl_browser_set` (`src/FlBrowsers.cpp`) calls a
+- **Effect on pofltk**: `ofl_browser_set` (`src/FlBrowsers.cpp`) calls a
   file browser, then any `Fl_Browser`, as itself.
 - **Confirmed**: `TestBrowsers` checks the icon size after
   `SetTextSize`, and fails when the shim calls `Fl_Browser_`'s.
@@ -563,7 +563,7 @@ Unless an entry says otherwise, the version is FLTK 1.4.5 (Fedora's
   directory's entries (with `./` and the files the filter hides), not of
   the lines it lists.
 - **Cause**: `src/Fl_Browser_load.cxx`, `src/Fl_File_Browser.cxx`.
-- **Effect on ofltk**: `Browser.Load` returns FALSE for "", and
+- **Effect on pofltk**: `Browser.Load` returns FALSE for "", and
   documents the empty last line; `FileBrowser.LoadDirectory` returns a
   `BOOLEAN`, the lines being `Count()`.
 - **Confirmed**: `TestBrowsers` loads `test/Check.Mod` (35 lines, 36 in
@@ -581,7 +581,7 @@ Unless an entry says otherwise, the version is FLTK 1.4.5 (Fedora's
   focus item, but not `_lastselect`. `extend_selection` only compares
   the pointer, so it reads no freed memory, unless the pointer is
   reused.
-- **Effect on ofltk**: `remove` (`src/FlBrowsers.cpp`) removes an
+- **Effect on pofltk**: `remove` (`src/FlBrowsers.cpp`) removes an
   item's descendants one by one through `Fl_Tree::remove`, last first,
   before the item.
 - **Confirmed**: a C++ program (a multi-select tree a/b, c, d, e; click
@@ -595,7 +595,7 @@ Unless an entry says otherwise, the version is FLTK 1.4.5 (Fedora's
   pointer to a deleted item.
 - **Cause**: nothing in `Fl_Tree::remove` or `~Fl_Tree_Item` clears
   `_callback_item` (`src/Fl_Tree.cxx`, `src/Fl_Tree_Item.cxx`).
-- **Effect on ofltk**: `remove` clears it when it removes that item, so
+- **Effect on pofltk**: `remove` clears it when it removes that item, so
   `CallbackItem` returns NIL.
 - **Confirmed**: in the source; `TestTree` removes the item in its
   callback, and fails without the clearing.
@@ -606,7 +606,7 @@ Unless an entry says otherwise, the version is FLTK 1.4.5 (Fedora's
   rest, and `root()` is then NULL until `add(path)` makes a new one.
 - **Cause**: `Fl_Tree::clear` (`src/Fl_Tree.cxx`); `remove(root())`
   calls it.
-- **Effect on ofltk**: `Tree.Root` may return NIL, as documented; an
+- **Effect on pofltk**: `Tree.Root` may return NIL, as documented; an
   old root's `TreeItem` is no longer live.
 - **Confirmed**: `TestTree`.
 
@@ -616,7 +616,7 @@ Unless an entry says otherwise, the version is FLTK 1.4.5 (Fedora's
 - **Cause**: `Fl_Window_Driver::icons` is empty, and only the X11,
   Windows and macOS drivers override it (`src/Fl_Window_Driver.H`,
   `src/drivers/`).
-- **Effect on ofltk**: `FlImages.SetIcon` says so.
+- **Effect on pofltk**: `FlImages.SetIcon` says so.
 - **Confirmed**: in the source.
 
 ### 46. An empty label is laid out as a line of text
@@ -627,8 +627,8 @@ Unless an entry says otherwise, the version is FLTK 1.4.5 (Fedora's
   half outside it.
 - **Cause**: `fl_draw` (`src/fl_draw.cxx`) counts the lines of any
   non-NULL text, and `""` is one line.
-- **Effect on ofltk**: Oberon has no NULL string, so every module's C++
-  part sets a label `""` as NULL (`ofl::label_text`, `src/ofltk.h`).
+- **Effect on pofltk**: Oberon has no NULL string, so every module's C++
+  part sets a label `""` as NULL (`ofl::label_text`, `src/pofltk.h`).
 - **Confirmed**: under Wayland and X11, a box with label `""` and an
   image; `TestImages` fails when `""` reaches FLTK.
 
@@ -640,7 +640,7 @@ Unless an entry says otherwise, the version is FLTK 1.4.5 (Fedora's
   driver asks the X server, which knows the names; the Wayland driver
   uses `Fl_Screen_Driver::parse_color` (`src/Fl_Screen_Driver.cxx`),
   which reads hexadecimal alone.
-- **Effect on ofltk**: none possible short of a color table of its own;
+- **Effect on pofltk**: none possible short of a color table of its own;
   `FlImages` says to use `#rrggbb` in XPM files. `test/images/rb.xpm`
   does.
 - **Confirmed**: an XPM of "red" and "blue" read back `C0C0C0` for both
@@ -654,7 +654,7 @@ Unless an entry says otherwise, the version is FLTK 1.4.5 (Fedora's
 - **Cause**: `Fl_Wayland_Screen_Driver::copy` and `paste`
   (`src/drivers/Wayland/fl_wayland_clipboard_dnd.cxx`): `paste` returns
   at once for a source other than 1.
-- **Effect on ofltk**: none; `Fl.Copy` and `Fl.Paste` say so.
+- **Effect on pofltk**: none; `Fl.Copy` and `Fl.Paste` say so.
   `TestClipboard` tests the selection buffer under X11 alone.
 - **Confirmed**: `TestClipboard` under headless sway: text copied to the
   selection buffer and pasted from it gives no `FL_PASTE`.
@@ -668,7 +668,7 @@ Unless an entry says otherwise, the version is FLTK 1.4.5 (Fedora's
 - **Cause**: `Fl_Preferences::~Fl_Preferences` (`src/Fl_Preferences.cxx`)
   deletes the `RootNode` for a root, which deletes the node tree;
   `Node::remove` deletes a node. A group object keeps a plain `Node *`.
-- **Effect on ofltk**: `FlPreferences` keeps no `Fl_Preferences` for a
+- **Effect on pofltk**: `FlPreferences` keeps no `Fl_Preferences` for a
   group: a group is its database and its path, checked with
   `group_exists` before each call and made a short-lived
   `Fl_Preferences` for it (`src/FlPreferences.cpp`). A group deleted, or
@@ -689,7 +689,7 @@ Unless an entry says otherwise, the version is FLTK 1.4.5 (Fedora's
 - **Cause**: `FL/Fl_Table.H`: the methods are plain inline members,
   forwarding to `table`, the protected `Fl_Scroll *`. The constructor
   (`src/Fl_Table.cxx`) leaves `table->begin()` current.
-- **Effect on ofltk**: Fl.cpp's group functions call a table as an
+- **Effect on pofltk**: Fl.cpp's group functions call a table as an
   `Fl_Table` (`dynamic_cast`), as they call a flex as an `Fl_Flex` (22),
   so `Group`'s methods reach the widgets in its cells.
 - **Confirmed**: `TestTable`; with Fl.cpp calling a table as an

@@ -1,4 +1,4 @@
-# ofltk - an Oberon-2 binding to FLTK for poc
+# pofltk - an Oberon-2 binding to FLTK for poc
 
 An Oberon-2 binding to [FLTK](https://www.fltk.org) 1.4, the Fast Light
 Toolkit, for poc, the
@@ -61,7 +61,7 @@ differ between poc's size models.
 Install it once as a poc library:
 
 ```sh
-make install    # into $(POC_OBERON_LIBRARIES)/ofltk
+make install    # into $(POC_OBERON_LIBRARIES)/pofltk
 make uninstall
 ```
 
@@ -70,7 +70,7 @@ The library records its C++ parts and its link flags (`-lfltk_images
 -lfltk`). A program then needs only the library path:
 
 ```sh
-poc -OC -library-path /usr/local/sw/versions/oberon/poc/lib/ofltk \
+poc -OC -library-path /usr/local/sw/versions/oberon/poc/lib/pofltk \
     -o Hello Hello.Mod
 ```
 
@@ -131,7 +131,7 @@ END Hello.
 | `FlTable` | `Table`, `TableRow`: cells the program draws |
 
 Each module has a C++ part (`src/<Module>.cpp`), compiled by poc, which
-flattens FLTK to C functions; `src/ofltk.h` is what they share.
+flattens FLTK to C functions; `src/pofltk.h` is what they share.
 
 ## Concepts
 
@@ -151,7 +151,7 @@ widgets opened until its `End`.
 - A table's `DrawCell` draws its cells.
 
 **Lifetime.** FLTK deletes a group's children with it, and a window
-the user closes may be deleted by the program's callback. ofltk hears of
+the user closes may be deleted by the program's callback. pofltk hears of
 every deletion: a deleted widget's `IsOpen()` is FALSE, and using it
 halts. Every open widget is kept reachable for poc's collector, which
 can't see FLTK's pointers. Delete a widget with `Delete`. Inside a
@@ -186,7 +186,7 @@ prints `assertion failed (n)`:
 
 ## FLTK's problems
 
-Writing ofltk found bugs and pitfalls in FLTK 1.4.5:
+Writing pofltk found bugs and pitfalls in FLTK 1.4.5:
 - crashes, such as `Fl::copy` before a window is shown on X11;
 - leaks and use-after-free;
 - non-virtual methods that hide their base's, such as `Fl_Table`'s
@@ -194,7 +194,7 @@ Writing ofltk found bugs and pitfalls in FLTK 1.4.5:
 - behaviour that differs between X11 and Wayland.
 
 `doc/fltk-issues.md` lists each, with its cause in FLTK's source and
-ofltk's workaround.
+pofltk's workaround.
 
 ## Documents
 

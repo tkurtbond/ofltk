@@ -1,6 +1,6 @@
 # AGENTS.md
 
-ofltk is an Oberon-2 binding to FLTK 1.4, the Fast Light Toolkit, compiled
+pofltk is an Oberon-2 binding to FLTK 1.4, the Fast Light Toolkit, compiled
 with poc, the Peaseblossom Oberon Compiler. PLAN.md is the design and
 roadmap; `doc/design.md` is the feasibility analysis that started it;
 `doc/fltk-issues.md` lists the FLTK bugs and pitfalls found so far. This
@@ -29,7 +29,7 @@ tests pass. Also kept:
 
 - `doc/design.md`: the feasibility analysis.
 - `doc/fltk-issues.md`: every FLTK bug and pitfall found, with its
-  cause in FLTK's source and ofltk's workaround.
+  cause in FLTK's source and pofltk's workaround.
 - `prototype/` was retired in Phase 3, when `src/` had all it had; it
   is in git up to commit f57262b. Its demo is `examples/Swatch.Mod`.
 - `probes/callback/`: C calling an Oberon procedure value.
@@ -37,9 +37,14 @@ tests pass. Also kept:
   shows a callback's `user_data` being collected; `Hello.Mod` is a
   one-button window that waits for real clicks.
 
+The project was called ofltk until 2026-10-07, when it was renamed
+pofltk (PLAN.md, "Rename to pofltk"). PLAN.md's phases, its open
+questions and `doc/design.md` keep the old name, as history. The `ofl`
+prefix of the C++ parts (`ofl::`, `ofl_`) was kept.
+
 ## Layout
 
-- `src/ofltk.h`: what every module's C++ part shares:
+- `src/pofltk.h`: what every module's C++ part shares:
   - `ofl::W<B>`, the FLTK class `B` with `draw()`, `handle()` and
     `resize()` sent to Oberon;
   - `ofl::Hooks`, through which Oberon reaches `B`'s own `draw()`,
@@ -51,7 +56,7 @@ tests pass. Also kept:
   - `ofl::Shared`, a reference count for what widgets share (images);
   - `ofl::label_text`, which every label goes through ("" is none);
   - the dispatch depth.
-- `src/Fl.Mod`, `src/Fl.cpp`: the core module. Its "For ofltk's modules
+- `src/Fl.Mod`, `src/Fl.cpp`: the core module. Its "For pofltk's modules
   only" procedures (`BeginOpen`, `EndOpen`) are how another module
   opens a widget of its own class. Keep application code off them.
 - `src/FlDraw.Mod`, `src/FlDraw.cpp`: `fl_draw.H`, for `Draw` methods.
@@ -167,7 +172,7 @@ make clean      # rm -rf build
 - `-verbose` on a poc command shows the clang commands it runs.
 
 ```sh
-make install    # the poc library ofltk, into $(POC_OBERON_LIBRARIES)/ofltk
+make install    # the poc library pofltk, into $(POC_OBERON_LIBRARIES)/pofltk
 make uninstall  # remove exactly what make install wrote
 ```
 
@@ -177,7 +182,7 @@ as polibfyaml's does. Try it elsewhere first with
 `c++`, `-lfltk_images` and `-lfltk`, so a program using the installed library needs only:
 
 ```sh
-poc -OC -library-path $POC_OBERON_LIBRARIES/ofltk Main.Mod
+poc -OC -library-path $POC_OBERON_LIBRARIES/pofltk Main.Mod
 ```
 
 A library records the poc that built it, and another poc refuses it, so
@@ -275,7 +280,7 @@ widgets never shown; `make test` stops with a message without one.
   (PLAN.md, Phase 0). So leaks don't count as valgrind errors
   (`--errors-for-leak-kinds=none`).
 - **`test/vg-check.sh` fails on any leak record whose allocator is
-  ofltk's**: the first frame after `malloc`/`calloc`/`realloc`/
+  pofltk's**: the first frame after `malloc`/`calloc`/`realloc`/
   `operator new` is an `ofl_` function, the `ofl` namespace, or an `Fl*`
   module.
   - So **a test must delete every widget it opens**, or it fails
@@ -338,8 +343,8 @@ held only in C++ memory**.
     `Fl::check`;
   - a shown window with its children.
 
-  This is ofltk's deletion hook (`src/ofltk.h`, `Ref`).
-- **Replacing a widget's user data deletes the old one**, so ofltk sets
+  This is pofltk's deletion hook (`src/pofltk.h`, `Ref`).
+- **Replacing a widget's user data deletes the old one**, so pofltk sets
   it once (`ofl::open`), and nothing may set it or the callback again.
   This applies to C++ code for a new class too.
 - **FLTK's own default callbacks**:
@@ -347,7 +352,7 @@ held only in C++ memory**.
   - `Fl_Window::default_callback` calls `Fl::atclose`, which hides the
     window.
 
-  ofltk's callback replaces them on every widget, so the Oberon
+  pofltk's callback replaces them on every widget, so the Oberon
   `Callback` defaults call them.
 - **`FLTK_BACKEND=x11`** puts FLTK 1.4.5 on X11 (XWayland here). With no
   display, FLTK prints "Can't open display" and exits 1.
@@ -522,7 +527,7 @@ None at present.
 - **Record every FLTK problem in `doc/fltk-issues.md`** as it is found:
   a bug (a crash, or behaviour against FLTK's documentation) or a
   pitfall a binding must allow for. Use the form the file gives: what
-  happens, the cause in FLTK's source, the effect on ofltk and its
+  happens, the cause in FLTK's source, the effect on pofltk and its
   workaround, and how it was confirmed. Keep the shorter note under
   "FLTK's behaviour" below too.
 - **Record decisions and findings in PLAN.md as they happen**: append to

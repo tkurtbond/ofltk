@@ -1,4 +1,4 @@
-// The C++ part of FlText: text buffers, displays and editors. See ofltk.h
+// The C++ part of FlText: text buffers, displays and editors. See pofltk.h
 // for the conventions.
 //
 // A buffer belongs to Oberon until its TextBuffer is closed, and to the
@@ -8,7 +8,7 @@
 // a display's hold is released only after the display is destroyed: by
 // Holds, a base class destroyed after Fl_Text_Display.
 
-#include "ofltk.h"
+#include "pofltk.h"
 
 #include <FL/Fl_Text_Buffer.H>
 #include <FL/Fl_Text_Display.H>

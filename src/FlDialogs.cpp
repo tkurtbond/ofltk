@@ -1,10 +1,10 @@
-// The C++ part of FlDialogs: FLTK's common dialogs. See ofltk.h for the
+// The C++ part of FlDialogs: FLTK's common dialogs. See pofltk.h for the
 // conventions.
 //
 // fl_message and the rest take a printf format, so the text is always an
 // argument of "%s", never the format: an Oberon string may hold a "%".
 
-#include "ofltk.h"
+#include "pofltk.h"
 
 #include <FL/Fl_Color_Chooser.H>
 #include <FL/Fl_File_Chooser.H>

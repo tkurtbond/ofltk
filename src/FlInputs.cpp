@@ -1,7 +1,7 @@
 // The C++ part of FlInputs: the text input and output classes. See
-// ofltk.h for the conventions.
+// pofltk.h for the conventions.
 
-#include "ofltk.h"
+#include "pofltk.h"
 
 #include <FL/Fl_Float_Input.H>
 #include <FL/Fl_Input.H>

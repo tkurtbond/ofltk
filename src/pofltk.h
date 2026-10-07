@@ -1,4 +1,4 @@
-// ofltk.h: what the C++ part of every ofltk module shares (PLAN.md,
+// pofltk.h: what the C++ part of every pofltk module shares (PLAN.md,
 // "Object model" and "Lifetime and the collector").
 //
 // A module's C++ part makes each widget as ofl::W<its FLTK class> and
@@ -10,8 +10,8 @@
 // int32_t, intptr_t and double; a widget is its Fl_Widget * as an
 // intptr_t.
 
-#ifndef OFLTK_H
-#define OFLTK_H
+#ifndef POFLTK_H
+#define POFLTK_H
 
 #include <FL/Fl.H>
 #include <FL/Fl_Image.H>
@@ -101,7 +101,7 @@ private:
 };
 
 // Every opened widget's FLTK callback, defined in Fl.cpp; also how
-// Fl.cpp tells an ofltk widget from one FLTK made itself.
+// Fl.cpp tells an pofltk widget from one FLTK made itself.
 void callback_trampoline(Fl_Widget *w, void *data);
 
 inline Ref *ref_of(Fl_Widget *w) { return static_cast<Ref *>(w->user_data()); }
@@ -110,7 +110,7 @@ inline intptr_t self_of(Fl_Widget *w) {
   return static_cast<Ref *>(w->user_data())->self;
 }
 
-// The Oberon object of w, or 0 if w is 0 or a widget ofltk didn't open
+// The Oberon object of w, or 0 if w is 0 or a widget pofltk didn't open
 // (FLTK makes some itself, such as a scroll group's scrollbars).
 inline intptr_t object_of(Fl_Widget *w) {
   if (w == 0 || w->callback() != callback_trampoline) return 0;

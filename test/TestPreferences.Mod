@@ -15,7 +15,7 @@ BEGIN
   odd := 'one?two \ "three"'; odd[3] := 0AX;
 
   (* Entries, in memory *)
-  NEW(p); FlPreferences.Open(p, FlPreferences.Memory, "org.example", "ofltk-test");
+  NEW(p); FlPreferences.Open(p, FlPreferences.Memory, "org.example", "pofltk-test");
   Check.Check(p.IsOpen() & (FlPreferences.openDatabases = 1), "Open");
   p.FileName(s);
   Check.Check(s = "", "a database in memory has no file");
@@ -73,16 +73,16 @@ BEGIN
   Check.Check(~p.IsOpen() & ~a.IsOpen() & (FlPreferences.openDatabases = 0), "closing a database closes its groups");
 
   (* A file, written and read back *)
-  NEW(p); FlPreferences.OpenFile(p, dir, "org.example", "ofltk-test");
+  NEW(p); FlPreferences.OpenFile(p, dir, "org.example", "pofltk-test");
   p.Clear;
   p.FileName(s);
   n := 0; WHILE s[n] # 0X DO INC(n) END;
-  Check.Check((n > 17) & (s[n - 17] = "/") & (s[n - 16] = "o") & (s[n - 6] = "."), "FileName: dir/ofltk-test.prefs");
+  Check.Check((n > 18) & (s[n - 18] = "/") & (s[n - 17] = "p") & (s[n - 6] = "."), "FileName: dir/pofltk-test.prefs");
   p.SetInt("n", 12); p.SetReal("x", 0.25D0); p.SetText("odd", odd);
   NEW(a); p.Group(a, "a/b"); a.SetText("t", "deep");
   Check.Check(p.Flush(), "Flush");
   p.Close;
-  NEW(p); FlPreferences.OpenFile(p, dir, "org.example", "ofltk-test");
+  NEW(p); FlPreferences.OpenFile(p, dir, "org.example", "pofltk-test");
   p.GetText("odd", "", s);
   Check.Check((p.Int("n", 0) = 12) & (p.Real("x", 0.0D0) = 0.25D0) & (s = odd), "read back from the file");
   Check.Check(p.TextLength("odd") >= 17, "TextLength holds the text");

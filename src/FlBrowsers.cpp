@@ -1,8 +1,8 @@
-// The C++ part of FlBrowsers: lists of lines to choose from. See ofltk.h
+// The C++ part of FlBrowsers: lists of lines to choose from. See pofltk.h
 // for the conventions. Lines and items are numbered from 1, as in FLTK;
 // FlBrowsers checks them.
 
-#include "ofltk.h"
+#include "pofltk.h"
 
 #include <FL/Fl_Browser.H>
 #include <FL/Fl_Check_Browser.H>
@@ -64,9 +64,9 @@ Fl_Check_Browser *check(intptr_t b) { return ofl::as<Fl_Check_Browser>(b); }
 Fl_File_Browser *files(intptr_t b) { return ofl::as<Fl_File_Browser>(b); }
 
 // A tree's items are FLTK's, made and deleted by the tree, and some (a
-// path's parents) without ofltk seeing. So an Oberon TreeItem holds an
+// path's parents) without pofltk seeing. So an Oberon TreeItem holds an
 // item's pointer and a serial, and the tree keeps the items it has handed
-// out, each with its serial. Every item ofltk removes is dropped from the
+// out, each with its serial. Every item pofltk removes is dropped from the
 // map before FLTK deletes it, and the user can't delete items, so a
 // TreeItem is live exactly when its pointer is in the map with its
 // serial: a pointer FLTK reused for a new item has a new serial.

@@ -1,4 +1,4 @@
-MODULE TestConstants; (* ofltk's constants are FLTK's *)
+MODULE TestConstants; (* pofltk's constants are FLTK's *)
 
 (* Written by tools/gen-constants.py: one check per constant, against the
    value the installed FLTK's headers give (CConstants). A failure means

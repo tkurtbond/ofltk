@@ -31,7 +31,7 @@ BEGIN
 END Quit;
 
 PROCEDURE About(w: Fl.Widget);
-BEGIN FlDialogs.Message("Menus: an ofltk example.")
+BEGIN FlDialogs.Message("Menus: an pofltk example.")
 END About;
 
 (* The choice's own action, since its items have none. *)

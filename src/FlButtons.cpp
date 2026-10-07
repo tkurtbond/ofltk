@@ -1,7 +1,7 @@
-// The C++ part of FlButtons: the button classes. See ofltk.h for the
+// The C++ part of FlButtons: the button classes. See pofltk.h for the
 // conventions.
 
-#include "ofltk.h"
+#include "pofltk.h"
 
 #include <FL/Fl_Button.H>
 #include <FL/Fl_Check_Button.H>

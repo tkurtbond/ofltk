@@ -1,5 +1,5 @@
 // The C++ part of FlMenus: menu bars, menu buttons and choices. See
-// ofltk.h for the conventions.
+// pofltk.h for the conventions.
 //
 // A menu item is an index into the menu's Fl_Menu_Item array, as in
 // FLTK. Items have no FLTK callback: their user data is the address of
@@ -8,7 +8,7 @@
 // the item's action. A procedure is code, not a heap object, so the
 // collector needs to see nothing.
 
-#include "ofltk.h"
+#include "pofltk.h"
 
 #include <FL/Fl_Choice.H>
 #include <FL/Fl_Menu_.H>
@@ -21,7 +21,7 @@ namespace {
 
 // The menu whose shortcuts work in every window (Menu.Global). FLTK's
 // own Fl_Menu_::global keeps a pointer that a deleted menu leaves
-// dangling (doc/fltk-issues.md, 27), so ofltk keeps its own, and a menu
+// dangling (doc/fltk-issues.md, 27), so pofltk keeps its own, and a menu
 // forgets it as it is destroyed.
 Fl_Menu_ *global_menu;
 

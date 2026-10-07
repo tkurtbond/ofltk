@@ -1,4 +1,4 @@
-# ofltk -- Oberon-2 binding to FLTK 1.4 for poc, the Peaseblossom Oberon
+# pofltk -- Oberon-2 binding to FLTK 1.4 for poc, the Peaseblossom Oberon
 # Compiler.  See AGENTS.md and PLAN.md.
 #
 # poc builds a program from its main module's source, finding the modules
@@ -8,8 +8,8 @@
 # by clang++. What it writes - each module's .sym, .ll and .o, and the
 # programs - goes into $(BUILD), so make must not build two at once.
 #
-# make install builds the poc library ofltk (-OC) in
-# $(POC_OBERON_LIBRARIES)/ofltk, recording -lfltk_images -lfltk in its
+# make install builds the poc library pofltk (-OC) in
+# $(POC_OBERON_LIBRARIES)/pofltk, recording -lfltk_images -lfltk in its
 # manifest, so a program using it needs only -library-path: no FLTK or C++
 # flags.
 # Both need poc 0.4.1: C++ parts, libraries that record link flags, and
@@ -38,11 +38,11 @@ CXXFLAGS      := -std=c++11 -Wall -Wextra -Werror
 POC_VERSION := $(shell $(POC) -version | sed -n 's/^poc \([0-9.]*\).*/\1/p')
 # The case patterns are written (pattern) so make sees balanced parentheses.
 ifeq ($(shell case "$(POC_VERSION)" in (0.[0-3].*|0.4.0) echo old;; esac),old)
-  $(error ofltk needs poc 0.4.1 or later (C++ parts, libraries' link flags, ORD of a SET); $(POC) is $(POC_VERSION))
+  $(error pofltk needs poc 0.4.1 or later (C++ parts, libraries' link flags, ORD of a SET); $(POC) is $(POC_VERSION))
 endif
 
 MODULES := Fl FlDraw FlButtons FlInputs FlValuators FlLayout FlMenus FlDialogs FlText FlBrowsers FlImages FlPreferences FlTable
-HEADERS := src/ofltk.h
+HEADERS := src/pofltk.h
 LIBSRC  := $(MODULES:%=src/%.Mod) $(MODULES:%=src/%.cpp) $(HEADERS)
 # Test modules with a C++ part (test/<Module>.cpp).
 TESTCXX := CConstants Probe
@@ -54,7 +54,7 @@ LINK   := $(CFLAGS) $(foreach f,$(FLTK_LIBS),-link $(f))
 # Each library in its own directory under POC_OBERON_LIBRARIES, so a
 # program names only the libraries it uses (as polibfyaml does).
 POC_OBERON_LIBRARIES ?= /usr/local/sw/versions/oberon/poc/lib
-LIBRARY := ofltk
+LIBRARY := pofltk
 LIBDIR   = $(POC_OBERON_LIBRARIES)/$(LIBRARY)
 TRIPLE   = $(shell $(POC) -version | sed -n 's/^target \([^ ]*\).*/\1/p')
 
@@ -98,7 +98,7 @@ $(BUILD)/Halt%: test/Halt%.Mod $(LIBSRC) | $(BUILD)
 # test-sway below).
 display:
 	@if [ -z "$$DISPLAY$$WAYLAND_DISPLAY" ]; then \
-	  echo "ofltk's tests need a display: set DISPLAY or WAYLAND_DISPLAY, or use make test-headless or make test-sway"; exit 1; \
+	  echo "pofltk's tests need a display: set DISPLAY or WAYLAND_DISPLAY, or use make test-headless or make test-sway"; exit 1; \
 	fi
 
 # Run every test from test/; report all, fail at the end if any failed.
@@ -127,13 +127,13 @@ test: tests display
 # Memory errors fail a test (--error-exitcode); leaks don't count as
 # errors (--errors-for-leak-kinds=none), because FLTK's font cache and
 # window decorations leak by design. test/vg-check.sh fails instead on any
-# leaked block that ofltk allocated.
+# leaked block that pofltk allocated.
 valgrind: tests display
 	@status=0; for t in $(TESTS); do \
 	  echo "== valgrind $$t"; \
 	  (cd test && $(VALGRIND) --log-file=../$(BUILD)/$$t.vg ../$(BUILD)/$$t) || status=1; \
 	  grep -E 'ERROR SUMMARY' $(BUILD)/$$t.vg; \
-	  test/vg-check.sh $(BUILD)/$$t.vg || { echo "FAIL - $$t: memory ofltk allocated was not freed"; status=1; }; \
+	  test/vg-check.sh $(BUILD)/$$t.vg || { echo "FAIL - $$t: memory pofltk allocated was not freed"; status=1; }; \
 	done; exit $$status
 
 # The same, on a virtual X server (Xvfb), not the desktop. WAYLAND_DISPLAY

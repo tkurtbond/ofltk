@@ -1,8 +1,8 @@
 // The C++ part of FlImages: images, loaded or made from pixels, drawn, and
-// shown as widget labels; image surfaces, offscreen drawing. See ofltk.h
+// shown as widget labels; image surfaces, offscreen drawing. See pofltk.h
 // for the conventions.
 
-#include "ofltk.h"
+#include "pofltk.h"
 
 #include <FL/Fl_BMP_Image.H>
 #include <FL/Fl_Copy_Surface.H>

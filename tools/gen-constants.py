@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""gen-constants.py: FLTK's constants for ofltk's modules, and the test of them.
+"""gen-constants.py: FLTK's constants for pofltk's modules, and the test of them.
 
 Writes, from the SPEC below:
   - in each module's src/<Module>.Mod, the block between
@@ -368,7 +368,7 @@ def write_test():
     for o, c in CHECKS:
         checks.append('  Same(%s, "%s");' % (o, c))
     open("test/TestConstants.Mod", "w").write(
-        "MODULE TestConstants; (* ofltk's constants are FLTK's *)\n\n"
+        "MODULE TestConstants; (* pofltk's constants are FLTK's *)\n\n"
         "(* Written by tools/gen-constants.py: one check per constant, against the\n"
         "   value the installed FLTK's headers give (CConstants). A failure means\n"
         "   FLTK's headers changed: run the script again, and see what moved. *)\n\n"

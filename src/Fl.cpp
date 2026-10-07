@@ -1,7 +1,7 @@
-// The C++ part of Fl, ofltk's core module: widgets, groups, windows,
-// boxes, timeouts and the event loop. See ofltk.h for the conventions.
+// The C++ part of Fl, pofltk's core module: widgets, groups, windows,
+// boxes, timeouts and the event loop. See pofltk.h for the conventions.
 
-#include "ofltk.h"
+#include "pofltk.h"
 
 #include <FL/Fl_Box.H>
 #include <FL/Fl_Double_Window.H>
@@ -94,7 +94,7 @@ intptr_t ofl_box_new(int32_t x, int32_t y, int32_t w, int32_t h,
   return ofl::open(new ofl::W<Fl_Box>(x, y, w, h), self);
 }
 
-// Deleted now, unless an Oberon dispatch is running (ofltk.h).
+// Deleted now, unless an Oberon dispatch is running (pofltk.h).
 void ofl_widget_delete(intptr_t w) {
   if (ofl::depth > 0) {
     Fl::delete_widget(ofl::widget(w));
@@ -482,7 +482,7 @@ int32_t ofl_group_find(intptr_t g, intptr_t w) {
   return ofl::as<Fl_Group>(g)->find(ofl::widget(w));
 }
 
-// Deletes every child ofltk opened, later inside a dispatch, as
+// Deletes every child pofltk opened, later inside a dispatch, as
 // ofl_widget_delete does. Not Fl_Group::clear: some groups' children
 // are FLTK's own members, not on the heap (a scroll's scrollbars, a
 // spinner's field and buttons), which it would delete. Fl_Scroll::clear
@@ -561,7 +561,7 @@ extern char fl_i_own_selection[2];
 // image: 0 text, 1 an image. Under X11, another program's data is asked
 // for through Fl::first_window. With no window shown, FLTK asks with
 // window 0 anyway, and the X server's BadWindow error is printed, so
-// ofltk doesn't ask: the paste does nothing, as it would have.
+// pofltk doesn't ask: the paste does nothing, as it would have.
 void ofl_paste(intptr_t receiver, int32_t source, int32_t image) {
   fl_open_display();
   if (!fl_wl_display() && !Fl::first_window() &&

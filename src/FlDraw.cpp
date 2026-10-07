@@ -1,7 +1,7 @@
 // The C++ part of FlDraw: fl_draw.H's drawing, for a widget's Draw. See
-// ofltk.h for the conventions.
+// pofltk.h for the conventions.
 
-#include "ofltk.h"
+#include "pofltk.h"
 
 #include <FL/Fl_Graphics_Driver.H>
 #include <FL/fl_draw.H>

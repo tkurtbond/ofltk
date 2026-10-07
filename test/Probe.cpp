@@ -1,4 +1,4 @@
-// The C++ part of Probe: what the tests need of FLTK that ofltk doesn't
+// The C++ part of Probe: what the tests need of FLTK that pofltk doesn't
 // give programs. Capturing a widget's drawing as pixels, and sending
 // events as if from the user (PLAN.md, "Build and test").
 

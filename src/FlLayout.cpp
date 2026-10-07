@@ -1,7 +1,7 @@
 // The C++ part of FlLayout: the groups that place their children. See
-// ofltk.h for the conventions.
+// pofltk.h for the conventions.
 
-#include "ofltk.h"
+#include "pofltk.h"
 
 #include <FL/Fl_Flex.H>
 #include <FL/Fl_Grid.H>

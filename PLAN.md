@@ -1,6 +1,6 @@
-# ofltk design plan
+# pofltk design plan
 
-ofltk is an Oberon-2 binding to FLTK, the Fast Light Toolkit, compiled
+pofltk is an Oberon-2 binding to FLTK, the Fast Light Toolkit, compiled
 with poc, the Peaseblossom Oberon Compiler. `doc/design.md` is the
 feasibility analysis that started it (2026-10-06): what was tested, what
 broke, and why the binding is worth writing. This file is the design and
@@ -53,12 +53,12 @@ Later, if wanted: a FLUID back end that writes Oberon-2 instead of C++.
   `/usr/local/sw/src/lang/C++/fltk`). 1.4 is required: `Fl_Flex`,
   `Fl_Grid`, and `AUTO_DELETE_USER_DATA` (the deletion hook below) are
   new in 1.4.
-- poc **0.4.0** or later (installed 2026-10-06). ofltk relies on its two
+- poc **0.4.0** or later (installed 2026-10-06). pofltk relies on its two
   changes, made for this binding:
   - **a module's C++ part**, `<Module>.cpp`, compiled by clang++, with
     programs that use one linked by clang++;
   - **libraries that record their `-link` flags**, so a program using
-    ofltk needs no FLTK or C++ flags.
+    pofltk needs no FLTK or C++ flags.
 
   The makefile refuses an older poc.
 - Platforms: x86_64 Fedora first, under Wayland and X11. The BSDs poc runs
@@ -69,7 +69,7 @@ Later, if wanted: a FLUID back end that writes Oberon-2 instead of C++.
 ```
 application modules           (Oberon-2; extend Fl types, override methods)
         |
-ofltk modules  Fl, FlDraw, ...      (Oberon-2: objects, registry, policy)
+pofltk modules  Fl, FlDraw, ...      (Oberon-2: objects, registry, policy)
         |      ["C"] procedures, unexported
 C++ parts      Fl.cpp, FlDraw.cpp, ...  (extern "C" shim, ofl::W<B>)
         |
@@ -98,7 +98,7 @@ together with their methods and their part of the shim:
 | `FlPreferences` | `Preferences`: `Fl_Preferences` databases and their groups |
 | `FlTable` | `Table`, `TableRow`: `Fl_Table` and `Fl_Table_Row`, their cells drawn by the program |
 
-`Fl` exports a few procedures that only the other ofltk modules should
+`Fl` exports a few procedures that only the other pofltk modules should
 use (attaching a new widget's handle, registering it), as polibfyaml's
 `Fyaml` exports its "For FyamlStreams" hooks: Oberon has no friend
 modules. Mark them so in their comments, and keep application code off
@@ -199,7 +199,7 @@ This is the hard part; `doc/design.md` has the failures that motivate it.
 
 - **Size model: `-OC`** (as polibfyaml chose): `INTEGER` is C's
   `int`, which is what every FLTK coordinate, size and enum is, and
-  `LONGINT` is 64 bits. Code using ofltk must be built `-OC` too.
+  `LONGINT` is 64 bits. Code using pofltk must be built `-OC` too.
 - The shim's `extern "C"` functions use only `int32_t`, `uint32_t`,
   `intptr_t` and `double`. On the Oberon side they are `SYSTEM.INT32`,
   `SYSTEM.ADDRESS` and `LONGREAL`, whatever the model.
@@ -255,13 +255,13 @@ to load, a file chooser cancelled. Those come back as `BOOLEAN` results.
 
 `GNUmakefile`, modelled on polibfyaml's:
 - `make`, `make test`, `make valgrind`, `make clean`; later
-  `make install`/`uninstall` (the poc library `ofltk`, `-OC`);
+  `make install`/`uninstall` (the poc library `pofltk`, `-OC`);
 - output in `build/`, `.NOTPARALLEL`;
 - `fltk-config`'s `-I`/`-D` flags and `--ldflags`, passed as
   `-c-flag`/`-link`;
 - C++ parts are `src/<Module>.cpp`, which poc 0.4.0 compiles with
   clang++.
-- `make install` builds the poc library `ofltk` with FLTK's `-link`
+- `make install` builds the poc library `pofltk` with FLTK's `-link`
   flags, which its manifest records. A program then needs only
   `-library-path`.
 
@@ -296,7 +296,7 @@ Tests need a display. FLTK 1.4 opens one even to draw offscreen.
   FLTK, whose display stack leaks too much to list (Phase 0). Memory
   errors fail a test. Leaks don't count as valgrind errors; instead
   `test/vg-check.sh` fails on any leaked block whose allocator is
-  ofltk's own code.
+  pofltk's own code.
 - **Examples**: ports of FLTK's `test/` and `examples/` programs, taking
   FLTKAda's ports as a checklist. `make test` runs each, and checks that
   it is still running after a few seconds, since all wait for the user
@@ -986,6 +986,21 @@ poc 0.4.1 was installed during Phase 6 (2026-10-06):
   `HUGEINT`). The 16 `SYSTEM.VAL(SYSTEM.INT32, s)` workarounds became
   `ORD(s)`; `tools/gen-constants.py` checks set constants with `ORD`.
 - **The makefile now requires poc 0.4.1 or later.**
+
+### Rename to pofltk `[done]`
+
+On 2026-10-07 the repository was renamed pofltk, and the project with it:
+- `make install` writes the poc library `pofltk`, in
+  `$(POC_OBERON_LIBRARIES)/pofltk` (`libpofltk.a`, `libpofltk.so`,
+  `pofltk.library`, and `pofltk` in each module's `.owner`), so a
+  program now passes `-library-path <lib>/pofltk`.
+- `src/ofltk.h` became `src/pofltk.h`.
+- The sections above the roadmap, AGENTS.md, README.md,
+  `doc/fltk-issues.md`, the comments and the tests' names use the new
+  name. The phases above this one, the open questions below and
+  `doc/design.md` keep the old one, as the record of what was done.
+- Kept: the `ofl` prefix of the C++ parts (`ofl::`, `ofl_`), which
+  `test/vg-check.sh` matches, and the module names.
 
 ## Open questions
 

@@ -1,8 +1,8 @@
 // The C++ part of FlValuators: sliders, scrollbars, counters, dials,
 // rollers, adjusters, value inputs and outputs, spinners and progress
-// bars. See ofltk.h for the conventions.
+// bars. See pofltk.h for the conventions.
 
-#include "ofltk.h"
+#include "pofltk.h"
 
 #include <FL/Fl_Adjuster.H>
 #include <FL/Fl_Counter.H>

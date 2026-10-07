@@ -1,4 +1,4 @@
-MODULE Fl; (* ofltk's core: widgets, groups, windows, boxes, timers, the event loop *)
+MODULE Fl; (* pofltk's core: widgets, groups, windows, boxes, timers, the event loop *)
 
 (* Each widget type extends Widget, and a program extends those in turn:
    NEW(b); Fl.OpenBox(b, ...) makes the FLTK widget for b, whatever
@@ -10,7 +10,7 @@ MODULE Fl; (* ofltk's core: widgets, groups, windows, boxes, timers, the event l
    with its parent group, and its Oberon object lives at least as long,
    kept reachable here (the registry) because the collector never sees
    pointers held only by FLTK. When FLTK destroys a widget it tells this
-   module (ofltk.h, Ref), which forgets the object and marks it closed.
+   module (pofltk.h, Ref), which forgets the object and marks it closed.
    A method of a widget that isn't open - never opened, or deleted -
    halts with NotOpen. PLAN.md, "Object model" and "Lifetime and the
    collector", has the reasons.
@@ -18,7 +18,7 @@ MODULE Fl; (* ofltk's core: widgets, groups, windows, boxes, timers, the event l
    Timers work the same way: a pending timer is kept reachable here until
    it fires or is removed.
 
-   The C++ part is Fl.cpp, with ofltk.h. *)
+   The C++ part is Fl.cpp, with pofltk.h. *)
 
 IMPORT SYSTEM;
 
@@ -581,7 +581,7 @@ BEGIN
   w.prev := NIL; w.next := NIL; DEC(openCount)
 END Unregister;
 
-(* The handle of w, which must be open: for ofltk's modules, whose
+(* The handle of w, which must be open: for pofltk's modules, whose
    methods pass it to their C++ part. *)
 PROCEDURE Live*(w: Widget): SYSTEM.ADDRESS;
 BEGIN
@@ -589,7 +589,7 @@ BEGIN
   RETURN w.h
 END Live;
 
-(* For ofltk's modules only: makes w the Oberon object of h, the widget
+(* For pofltk's modules only: makes w the Oberon object of h, the widget
    their C++ part has just made with ofl::open(..., self) - self being
    SelfOf(w), which must have come from BeginOpen(w) first. *)
 PROCEDURE BeginOpen*(w: Widget): SYSTEM.ADDRESS;
@@ -814,7 +814,7 @@ PROCEDURE (w: Widget) VisibleR*(): BOOLEAN;
 BEGIN RETURN CVisibleR(Live(w)) # 0
 END VisibleR;
 
-(* The group w is in, or NIL: none, or one FLTK made rather than ofltk. *)
+(* The group w is in, or NIL: none, or one FLTK made rather than pofltk. *)
 PROCEDURE (w: Widget) Parent*(): Group;
   VAR p: Widget;
 BEGIN
@@ -961,7 +961,7 @@ BEGIN
   RETURN i
 END Find;
 
-(* Deletes every child ofltk opened, as Delete does each; children FLTK
+(* Deletes every child pofltk opened, as Delete does each; children FLTK
    made itself, such as a scroll's scrollbars, stay. *)
 PROCEDURE (g: Group) Clear*;
 BEGIN CClear(Live(g))
@@ -978,7 +978,7 @@ PROCEDURE (g: Group) Resizable*(): Widget;
 BEGIN RETURN SYSTEM.VAL(Widget, CResizable(Live(g)))
 END Resizable;
 
-(* Child i, from 0, or NIL if FLTK made it rather than ofltk. *)
+(* Child i, from 0, or NIL if FLTK made it rather than pofltk. *)
 PROCEDURE (g: Group) Child*(i: INTEGER): Widget;
   VAR h: SYSTEM.ADDRESS;
 BEGIN
@@ -1419,7 +1419,7 @@ PROCEDURE Wait*(seconds: LONGREAL);
 BEGIN CWait(seconds)
 END Wait;
 
-(* The dispatchers the C++ part calls (ofltk.h), registered below. *)
+(* The dispatchers the C++ part calls (pofltk.h), registered below. *)
 
 PROCEDURE CallbackD(self: SYSTEM.ADDRESS);
   VAR w: Widget;

@@ -1,11 +1,11 @@
 // The C++ part of FlTable: Fl_Table and Fl_Table_Row, their cells drawn
-// by the Oberon object's DrawCell. See ofltk.h for the conventions.
+// by the Oberon object's DrawCell. See pofltk.h for the conventions.
 //
 // A table is a group: the widgets in its cells are children of an inner
 // group, which Fl.cpp's group functions reach by calling the table as an
 // Fl_Table (doc/fltk-issues.md, 52).
 
-#include "ofltk.h"
+#include "pofltk.h"
 
 #include <FL/Fl_Table.H>
 #include <FL/Fl_Table_Row.H>
