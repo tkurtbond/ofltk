@@ -307,652 +307,686 @@ Tests need a display. FLTK 1.4 opens one even to draw offscreen.
 Each phase ends with every test passing, `make valgrind` clean, and its
 findings written into this file and AGENTS.md.
 
-0. **`[done]` Skeleton and the deciding experiments** (2026-10-06, poc
-   0.3.1, FLTK 1.4.5, Fedora 44 under Wayland).
-   - `GNUmakefile` (see "Build and test"), `build/` in `.gitignore`,
-     `test/Check.Mod` and `test/poc-gc.supp` from polibfyaml, and
-     `test/vg-check.sh`.
-   - `src/Fl.Mod`, `src/Fl.cpp` and `src/ofltk.h`: the core of Phase 1,
-     enough to test the object model. It has:
-     - `Widget`, `Group`, `Window`, `DoubleWindow`, `Box`;
-     - the registry, a doubly linked list, and the deletion hook;
-     - `Callback` and `action`, `Draw`, `Handle`;
-     - `Child`, which finds a child's Oberon object through FLTK;
-     - labels (copied), geometry, show, hide;
-     - `Run`, `Check`, `Wait`, and `Timer` with add, repeat and remove.
-   - Tests: `TestLiveness` (5 checks), `TestDelete` (12), `TestTimer`
-     (8), and 6 halt tests, one per code 70, 71, 72, 74 and 75 (70
-     twice). All pass under Wayland and under `FLTK_BACKEND=x11`, and
-     `make valgrind` is clean: 0 errors.
-   - **The tests catch what they're for.** In a scratch copy:
-     - with the registry no longer a root, `TestLiveness` failed and then
-       crashed calling a freed object's callback, the original bug;
-     - with `AUTO_DELETE_USER_DATA` off, 9 checks failed;
-     - a program that never deletes its box failed `make valgrind`.
+### Phase 0: Skeleton and the deciding experiments `[done]`
 
-   Findings, confirmed live (C++ programs in the scratchpad, then the
-   tests above):
-   - **The deletion hook covers every way a widget dies**:
-     - explicit `delete`;
-     - with its parent group, at any depth;
-     - `Fl::delete_widget` from inside its own callback, at the next
-       `Fl::check`;
-     - a shown top-level window, with its children.
-   - **Replacing a widget's user data deletes the old one** (FLTK frees
-     the previous `Fl_Callback_User_Data`), which would unregister a live
-     widget. So `ofl::open` sets it once, and nothing sets it again.
-   - **The callback must be ofltk's for every widget**, so FLTK's own
-     defaults are bound for the Oberon defaults to call:
-     `Fl_Widget::default_callback` queues the widget for
-     `Fl::readqueue`, and `Fl_Window::default_callback` calls
-     `Fl::atclose`, which hides the window.
-   - **`FLTK_BACKEND=x11` switches FLTK 1.4.5 to X11**, checked with
-     `fl_x11_display()`/`fl_wl_display()`; here it goes through XWayland.
-     With no display at all, FLTK prints "Can't open display" and exits
-     1.
-   - **Headless runs work on Xvfb**, and the tests pass there, including
-     under valgrind. But a plain `xvfb-run` in a Wayland session leaves
-     `WAYLAND_DISPLAY` set, and FLTK then quietly uses the real desktop.
-     Hence `make test-headless`, which unsets it.
-   - **Pixel checks work**: a widget never shown, drawn into an
-     `Fl_Image_Surface`, reads back exactly (`FL_RED` is 255,0,0), under
-     both back ends. Binding it is Phase 2's.
-   - **FLTK's display stack leaks by design.** A C++ program that deletes
-     everything it makes shows about 390 KB "definitely lost" and 1,225
-     (X11) or 8,559 (Wayland) loss records, all allocated by fontconfig
-     and Pango's font cache, and under Wayland by GTK's window
-     decorations. It shows **no memory errors** on either back end. Hence
-     `vg-check.sh`'s rule above, rather than suppressions.
-   - `fltk-config --cxxflags` includes `-I/usr/include` and Fedora's
-     build flags, so the makefile passes only its `-I`/`-D` flags, without
-     `-I/usr/include`.
+Done 2026-10-06, with poc 0.3.1 and FLTK 1.4.5, on Fedora 44 under
+Wayland.
 
-   Not done, and why:
-   - `prototype/` stays. Its custom drawing (Phase 2's `FlDraw`) and
-     buttons (Phase 3's `FlButtons`) are not in `src/` yet. Retire it
-     when they are.
-1. **`[done]` Core object model** (`Fl`; 2026-10-06, poc 0.3.1). On top of
-   Phase 0's core:
-   - **Constants**: 188 of them (events, when, box types, label types,
-     alignment, fonts, colors), from `tools/gen-constants.py`.
-   - **Widget**:
-     - label font, size, color and type; box type;
-     - color and selection color; alignment; `when`;
-     - activate, deactivate, `Active`, `ActiveR`, `VisibleR`;
-     - tooltips (copied); position and size; `Parent`.
-   - **Group**: `Add`, `Insert`, `Remove`, `Find`, `Clear` (deferred
-     inside a dispatch, like `Delete`), resizable.
-   - **Window**: `Shown`, `SizeRange`, modal and non-modal, fullscreen.
-     The title is the label, set through `Fl_Window::copy_label`.
-   - **Colors**: `RGB`, `GrayRamp`, `ColorCube` (in Oberon, checked
-     against C), `SetIndexColor`, `GetRGB`, background, background2 and
-     foreground, `ColorAverage`, `Lighter`, `Darker`, `Contrast`,
-     `Inactive`.
-   - **Other globals**: `NormalSize`, schemes.
-   - **Tests**:
-     - `TestConstants` (196 values; a deliberately wrong constant fails
-       it and is named);
-     - `TestWidget` (33 checks).
+- `GNUmakefile` (see "Build and test"), `build/` in `.gitignore`,
+  `test/Check.Mod` and `test/poc-gc.supp` from polibfyaml, and
+  `test/vg-check.sh`.
+- `src/Fl.Mod`, `src/Fl.cpp` and `src/ofltk.h`: the core of Phase 1,
+  enough to test the object model. It has:
+  - `Widget`, `Group`, `Window`, `DoubleWindow`, `Box`;
+  - the registry, a doubly linked list, and the deletion hook;
+  - `Callback` and `action`, `Draw`, `Handle`;
+  - `Child`, which finds a child's Oberon object through FLTK;
+  - labels (copied), geometry, show, hide;
+  - `Run`, `Check`, `Wait`, and `Timer` with add, repeat and remove.
+- Tests: `TestLiveness` (5 checks), `TestDelete` (12), `TestTimer`
+  (8), and 6 halt tests, one per code 70, 71, 72, 74 and 75 (70
+  twice). All pass under Wayland and under `FLTK_BACKEND=x11`, and
+  `make valgrind` is clean: 0 errors.
+- **The tests catch what they're for.** In a scratch copy:
+  - with the registry no longer a root, `TestLiveness` failed and then
+    crashed calling a freed object's callback, the original bug;
+  - with `AUTO_DELETE_USER_DATA` off, 9 checks failed;
+  - a program that never deletes its box failed `make valgrind`.
 
-     All pass on Wayland, on Xvfb, and under valgrind (0 errors).
-   - **Example**: `examples/Hello.Mod`, FLTK's `test/hello.cxx`, built by
-     `make`. A screenshot under Xvfb showed it as FLTK draws it: an up
-     box, and a bold italic shadow label of size 36.
-   - **Found**: poc 0.3.1 can't compile `ORD` of a `SET` under `-OC`. Any
-     use emits LLVM `trunc i32 to i32`, which clang rejects; `-O2` is
-     fine. `SYSTEM.VAL(SYSTEM.INT32, s)` gives the same bits, and is used
-     instead (AGENTS.md, "poc problems"). poc 0.4.0 still has it; 0.4.1 fixed it ("poc 0.4.1" below).
-   - **Left for later**:
-     - `Fl_Window` icons, `xclass`, and border control;
-     - `Fl::readqueue`;
-     - multi, icon and image labels, which come with images in Phase 7;
-     - the prototype's demo, which needs Phase 2's drawing and Phase 3's
-       buttons.
-2. **`[done]` Custom widgets and drawing** (`Fl`, `FlDraw`; 2026-10-06,
-   poc 0.4.0, FLTK 1.4.5):
-   - **`Resize` is overridable**, like `Draw` and `Handle`: `ofl::W<B>`
-     overrides `resize()` too. The default `Resize` calls `B::resize`
-     directly, not the virtual one, so an override's `Resize^` doesn't
-     recurse. `Position` and `Size` go through the virtual `resize()`, so
-     they reach an override, as FLTK's group resizing does.
-   - **Widget**, for an override's `Draw`: `DrawBox`, `DrawLabel` and
-     `DrawFocus`, FLTK's protected `draw_box()` and friends, reached
-     through `ofl::Hooks`. Also `Damage`/`SetDamage` (a `SET`),
-     `TakeFocus`, `VisibleFocus`/`SetVisibleFocus`, `EventInside`; and
-     `Window.SetCursor`.
-   - **Event queries** in `Fl`: `Event`, `EventX`/`Y`, `EventXRoot`/
-     `YRoot`, `EventDx`/`Dy`, `EventButton`, `EventClicks` (and
-     `SetEventClicks`), `EventIsClick` (and `EventIsClickOff`),
-     `EventKey`, `EventOriginalKey`, `EventKeyDown(key)`, `GetKey(key)`,
-     `EventState` (a `SET`), `EventText`, `EventLength`, `EventInside`;
-     `Focus`/`SetFocus`, `BelowMouse`, `Pushed`.
-   - **Constants**, 116 more: keys (prefix `Key`, so `FL_End` isn't the
-     keyword `END`, and `KeyF + n` is F*n*), mouse buttons, event state
-     bits (`SET`s), damage bits (`SET`s), cursors; and in `FlDraw`, line
-     styles. `tools/gen-constants.py` now writes a block into each
-     module it names, and `TestConstants` checks all 312 values.
-   - **`FlDraw`**, the common calls of `fl_draw.H` (the open question
-     below, decided):
-     - colors and line styles;
-     - integer shapes: `Point`, `Line`, `Rect`, `RectF`, `Loop3`/`4`,
-       `Polygon3`/`4`, `XYLine`, `YXLine`, `Arc`, `Pie`;
-     - the transformation and paths: `PushMatrix`, `Translate`, `Scale`,
-       `Rotate`, the `Begin`/`End` pairs, `Vertex`, `Curve`, `ArcPath`,
-       `Circle`, `Gap`;
-     - text: `SetFont`, `Font`, `Size`, `Height`, `Descent`, `Width`,
-       `Text`, `TextAligned`, `Measure`. Each sets FLTK's normal font
-       first if no font is set, the crash `doc/design.md` records;
-     - clipping: `PushClip`, `PushNoClip`, `PopClip`, `NotClipped`,
-       `ClipBox`;
-     - `DrawBox`, `FocusRect`, `DrawSymbol`.
-   - **Tests**:
-     - `test/Probe` (Oberon and C++), for tests only: captures a widget
-       into an `Fl_Image_Surface` and reads its pixels, and sends mouse,
-       wheel and key events as the window system would, by setting
-       `Fl::e_x` and the rest and calling `Fl::handle`;
-     - `TestDraw` (24 checks): pixels of `Draw` overrides (fills, lines,
-       clipping, a transformed path, text, `DrawBox`/`DrawLabel`) and of
-       a box's own `Draw`;
-     - `TestEvents` (23 checks): pushes, drags, releases, a shifted
-       double click, the wheel, keys and focus reaching `Handle` with the
-       right event queries; `Resize` overrides through `Size`,
-       `Position` and a window's resizing, and one that refuses.
+Findings, confirmed live (C++ programs in the scratchpad, then the
+tests above):
+- **The deletion hook covers every way a widget dies**:
+  - explicit `delete`;
+  - with its parent group, at any depth;
+  - `Fl::delete_widget` from inside its own callback, at the next
+    `Fl::check`;
+  - a shown top-level window, with its children.
+- **Replacing a widget's user data deletes the old one** (FLTK frees
+  the previous `Fl_Callback_User_Data`), which would unregister a live
+  widget. So `ofl::open` sets it once, and nothing sets it again.
+- **The callback must be ofltk's for every widget**, so FLTK's own
+  defaults are bound for the Oberon defaults to call:
+  `Fl_Widget::default_callback` queues the widget for
+  `Fl::readqueue`, and `Fl_Window::default_callback` calls
+  `Fl::atclose`, which hides the window.
+- **`FLTK_BACKEND=x11` switches FLTK 1.4.5 to X11**, checked with
+  `fl_x11_display()`/`fl_wl_display()`; here it goes through XWayland.
+  With no display at all, FLTK prints "Can't open display" and exits
+  1.
+- **Headless runs work on Xvfb**, and the tests pass there, including
+  under valgrind. But a plain `xvfb-run` in a Wayland session leaves
+  `WAYLAND_DISPLAY` set, and FLTK then quietly uses the real desktop.
+  Hence `make test-headless`, which unsets it.
+- **Pixel checks work**: a widget never shown, drawn into an
+  `Fl_Image_Surface`, reads back exactly (`FL_RED` is 255,0,0), under
+  both back ends. Binding it is Phase 2's.
+- **FLTK's display stack leaks by design.** A C++ program that deletes
+  everything it makes shows about 390 KB "definitely lost" and 1,225
+  (X11) or 8,559 (Wayland) loss records, all allocated by fontconfig
+  and Pango's font cache, and under Wayland by GTK's window
+  decorations. It shows **no memory errors** on either back end. Hence
+  `vg-check.sh`'s rule above, rather than suppressions.
+- `fltk-config --cxxflags` includes `-I/usr/include` and Fedora's
+  build flags, so the makefile passes only its `-I`/`-D` flags, without
+  `-I/usr/include`.
 
-     All pass on Wayland and on Xvfb, `make valgrind` and
-     `make valgrind-headless` show 0 errors and no ofltk leak, and
-     `make install` (tried in a scratch directory) installs both
-     modules, with a client built from `-library-path` alone.
-   - **The tests catch what they're for**: with `resize()` not sent to
-     Oberon, 4 `TestEvents` checks failed; with `ofl_draw_rectf` drawing
-     nothing, 5 `TestDraw` checks did.
-   - **Example**: `examples/Scribble.Mod`, drawing with the mouse: a
-     custom widget's `Handle` keeps the strokes, and its `Draw` draws
-     them as paths. Run under Xvfb and driven by `xdotool` (installed
-     later that day): a drag drew a stroke, a right click cleared it, and
-     Escape ended the program with status 0, each seen in a screenshot.
+Not done, and why:
+- `prototype/` stays. Its custom drawing (Phase 2's `FlDraw`) and
+  buttons (Phase 3's `FlButtons`) are not in `src/` yet. Retire it
+  when they are.
 
-   Findings, confirmed live:
-   - **`fl_clip_box` returns the reverse of what its documentation
-     says**: 0 when the box was clipped, 1 when it wasn't, on both back
-     ends. The Cairo driver (`Fl_Cairo_Graphics_Driver::clip_box`, which
-     the image surface uses) compares the result with the clip, not with
-     the box. For a box wholly clipped it sets `W` to 0 and returns
-     without setting `H`. So `FlDraw.ClipBox` is a proper procedure, and
-     the shim zeroes its outputs first.
-   - **A push no widget uses shows the window**: `Fl::handle_` makes the
-     window `Fl::pushed()` before offering the push to its widgets, and
-     if none uses it, raises the window with `show()`. So a never-shown
-     window is shown, and its widgets get `EvShow`.
-   - **A key no widget uses, sent by `Fl::handle` to a window never
-     shown, crashes FLTK 1.4.5** in `send_event`, as it tries the key as
-     a shortcut: with `belowmouse()` set and no window shown, it sends
-     the shortcut to `first_window()`, which is 0
-     (`doc/fltk-issues.md`, 3). Real keys can't reach such a window, so this binds only
-     tests: `Probe.Key` sends a key to the focus widget, as FLTK does
-     first.
-   - **Synthesized mouse events reach widgets of a window never shown**:
-     `Fl::handle` routes them to the widget under the mouse, then to
-     `Fl::pushed()`, as for real ones, so `Pushed`, `BelowMouse` and
-     `Focus` can be tested without a window on the screen.
-   - **`KeyDown` is FLTK's down arrow**, so `Fl::get_key` is `GetKey`,
-     its own name.
+### Phase 1: Core object model `[done]`
 
-   Not done, and why:
-   - Offscreen drawing (`Fl_Offscreen`), images, and `fl_read_image`
-     come with images in Phase 7.
-   - `fl_line_style`'s dash arrays, `fl_frame` strings, the 3-point
-     `fl_line`, and `fl_text_extents` wait until a program needs them.
-   - `prototype/` stays until Phase 3 gives it buttons (done there).
-3. **`[done]` Buttons, inputs and valuators** (`FlButtons`, `FlInputs`,
-   `FlValuators`; 2026-10-06, poc 0.4.0, FLTK 1.4.5):
-   - **`FlButtons`**: `Button`, `LightButton`, `CheckButton`,
-     `RoundButton`, `RadioButton`, `RadioLightButton`,
-     `RadioRoundButton`, `ReturnButton`, `RepeatButton`,
-     `ToggleButton`, each extending what FLTK's extends. `Value`,
-     `SetValue`, `SetOnly`, `Kind`/`SetKind` (`Normal`, `Toggle`,
-     `Radio`, `Hidden`: the type names `ToggleButton` and `RadioButton`
-     are taken, so the kinds drop "Button"), `Shortcut`/`SetShortcut` as
-     a key and a `SET` of shift keys, `DownBox`.
-   - **`FlInputs`**: `Input`, `IntInput`, `FloatInput`,
-     `MultilineInput`, `SecretInput`, `Output`, `MultilineOutput`. The
-     text in and out (`Value` truncates to its argument; `Length`), as
-     numbers too, the cursor and selection (`Select`, since `Position`
-     is the widget's), undoable edits returning whether anything
-     changed, the maximum size, read-only, wrap, tab navigation,
-     shortcut, and the text's look.
-   - **`FlValuators`**: `Valuator` (FLTK's base, never opened),
-     `Slider`, `ValueSlider`, `Scrollbar`, `Counter`, `Dial`, `Roller`,
-     `Adjuster`, `ValueInput`, `ValueOutput`; and `Spinner` (an FLTK
-     group) and `Progress` (a plain widget) with values of their own.
-     Value, bounds, step, precision, `Round`/`Clamp`/`Increment`,
-     `Format`, and `Kind`/`SetKind` with FLTK's names (`HorSlider`,
-     `LineDial`, `Vertical`, ...), plus each class's own settings.
-   - **`Fl`**: `Live` is exported, for the other modules' methods;
-     `Changed`/`SetChanged`; `ClearDamage`. Every module's C++ part
-     opens a widget with its label copied, through `ofl::open`; Fl's
-     `BeginOpen`/`EndOpen` attach it.
-   - **Constants**, 19 more (button, valuator and spinner kinds), for 331
-     values in `TestConstants`.
-   - **Tests**: `TestButtons` (24 checks: clicks, toggles, a radio
-     group with a check button made radio, shortcuts and Enter, repeat
-     and its stopping), `TestInputs` (38: typing, BackSpace, Enter and
-     `when`, maximum size, editing and undo, number inputs, multiline,
-     secret and output), `TestValuators` (32: numbers and rounding,
-     kinds, dragging a slider, a slider's own bounds, scrollbar,
-     counter arrows, settings, typing into a value input, spinner,
-     progress). `Probe.Shortcut` offers a key as a shortcut. All pass
-     on Wayland and on Xvfb, and under valgrind on both with 0 errors
-     and no ofltk leak.
-   - **The tests catch what they're for**: with a slider's bounds set
-     as a valuator's, `TestValuators` failed; without the display
-     opened before focusing, `TestInputs` crashed on Wayland.
-   - **`prototype/` is retired** (in git up to f57262b): `src/` does all
-     it did. Its demo is `examples/Swatch.Mod`, a custom-drawn box and a
-     button; driven under Xvfb by `xdotool`, two clicks took the swatch
-     from red to green.
+Module `Fl`. Done 2026-10-06, with poc 0.3.1. On top of Phase 0's core:
 
-   Findings, confirmed live and in FLTK's source (`doc/fltk-issues.md`
-   has each in full):
-   - **A text input taking the focus before the display is open
-     crashes FLTK 1.4.5 under Wayland**, also in plain C++, where giving
-     the first field the focus before `show()` is common. `TakeFocus`
-     and `SetFocus` open the display first.
-   - **`changed()` is cleared after every callback but FLTK's default**,
-     so `Changed` is TRUE only inside a `Callback`. **A push button is
-     off again before its callback.**
-   - **Non-virtual methods hidden by subclasses**: `Fl_Slider::bounds`
-     (adds a redraw), `Fl_Spinner`'s `color`, `selection_color` and
-     `type` (its field's). The shim calls each class as itself.
-     `Fl_Repeat_Button::deactivate` hides `Fl_Widget`'s too, but needs
-     no help: `Fl_Widget::deactivate` sends `FL_DEACTIVATE`, which stops
-     the repeating (a mutation test showed the override was redundant,
-     so it was removed).
-   - **`Fl_Spinner::format` keeps its pointer and uses it as a printf
-     format**, so it isn't bound.
-   - **Enter in an input calls back (`WhenEnterKey`) only if the text
-     changed, and selects all the text.** `Valuator.Increment` rounds
-     but doesn't clamp.
-   - **Synthesized keys need the text the window system gives**:
-     BackSpace with `08X`, since under Wayland a key with no text is
-     taken as composed text.
+- **Constants**: 188 of them (events, when, box types, label types,
+  alignment, fonts, colors), from `tools/gen-constants.py`.
+- **Widget**:
+  - label font, size, color and type; box type;
+  - color and selection color; alignment; `when`;
+  - activate, deactivate, `Active`, `ActiveR`, `VisibleR`;
+  - tooltips (copied); position and size; `Parent`.
+- **Group**: `Add`, `Insert`, `Remove`, `Find`, `Clear` (deferred
+  inside a dispatch, like `Delete`), resizable.
+- **Window**: `Shown`, `SizeRange`, modal and non-modal, fullscreen.
+  The title is the label, set through `Fl_Window::copy_label`.
+- **Colors**: `RGB`, `GrayRamp`, `ColorCube` (in Oberon, checked
+  against C), `SetIndexColor`, `GetRGB`, background, background2 and
+  foreground, `ColorAverage`, `Lighter`, `Darker`, `Contrast`,
+  `Inactive`.
+- **Other globals**: `NormalSize`, schemes.
+- **Tests**:
+  - `TestConstants` (196 values; a deliberately wrong constant fails
+    it and is named);
+  - `TestWidget` (33 checks).
 
-   Not done, and why:
-   - `Fl_Spinner::format` (above); `Fl_Input_::copy` and `copy_cuts`
-     wait for the clipboard (Phase 7).
-   - `Fl::callback_reason()`, which says why a `Callback` runs, waits
-     until a program needs it.
-4. **`[done]` Layout** (`FlLayout`; 2026-10-06, poc 0.4.0, FLTK 1.4.5):
-   - **`FlLayout`**: `Flex`, `Grid`, `Pack`, `Scroll`, `Tabs`, `Tile`
-     and `Wizard`, each an `Fl.Group`.
-     - `Flex`: `Kind` (`Column`, `Row`), `SetFixed`/`Fixed`, margins,
-       gap, `Layout`.
-     - `Grid`: `SetLayout`, `Place` and `PlaceSpan` with an alignment
-       `SET`, margins and gaps, each row's and column's size, weight,
-       gap and computed size, `ShowGrid`.
-     - `Pack`: kind and spacing. `Scroll`: kind, position, `ScrollTo`,
-       scrollbar size. `Tabs`: `Value` (the page shown), `TabAlign`,
-       `HandleOverflow`, `ClientArea`. `Wizard`: `Value`, `Next`,
-       `Prev`. `Tile`: `SizeRange`, `InitSizeRange`,
-       `MoveIntersection`.
-     - `resizable` was already `Fl.Group`'s (Phase 1).
-   - **Halts**: a grid cell or span outside the grid, and a row or
-     column index, are `IndexOutOfRange` (74). A widget that must be
-     the group's child and isn't (a grid's cell, a flex's fixed size, a
-     tab or wizard page, a tile's size range) is the new `NotAChild`
-     (76).
-   - **`Fl`**: `Group.End` calls a flex as a flex, and `Group.Clear`
-     deletes only the children ofltk opened, so it can clear a scroll or
-     a spinner (findings, below).
-   - **Constants**, 28 more (flex, pack and scroll kinds, grid
-     alignments, tab overflow), for 359 values in `TestConstants`.
-   - **Tests**: `TestLayout` (31 checks: a flex column and row, fixed
-     sizes, gap and margins; a grid's cells, spans, weights, sizes and
-     gaps; a pack's stacking and `Clear`; a scroll's position and
-     `Clear`; tabs and a wizard's pages; a tile's border and size range;
-     clearing a spinner). Halt tests `HaltGridRange` and
-     `HaltNotAChild`. All pass on Wayland and on Xvfb, and under
-     valgrind on both with 0 errors and no ofltk leak.
-   - **The tests catch what they're for**: `TestLayout` failed with a
-     flex ended as a group, with a pack's `resizable()` left after
-     `Clear`, and without the tile's saved sizes reset (each tried).
-   - Defaults the comments state were checked: a grid's weights 50, its
-     gaps -1 (the grid's), widths 0; a flex's gap and margins 0; a
-     scroll's scrollbar size 0 (`Fl::scrollbar_size()`).
+  All pass on Wayland, on Xvfb, and under valgrind (0 errors).
+- **Example**: `examples/Hello.Mod`, FLTK's `test/hello.cxx`, built by
+  `make`. A screenshot under Xvfb showed it as FLTK draws it: an up
+  box, and a bold italic shadow label of size 36.
+- **Found**: poc 0.3.1 can't compile `ORD` of a `SET` under `-OC`. Any
+  use emits LLVM `trunc i32 to i32`, which clang rejects; `-O2` is
+  fine. `SYSTEM.VAL(SYSTEM.INT32, s)` gives the same bits, and is used
+  instead (AGENTS.md, "poc problems"). poc 0.4.0 still has it; 0.4.1 fixed it ("poc 0.4.1" below).
+- **Left for later**:
+  - `Fl_Window` icons, `xclass`, and border control;
+  - `Fl::readqueue`;
+  - multi, icon and image labels, which come with images in Phase 7;
+  - the prototype's demo, which needs Phase 2's drawing and Phase 3's
+    buttons.
 
-   Findings, confirmed live and in FLTK's source (`doc/fltk-issues.md`,
-   21 to 25):
-   - **`Fl_Grid::widget` writes past its rows** for a row equal to
-     `rows()` (or a column equal to `cols()`), where it documents NULL:
-     valgrind shows an invalid read and write. `PlaceSpan` checks the
-     range first.
-   - **More hidden non-virtual methods**: `Fl_Flex::end` (asks for a
-     layout), `Fl_Scroll::clear` and `Fl_Pack::clear`. `Fl_Group::clear`
-     on a scroll or spinner would `delete` its member parts.
-   - **`Fl_Tile` size ranges set after a move put the children back**,
-     since without ranges `move_intersection` doesn't save the new
-     sizes. `SizeRange` and `InitSizeRange` save them first.
-   - **`Fl_Pack` resizes itself as it draws**, to fit its children.
+### Phase 2: Custom widgets and drawing `[done]`
 
-   Not done, and why:
-   - `Fl_Grid`'s `Cell` objects (per-cell size and alignment after
-     placing) and `Fl_Flex`'s `spacing` alias: `Place` again does the
-     first, `Gap` is the second.
-   - `Fl_Scroll`'s scrollbars are FLTK's, not ofltk widgets, so they
-     aren't reachable from Oberon; `Scroll.ScrollbarSize` and `Kind`
-     cover what programs set on them.
-5. **`[done]` Menus and dialogs** (`FlMenus`, `FlDialogs`; 2026-10-06,
-   poc 0.4.0, FLTK 1.4.5):
-   - **`FlMenus`**: `Menu` (FLTK's `Fl_Menu_`, never opened), `MenuBar`,
-     `MenuButton` (`Popup`, `Kind` for the pop-up kinds) and `Choice`.
-     - Items are indexes into FLTK's array, as in FLTK: `Add`, `Insert`
-       (a label is a path, "File/Open"), `Remove`, `Clear`,
-       `ClearSubmenu`, `Length` (`size()`, ends included; `Size` is
-       `Fl.Widget`'s), `IsItem`, `FindIndex`, `ItemPath`.
-     - `Value`, `SetValue`, `Pick` (as if picked), `SetOnly`; each
-       item's label, flags (a `SET`), shortcut (key and `SET`, as
-       `Button`'s) and action; the items' font, size, color and boxes;
-       `Global`.
-     - **Item actions** are procedures, `Action = PROCEDURE (w:
-       Fl.Widget)`, so one procedure serves a button and a menu item.
-       Each is stored as the item's `user_data`, with no FLTK callback on
-       the item, so FLTK calls the menu's callback for every pick
-       (`Fl_Menu_::picked`). `Menu.Callback` then calls the action of
-       `Value`, or the menu's own. A procedure is code, so the collector
-       needs no root for it, and an extension can override `Callback`.
-     - `FL_SUBMENU_POINTER` is never set (it would make the action a
-       menu array), and `SetItemFlags` keeps an item's submenu bits,
-       which describe the array's shape.
-     - Halts: an index that is outside the array or names the end of a
-       menu is `IndexOutOfRange` (74), as is `ClearSubmenu` of an item
-       that isn't a submenu.
-   - **`FlDialogs`**: `Message`, `Alert`, `Choice` (FLTK's
-     `fl_choice_n`, so Escape and the close button are told apart),
-     `Input`, `Password`, `SetTitle`, `SetDefaultTitle`, hotspot, font,
-     `Beep`; `ChooseColor`, `ChooseFromColormap`; `ChooseFile`,
-     `ChooseDirectory` (FLTK's own chooser). A cancel is `FALSE` or a
-     negative `Choice`, never a halt.
-   - **`Fl`**: `Window.WaitForExpose`.
-   - **Constants**, 20 more (item flags, pop-up kinds, beeps), for 379
-     values in `TestConstants`.
-   - **Tests**:
-     - `TestMenus` (40 checks): the array and paths, picking by `Pick`
-       and by shortcut, toggle and radio items, changing items, removing
-       and the value, a menu cleared in its own callback, a choice, a
-       global menu and its deletion, and on X11 a pop-up answered by
-       keys.
-     - `TestDialogs` (25): every dialog, answered by keys sent from a
-       timer to the modal window (`Probe.ModalKey`), titles read back
-       (`Probe.Modal`).
-     - `HaltMenuItem`. All pass on Wayland and on Xvfb, `TestDialogs`
-       on X11 (XWayland) too, and under valgrind on both with 0 errors
-       and no ofltk leak.
-   - **The tests catch what they're for**: `TestMenus` failed without
-     the value kept across insert and remove, with a choice's value set
-     as a menu's, and with `SetItemFlags` setting the submenu bits; it
-     crashed without the global menu forgotten on deletion. The Wayland
-     wait in `Popup` is checked by a C++ program only (findings).
-   - **`examples/Menus.Mod`**: a menu bar with shortcuts, a choice, and
-     the file, color and question dialogs. Driven under Xvfb by
-     `xdotool`, its File menu and its Quit question looked right.
+Modules `Fl` and `FlDraw`. Done 2026-10-06, with poc 0.4.0 and FLTK
+1.4.5.
 
-   Findings, confirmed live or in FLTK's source (`doc/fltk-issues.md`,
-   26 to 33):
-   - **Inserting or removing items moves `value()` to another item**:
-     FLTK keeps it as a pointer into the array. ofltk finds the item
-     again by its text pointer.
-   - **A deleted `global()` menu is used by the next shortcut**
-     (valgrind, in plain C++). ofltk keeps its own pointer, cleared by
-     the menu's destructor.
-   - **Under Wayland, a menu popped up over a window not yet on the
-     screen kills the program** (a protocol error), and **a pop-up of a
-     window without the focus is closed at once** by the compositor.
-     `Popup` waits for the window; the second needs a real user, so the
-     test pops up only on X11.
-   - **`fl_file_chooser` keeps its title pointer** in its one window;
-     **the common dialogs take printf formats**. The shim copies the
-     title, and passes text as `"%s"`.
-   - **`Fl_Choice::value(int)` hides `Fl_Menu_::value(int)`**.
-   - **A menu cleared in its own callback is safe in 1.4.5**, although
-     FLTK's documentation forbids it: nothing reads the item after the
-     callback (valgrind, in plain C++, through both a menu bar's and a
-     choice's shortcut). So ofltk doesn't forbid it.
-   - **A key a timer sends to a dialog ends its loop only at the next
-     event**, which never comes under Xvfb; the tests fire once more.
+- **`Resize` is overridable**, like `Draw` and `Handle`: `ofl::W<B>`
+  overrides `resize()` too. The default `Resize` calls `B::resize`
+  directly, not the virtual one, so an override's `Resize^` doesn't
+  recurse. `Position` and `Size` go through the virtual `resize()`, so
+  they reach an override, as FLTK's group resizing does.
+- **Widget**, for an override's `Draw`: `DrawBox`, `DrawLabel` and
+  `DrawFocus`, FLTK's protected `draw_box()` and friends, reached
+  through `ofl::Hooks`. Also `Damage`/`SetDamage` (a `SET`),
+  `TakeFocus`, `VisibleFocus`/`SetVisibleFocus`, `EventInside`; and
+  `Window.SetCursor`.
+- **Event queries** in `Fl`: `Event`, `EventX`/`Y`, `EventXRoot`/
+  `YRoot`, `EventDx`/`Dy`, `EventButton`, `EventClicks` (and
+  `SetEventClicks`), `EventIsClick` (and `EventIsClickOff`),
+  `EventKey`, `EventOriginalKey`, `EventKeyDown(key)`, `GetKey(key)`,
+  `EventState` (a `SET`), `EventText`, `EventLength`, `EventInside`;
+  `Focus`/`SetFocus`, `BelowMouse`, `Pushed`.
+- **Constants**, 116 more: keys (prefix `Key`, so `FL_End` isn't the
+  keyword `END`, and `KeyF + n` is F*n*), mouse buttons, event state
+  bits (`SET`s), damage bits (`SET`s), cursors; and in `FlDraw`, line
+  styles. `tools/gen-constants.py` now writes a block into each
+  module it names, and `TestConstants` checks all 312 values.
+- **`FlDraw`**, the common calls of `fl_draw.H` (the open question
+  below, decided):
+  - colors and line styles;
+  - integer shapes: `Point`, `Line`, `Rect`, `RectF`, `Loop3`/`4`,
+    `Polygon3`/`4`, `XYLine`, `YXLine`, `Arc`, `Pie`;
+  - the transformation and paths: `PushMatrix`, `Translate`, `Scale`,
+    `Rotate`, the `Begin`/`End` pairs, `Vertex`, `Curve`, `ArcPath`,
+    `Circle`, `Gap`;
+  - text: `SetFont`, `Font`, `Size`, `Height`, `Descent`, `Width`,
+    `Text`, `TextAligned`, `Measure`. Each sets FLTK's normal font
+    first if no font is set, the crash `doc/design.md` records;
+  - clipping: `PushClip`, `PushNoClip`, `PopClip`, `NotClipped`,
+    `ClipBox`;
+  - `DrawBox`, `FocusRect`, `DrawSymbol`.
+- **Tests**:
+  - `test/Probe` (Oberon and C++), for tests only: captures a widget
+    into an `Fl_Image_Surface` and reads its pixels, and sends mouse,
+    wheel and key events as the window system would, by setting
+    `Fl::e_x` and the rest and calling `Fl::handle`;
+  - `TestDraw` (24 checks): pixels of `Draw` overrides (fills, lines,
+    clipping, a transformed path, text, `DrawBox`/`DrawLabel`) and of
+    a box's own `Draw`;
+  - `TestEvents` (23 checks): pushes, drags, releases, a shifted
+    double click, the wheel, keys and focus reaching `Handle` with the
+    right event queries; `Resize` overrides through `Size`,
+    `Position` and a window's resizing, and one that refuses.
 
-   Not done, and why:
-   - `Fl_Native_File_Chooser` stays in Phase 7, as planned: it runs the
-     desktop's own chooser, which keys from a test can't answer.
-   - `Fl_Sys_Menu_Bar` is an `Fl_Menu_Bar` except on macOS; menu item
-     images and multi-labels come with images (Phase 7).
-   - `fl_yes`, `fl_no` and the other button labels are pointers FLTK
-     keeps; `fl_message_icon` returns an FLTK-made widget. Not bound
-     until a program needs them.
-6. **`[done]` Text and browsers** (`FlText`, `FlBrowsers`; 2026-10-06,
-   poc 0.4.1, FLTK 1.4.5):
-   - **`FlText`**: `TextBuffer`, a resource the program owns, as planned
-     ("Lifetime and the collector"): `OpenBuffer`, `Close` (idempotent),
-     a collector finalizer as the backstop, `IsOpen`, and `openBuffers`,
-     the count made and not closed, for tests.
-     - Text by byte position from 0: `SetText`, `GetText`, `TextRange`,
-       `CharAt`, `ByteAt`, `Insert`, `Append`, `Remove`, `Replace`;
-       undo and redo; files (load, append, insert, save, save a range);
-       the selection; lines and words (`LineStart`, `WordEnd`,
-       `CountLines`, `SkipLines` and the rest); `SearchForward`,
-       `SearchBackward`.
-     - `Modified`, a method an extension overrides, runs after every
-       change, from FLTK's modify callback.
-     - `TextDisplay` and `TextEditor`: `SetBuffer`, `SetStyleBuffer`,
-       `AddStyle` (returns the style's character, "A" on), the cursor,
-       moving and scrolling, wrapping, line numbers, fonts and colors,
-       the editor's insert mode and tab navigation.
-     - **A buffer lives while a display shows it**, whatever the
-       program does: the C++ buffer is reference counted, `Close` gives
-       up the program's hold only, and a display lets go only after
-       FLTK's display is destroyed (`Holds`, a base class destroyed
-       after it). The display also keeps the Oberon buffer, so the
-       collector leaves it.
-     - Halts: a closed buffer used, and a display's text methods with
-       no buffer, are `ClosedResource` (73).
-   - **`FlBrowsers`**: `BrowserBase` (`Fl_Browser_`, never opened),
-     `Browser`, `HoldBrowser`, `MultiBrowser`, `SelectBrowser`,
-     `FileBrowser`, `CheckBrowser`, `Tree`.
-     - Lines from 1, as FLTK numbers them: `Add`, `Insert`, `Remove`,
-       `Move`, `Swap`, `Clear`, `Load`, `GetText`, `SetText`, `Select`,
-       `Selected`, `Value`, `Deselect`, `Sort`; hiding, showing and
-       scrolling to lines; the format and column characters, and column
-       widths. `Count`, not `Size`, which is `Fl.Widget`'s.
-     - `FileBrowser`: `LoadDirectory`, `SetFilter`, `SetFileType`,
-       the icon size. `CheckBrowser`: items checked and unchecked, and
-       their counts.
-     - Halts: a line or item outside 1 to the count (`Insert`, to the
-       count plus 1) is `IndexOutOfRange` (74).
-   - **`Tree`**, about FLTKAda's scope (its `progress.txt`): items added
-       by path or under an item, inserted at a position or above an
-       item, removed, cleared; finding, paths, walking (`Next`, `Prev`,
-       `Parent`, `Child`, the visible and selected items); open and
-       close; selection; activation; each item's label font, size and
-       colors; the tree's modes, spacing and colors; `CallbackItem` and
-       `CallbackReason`. Not bound: embedded widgets and icons, which
-       wait for images (Phase 7), moving items, and items made outside
-       a tree.
-     - **A `TreeItem` is a reference the program can't misuse.** FLTK
-       makes and deletes items itself, some without ofltk seeing (a
-       path's parents). So a `TreeItem` holds the item's pointer and a
-       serial; the C++ tree maps the items it has handed out to their
-       serials, and drops an item and its descendants from the map
-       before it removes them. Only the program removes items, so an
-       item is live exactly when its pointer is in the map with its
-       serial. A pointer the allocator reuses gets a new serial: the
-       test sees this happen. A dead item halts, `ClosedResource` (73).
-     - What the program does never calls back (`docallback` 0), as
-       elsewhere.
-   - **Constants**, 39 more (text wrap and cursor, style attributes,
-     scrollbars, sorting, file types, tree modes and reasons), for 418
-     in `TestConstants`.
-   - **Tests**:
-     - `TestText` (45 checks): the buffer's operations, files, undo,
-       search, a display's buffer and styles (a styled pixel read
-       back), the buffer kept alive by its display, and a lost buffer
-       finalized.
-     - `TestBrowsers` (53): lines and selection by the program, clicks
-       on a hold and a multi browser, column widths read back as
-       pixels, loading a file, a file browser's directory and filter,
-       a check browser's items and clicks.
-     - `TestTree` (33): items and paths, removal and liveness, open and
-       close, selection by the program and by clicks, Shift-click after
-       a removal, an item removed in its own callback, `Clear`.
-     - `HaltClosedBuffer`, `HaltNoBuffer`, `HaltBrowserLine`,
-       `HaltTreeItem`. All pass on Wayland, X11 (XWayland) and Xvfb,
-       and under valgrind on Wayland and Xvfb with 0 errors and no
-       ofltk leak.
-   - **The tests catch what they're for**, each checked by breaking the
-     shim:
-     - `FlText`: `Holds` as the last base class, `Close` deleting a
-       buffer still shown, and no style guard: valgrind errors.
-     - `FlBrowsers`: the column widths or the filter passed to FLTK
-       uncopied (the test sets them from a frame since written over),
-       `textsize` called as `Fl_Browser_`'s, no top-line update, the
-       tree removing as FLTK does, the callback item kept, and no
-       serial: each fails a check.
+  All pass on Wayland and on Xvfb, `make valgrind` and
+  `make valgrind-headless` show 0 errors and no ofltk leak, and
+  `make install` (tried in a scratch directory) installs both
+  modules, with a client built from `-library-path` alone.
+- **The tests catch what they're for**: with `resize()` not sent to
+  Oberon, 4 `TestEvents` checks failed; with `ofl_draw_rectf` drawing
+  nothing, 5 `TestDraw` checks did.
+- **Example**: `examples/Scribble.Mod`, drawing with the mouse: a
+  custom widget's `Handle` keeps the strokes, and its `Draw` draws
+  them as paths. Run under Xvfb and driven by `xdotool` (installed
+  later that day): a drag drew a stroke, a right click cleared it, and
+  Escape ended the program with status 0, each seen in a screenshot.
 
-   Findings, confirmed live or in FLTK's source (`doc/fltk-issues.md`,
-   34 to 43):
-   - **A text buffer deleted before its displays is used after it is
-     freed**: neither detaches from the other.
-   - **A style buffer with no styles** makes FLTK read before the style
-     table.
-   - **`search_forward` and `search_backward` read past the text when
-     matching case** (a bug; valgrind, in plain C++). The shim
-     searches itself.
-   - **Browsers keep the column widths, filter and directory pointers**
-     they are given; the shim keeps copies.
-   - **A browser finds its top line only when it draws**, so `TopLine`
-     and `Displayed` read stale values and a browser never drawn takes
-     no click; the shim updates it through the protected `find_item`.
-   - **`Fl_Browser::textsize` and `Fl_File_Browser::textsize` hide
-     `Fl_Browser_`'s.**
-   - **`Fl_Browser::load` adds an empty last line** after a final
-     newline, and **`Fl_File_Browser::load` returns the directory's
-     entries**, not the lines listed.
-   - **`Fl_Tree` keeps a removed item's descendant as the last one
-     clicked**, and **its callback item after removal**; **`clear`
-     deletes the root**.
-   - **A check browser starts with `FL_WHEN_NEVER`**, and a browser
-     calls back on every release (`FL_WHEN_RELEASE_ALWAYS`), changed
-     or not: documented in `FlBrowsers`.
+Findings, confirmed live:
+- **`fl_clip_box` returns the reverse of what its documentation
+  says**: 0 when the box was clipped, 1 when it wasn't, on both back
+  ends. The Cairo driver (`Fl_Cairo_Graphics_Driver::clip_box`, which
+  the image surface uses) compares the result with the clip, not with
+  the box. For a box wholly clipped it sets `W` to 0 and returns
+  without setting `H`. So `FlDraw.ClipBox` is a proper procedure, and
+  the shim zeroes its outputs first.
+- **A push no widget uses shows the window**: `Fl::handle_` makes the
+  window `Fl::pushed()` before offering the push to its widgets, and
+  if none uses it, raises the window with `show()`. So a never-shown
+  window is shown, and its widgets get `EvShow`.
+- **A key no widget uses, sent by `Fl::handle` to a window never
+  shown, crashes FLTK 1.4.5** in `send_event`, as it tries the key as
+  a shortcut: with `belowmouse()` set and no window shown, it sends
+  the shortcut to `first_window()`, which is 0
+  (`doc/fltk-issues.md`, 3). Real keys can't reach such a window, so this binds only
+  tests: `Probe.Key` sends a key to the focus widget, as FLTK does
+  first.
+- **Synthesized mouse events reach widgets of a window never shown**:
+  `Fl::handle` routes them to the widget under the mouse, then to
+  `Fl::pushed()`, as for real ones, so `Pushed`, `BelowMouse` and
+  `Focus` can be tested without a window on the screen.
+- **`KeyDown` is FLTK's down arrow**, so `Fl::get_key` is `GetKey`,
+  its own name.
 
-   Not done, and why:
-   - No editor example yet; `examples/Menus.Mod` shows the dialogs a
-     text editor would use. It can come with Phase 8's examples.
-   - `Fl_Text_Editor` key bindings, and the buffer's
-     `Fl_Text_Selection` beyond the primary selection: not needed by
-     anything yet.
-7. **`[done]` Images and the rest** (`FlImages`, `FlPreferences`, `FlTable`, `Fl`,
-   `FlDialogs`; 2026-10-06, poc 0.4.1, FLTK 1.4.5):
-   - shared and RGB images (data copied); offscreen drawing and
-     `fl_read_image`;
-   - the clipboard, drag and drop, `Preferences`, `NativeFileChooser`,
-     `Table`.
+Not done, and why:
+- Offscreen drawing (`Fl_Offscreen`), images, and `fl_read_image`
+  come with images in Phase 7.
+- `fl_line_style`'s dash arrays, `fl_frame` strings, the 3-point
+  `fl_line`, and `fl_text_extents` wait until a program needs them.
+- `prototype/` stays until Phase 3 gives it buttons (done there).
 
-   Done:
-   - `FlImages` (`-lfltk_images`, from `fltk-config --use-images`):
-     - `Image`: `Load` (the format told by the file's contents, not its
-       name), `LoadData`, `OpenRGB` (the pixels copied), `Copy`, `Scale`,
-       `ColorAverage`, `Desaturate`, `Inactive`, `Draw`, `DrawPart`,
-       `Pixel`, `Alpha`, `SavePNG`;
-     - `SetImage`, `SetInactiveImage`, `SetIcon`: a widget holds its
-       images (`ofl::Shared`, counted, in `Ref`), so closing an image a
-       widget shows is safe;
-     - `Surface` (`Fl_Image_Surface`): `Begin` and `End` nest, and an
-       `End` out of order halts with the new code 77; `DrawWidget`,
-       `GetImage`; and `ReadImage`.
-   - The clipboard, in `Fl`: `Copy`, `Paste`, `PasteImage`,
-     `ClipboardHasText`, `ClipboardHasImage`, `EventIsImage`; and
-     `FlImages`' `CopyToClipboard` and `TakePastedImage`. A pasted image
-     not taken is deleted by ofltk (`doc/fltk-issues.md`, 48).
-   - Drag and drop: `Dnd`, `DndTextOps`, `SetDndTextOps`, bound but not
-     tested: a drag needs a real pointer, and `Fl::dnd` returns at once
-     under Wayland.
-   - `FlPreferences`: `Preferences`, a database (`Open`: `User`,
-     `System`, `Memory`; `OpenFile`) or a group in one (`Group`, which
-     takes a path), with entries (`SetInt`, `SetReal`, `SetText`, `Int`,
-     `Real`, `GetText`, `TextLength`, `Entries`, `EntryName`,
-     `HasEntry`, `DeleteEntry`, `DeleteEntries`), groups (`Groups`,
-     `GroupName`, `HasGroup`, `DeleteGroup`, `DeleteGroups`, `Clear`),
-     `Flush`, `FileName` and `Close`. Reals are written in the C locale.
-     A group is its database and its path, never an `Fl_Preferences`
-     kept (`doc/fltk-issues.md`, 51). Binary entries and
-     `get_userdata_path` aren't bound. Tested by `TestPreferences` and
-     `HaltClosedGroup` (73); mutations caught: no existence check (the
-     halt test exits 0), no `delete` in `Close` (`vg-check.sh`).
-   - `Fl.Option` and `Fl.SetOption` (`Fl::option`), and
-     `FlDialogs.NativeFileChooser` (`Fl_Native_File_Chooser`):
-     `OpenNativeFileChooser`, `SetKind`, `SetTitle` (copied: FLTK's
-     driver keeps it, `doc/fltk-issues.md`, 30), `SetFilter`,
-     `SetFilterValue`, `SetDirectory`, `SetPresetFile`, `SetOptions`,
-     `Show` (`Chosen`, `Cancelled`, `Failed`), `Count`, `FileName`,
-     `ErrorMessage`, `Close`. `TestDialogs` turns zenity, kdialog and GTK
-     off with `SetOption`, so FLTK's own chooser is shown and answered by
-     keys, on X11 and Wayland. The desktop's choosers are untested: they
-     are other programs, or GTK's windows, out of `Probe`'s reach.
-   - `FlTable`: `Table` (`Fl_Table`) and `TableRow` (`Fl_Table_Row`),
-     whose `draw_cell` reaches the Oberon `DrawCell` (a new dispatcher,
-     `ofl_table_register`); rows, columns, headers, sizes, resizing,
-     scrolling, `FindCell`, `VisibleCells`, cell selection, row
-     selection, and the callback's row, column and context. A table is a
-     `Group` of the widgets in its cells: Fl.cpp calls it as an
-     `Fl_Table` (`doc/fltk-issues.md`, 52). Tested by `TestTable` (cells'
-     pixels, a click, selection, widgets in cells) and `HaltTableRow`
-     (74).
-   - Every label goes through `ofl::label_text`: FLTK lays out an empty
-     label as a line of text, which moved label images
-     (`doc/fltk-issues.md`, 46).
-   - Tests: `TestImages`, `TestClipboard`, and the halt tests
-     `HaltClosedImage` (73) and `HaltSurfaceOrder` (77). They pass under
-     headless sway and Xvfb, and both valgrind runs are clean.
-   - FLTK issues 44 to 50: no window icons and no selection buffer under
-     Wayland; binary PNM unscaled; XPM color names only on X11; X11's
-     `Fl::copy` before the display is open crashes; Wayland leaks the
-     program's own pasted image.
-   - Mutations caught: no image held by its widget (valgrind invalid
-     reads); "" labels (`TestImages`); pixels not copied; PNM unscaled; no
-     release in `~Ref` (`vg-check.sh`); no `drop_pasted_image` (leaks in
-     the valgrind log).
+### Phase 3: Buttons, inputs and valuators `[done]`
 
-   Not done, and why:
-   - Multi, icon and image labels, images in menu items and tree items'
-     icons: images are in place, and these can come when something needs
-     them.
-   - Drag and drop is bound but untested (above).
-   - `Fl_Preferences`' binary entries and `get_userdata_path`.
-8. **`[done]` Release** (2026-10-06, poc 0.4.1, FLTK 1.4.5). `make
-   install` as a poc library, and poc 0.4.0's C++ parts and recorded link
-   flags, were done early, once 0.4.0 was installed ("poc 0.4.0" below).
-   - `README.md`: what ofltk is, requirements, building and testing,
-     installing and using the library, the modules, the concepts
-     (opening, overriding, lifetime, resources, strings, halt codes),
-     and FLTK's problems.
-   - Examples: ports of FLTK's `examples/` programs, one for each module
-     the first four examples left out: `TableSimple`, `TreeSimple`,
-     `TextEditorSimple`, `BrowserSimple`, `GridSimple`, `FlexSimple`,
-     `TabsSimple`, `WizardSimple`, `ProgressSimple`,
-     `NativeFileChooserSimple`, `SvgSimple` (the SVG decoded from
-     memory). Each was looked at under Xvfb against what FLTK's draws,
-     and `ProgressSimple`, `WizardSimple`, `TreeSimple` and
-     `BrowserSimple` were driven with `xdotool`.
-   - `make test` runs every example too: none ends by itself, so each
-     must still be running after `EXAMPLETIME` seconds (3), when
-     `timeout` ends it (status 124). An example that halted at once
-     failed this (checked with a throwaway one).
-   - The README's install instructions were followed in the scratchpad:
-     `poc -OC -library-path <lib>/ofltk` built `TableSimple` alone, and
-     it ran.
+Modules `FlButtons`, `FlInputs` and `FlValuators`. Done 2026-10-06,
+with poc 0.4.0 and FLTK 1.4.5.
 
-   Not done, and why:
-   - The examples aren't run under valgrind: killed by `timeout`, a
-     program frees nothing, so its leak report means nothing.
-   - No larger demo (an editor with files, a spreadsheet): the ports
-     show each module, and `Menus` the dialogs.
+- **`FlButtons`**: `Button`, `LightButton`, `CheckButton`,
+  `RoundButton`, `RadioButton`, `RadioLightButton`,
+  `RadioRoundButton`, `ReturnButton`, `RepeatButton`,
+  `ToggleButton`, each extending what FLTK's extends. `Value`,
+  `SetValue`, `SetOnly`, `Kind`/`SetKind` (`Normal`, `Toggle`,
+  `Radio`, `Hidden`: the type names `ToggleButton` and `RadioButton`
+  are taken, so the kinds drop "Button"), `Shortcut`/`SetShortcut` as
+  a key and a `SET` of shift keys, `DownBox`.
+- **`FlInputs`**: `Input`, `IntInput`, `FloatInput`,
+  `MultilineInput`, `SecretInput`, `Output`, `MultilineOutput`. The
+  text in and out (`Value` truncates to its argument; `Length`), as
+  numbers too, the cursor and selection (`Select`, since `Position`
+  is the widget's), undoable edits returning whether anything
+  changed, the maximum size, read-only, wrap, tab navigation,
+  shortcut, and the text's look.
+- **`FlValuators`**: `Valuator` (FLTK's base, never opened),
+  `Slider`, `ValueSlider`, `Scrollbar`, `Counter`, `Dial`, `Roller`,
+  `Adjuster`, `ValueInput`, `ValueOutput`; and `Spinner` (an FLTK
+  group) and `Progress` (a plain widget) with values of their own.
+  Value, bounds, step, precision, `Round`/`Clamp`/`Increment`,
+  `Format`, and `Kind`/`SetKind` with FLTK's names (`HorSlider`,
+  `LineDial`, `Vertical`, ...), plus each class's own settings.
+- **`Fl`**: `Live` is exported, for the other modules' methods;
+  `Changed`/`SetChanged`; `ClearDamage`. Every module's C++ part
+  opens a widget with its label copied, through `ofl::open`; Fl's
+  `BeginOpen`/`EndOpen` attach it.
+- **Constants**, 19 more (button, valuator and spinner kinds), for 331
+  values in `TestConstants`.
+- **Tests**: `TestButtons` (24 checks: clicks, toggles, a radio
+  group with a check button made radio, shortcuts and Enter, repeat
+  and its stopping), `TestInputs` (38: typing, BackSpace, Enter and
+  `when`, maximum size, editing and undo, number inputs, multiline,
+  secret and output), `TestValuators` (32: numbers and rounding,
+  kinds, dragging a slider, a slider's own bounds, scrollbar,
+  counter arrows, settings, typing into a value input, spinner,
+  progress). `Probe.Shortcut` offers a key as a shortcut. All pass
+  on Wayland and on Xvfb, and under valgrind on both with 0 errors
+  and no ofltk leak.
+- **The tests catch what they're for**: with a slider's bounds set
+  as a valuator's, `TestValuators` failed; without the display
+  opened before focusing, `TestInputs` crashed on Wayland.
+- **`prototype/` is retired** (in git up to f57262b): `src/` does all
+  it did. Its demo is `examples/Swatch.Mod`, a custom-drawn box and a
+  button; driven under Xvfb by `xdotool`, two clicks took the swatch
+  from red to green.
+
+Findings, confirmed live and in FLTK's source (`doc/fltk-issues.md`
+has each in full):
+- **A text input taking the focus before the display is open
+  crashes FLTK 1.4.5 under Wayland**, also in plain C++, where giving
+  the first field the focus before `show()` is common. `TakeFocus`
+  and `SetFocus` open the display first.
+- **`changed()` is cleared after every callback but FLTK's default**,
+  so `Changed` is TRUE only inside a `Callback`. **A push button is
+  off again before its callback.**
+- **Non-virtual methods hidden by subclasses**: `Fl_Slider::bounds`
+  (adds a redraw), `Fl_Spinner`'s `color`, `selection_color` and
+  `type` (its field's). The shim calls each class as itself.
+  `Fl_Repeat_Button::deactivate` hides `Fl_Widget`'s too, but needs
+  no help: `Fl_Widget::deactivate` sends `FL_DEACTIVATE`, which stops
+  the repeating (a mutation test showed the override was redundant,
+  so it was removed).
+- **`Fl_Spinner::format` keeps its pointer and uses it as a printf
+  format**, so it isn't bound.
+- **Enter in an input calls back (`WhenEnterKey`) only if the text
+  changed, and selects all the text.** `Valuator.Increment` rounds
+  but doesn't clamp.
+- **Synthesized keys need the text the window system gives**:
+  BackSpace with `08X`, since under Wayland a key with no text is
+  taken as composed text.
+
+Not done, and why:
+- `Fl_Spinner::format` (above); `Fl_Input_::copy` and `copy_cuts`
+  wait for the clipboard (Phase 7).
+- `Fl::callback_reason()`, which says why a `Callback` runs, waits
+  until a program needs it.
+
+### Phase 4: Layout `[done]`
+
+Module `FlLayout`. Done 2026-10-06, with poc 0.4.0 and FLTK 1.4.5.
+
+- **`FlLayout`**: `Flex`, `Grid`, `Pack`, `Scroll`, `Tabs`, `Tile`
+  and `Wizard`, each an `Fl.Group`.
+  - `Flex`: `Kind` (`Column`, `Row`), `SetFixed`/`Fixed`, margins,
+    gap, `Layout`.
+  - `Grid`: `SetLayout`, `Place` and `PlaceSpan` with an alignment
+    `SET`, margins and gaps, each row's and column's size, weight,
+    gap and computed size, `ShowGrid`.
+  - `Pack`: kind and spacing. `Scroll`: kind, position, `ScrollTo`,
+    scrollbar size. `Tabs`: `Value` (the page shown), `TabAlign`,
+    `HandleOverflow`, `ClientArea`. `Wizard`: `Value`, `Next`,
+    `Prev`. `Tile`: `SizeRange`, `InitSizeRange`,
+    `MoveIntersection`.
+  - `resizable` was already `Fl.Group`'s (Phase 1).
+- **Halts**: a grid cell or span outside the grid, and a row or
+  column index, are `IndexOutOfRange` (74). A widget that must be
+  the group's child and isn't (a grid's cell, a flex's fixed size, a
+  tab or wizard page, a tile's size range) is the new `NotAChild`
+  (76).
+- **`Fl`**: `Group.End` calls a flex as a flex, and `Group.Clear`
+  deletes only the children ofltk opened, so it can clear a scroll or
+  a spinner (findings, below).
+- **Constants**, 28 more (flex, pack and scroll kinds, grid
+  alignments, tab overflow), for 359 values in `TestConstants`.
+- **Tests**: `TestLayout` (31 checks: a flex column and row, fixed
+  sizes, gap and margins; a grid's cells, spans, weights, sizes and
+  gaps; a pack's stacking and `Clear`; a scroll's position and
+  `Clear`; tabs and a wizard's pages; a tile's border and size range;
+  clearing a spinner). Halt tests `HaltGridRange` and
+  `HaltNotAChild`. All pass on Wayland and on Xvfb, and under
+  valgrind on both with 0 errors and no ofltk leak.
+- **The tests catch what they're for**: `TestLayout` failed with a
+  flex ended as a group, with a pack's `resizable()` left after
+  `Clear`, and without the tile's saved sizes reset (each tried).
+- Defaults the comments state were checked: a grid's weights 50, its
+  gaps -1 (the grid's), widths 0; a flex's gap and margins 0; a
+  scroll's scrollbar size 0 (`Fl::scrollbar_size()`).
+
+Findings, confirmed live and in FLTK's source (`doc/fltk-issues.md`,
+21 to 25):
+- **`Fl_Grid::widget` writes past its rows** for a row equal to
+  `rows()` (or a column equal to `cols()`), where it documents NULL:
+  valgrind shows an invalid read and write. `PlaceSpan` checks the
+  range first.
+- **More hidden non-virtual methods**: `Fl_Flex::end` (asks for a
+  layout), `Fl_Scroll::clear` and `Fl_Pack::clear`. `Fl_Group::clear`
+  on a scroll or spinner would `delete` its member parts.
+- **`Fl_Tile` size ranges set after a move put the children back**,
+  since without ranges `move_intersection` doesn't save the new
+  sizes. `SizeRange` and `InitSizeRange` save them first.
+- **`Fl_Pack` resizes itself as it draws**, to fit its children.
+
+Not done, and why:
+- `Fl_Grid`'s `Cell` objects (per-cell size and alignment after
+  placing) and `Fl_Flex`'s `spacing` alias: `Place` again does the
+  first, `Gap` is the second.
+- `Fl_Scroll`'s scrollbars are FLTK's, not ofltk widgets, so they
+  aren't reachable from Oberon; `Scroll.ScrollbarSize` and `Kind`
+  cover what programs set on them.
+
+### Phase 5: Menus and dialogs `[done]`
+
+Modules `FlMenus` and `FlDialogs`. Done 2026-10-06, with poc 0.4.0 and
+FLTK 1.4.5.
+
+- **`FlMenus`**: `Menu` (FLTK's `Fl_Menu_`, never opened), `MenuBar`,
+  `MenuButton` (`Popup`, `Kind` for the pop-up kinds) and `Choice`.
+  - Items are indexes into FLTK's array, as in FLTK: `Add`, `Insert`
+    (a label is a path, "File/Open"), `Remove`, `Clear`,
+    `ClearSubmenu`, `Length` (`size()`, ends included; `Size` is
+    `Fl.Widget`'s), `IsItem`, `FindIndex`, `ItemPath`.
+  - `Value`, `SetValue`, `Pick` (as if picked), `SetOnly`; each
+    item's label, flags (a `SET`), shortcut (key and `SET`, as
+    `Button`'s) and action; the items' font, size, color and boxes;
+    `Global`.
+  - **Item actions** are procedures, `Action = PROCEDURE (w:
+    Fl.Widget)`, so one procedure serves a button and a menu item.
+    Each is stored as the item's `user_data`, with no FLTK callback on
+    the item, so FLTK calls the menu's callback for every pick
+    (`Fl_Menu_::picked`). `Menu.Callback` then calls the action of
+    `Value`, or the menu's own. A procedure is code, so the collector
+    needs no root for it, and an extension can override `Callback`.
+  - `FL_SUBMENU_POINTER` is never set (it would make the action a
+    menu array), and `SetItemFlags` keeps an item's submenu bits,
+    which describe the array's shape.
+  - Halts: an index that is outside the array or names the end of a
+    menu is `IndexOutOfRange` (74), as is `ClearSubmenu` of an item
+    that isn't a submenu.
+- **`FlDialogs`**: `Message`, `Alert`, `Choice` (FLTK's
+  `fl_choice_n`, so Escape and the close button are told apart),
+  `Input`, `Password`, `SetTitle`, `SetDefaultTitle`, hotspot, font,
+  `Beep`; `ChooseColor`, `ChooseFromColormap`; `ChooseFile`,
+  `ChooseDirectory` (FLTK's own chooser). A cancel is `FALSE` or a
+  negative `Choice`, never a halt.
+- **`Fl`**: `Window.WaitForExpose`.
+- **Constants**, 20 more (item flags, pop-up kinds, beeps), for 379
+  values in `TestConstants`.
+- **Tests**:
+  - `TestMenus` (40 checks): the array and paths, picking by `Pick`
+    and by shortcut, toggle and radio items, changing items, removing
+    and the value, a menu cleared in its own callback, a choice, a
+    global menu and its deletion, and on X11 a pop-up answered by
+    keys.
+  - `TestDialogs` (25): every dialog, answered by keys sent from a
+    timer to the modal window (`Probe.ModalKey`), titles read back
+    (`Probe.Modal`).
+  - `HaltMenuItem`. All pass on Wayland and on Xvfb, `TestDialogs`
+    on X11 (XWayland) too, and under valgrind on both with 0 errors
+    and no ofltk leak.
+- **The tests catch what they're for**: `TestMenus` failed without
+  the value kept across insert and remove, with a choice's value set
+  as a menu's, and with `SetItemFlags` setting the submenu bits; it
+  crashed without the global menu forgotten on deletion. The Wayland
+  wait in `Popup` is checked by a C++ program only (findings).
+- **`examples/Menus.Mod`**: a menu bar with shortcuts, a choice, and
+  the file, color and question dialogs. Driven under Xvfb by
+  `xdotool`, its File menu and its Quit question looked right.
+
+Findings, confirmed live or in FLTK's source (`doc/fltk-issues.md`,
+26 to 33):
+- **Inserting or removing items moves `value()` to another item**:
+  FLTK keeps it as a pointer into the array. ofltk finds the item
+  again by its text pointer.
+- **A deleted `global()` menu is used by the next shortcut**
+  (valgrind, in plain C++). ofltk keeps its own pointer, cleared by
+  the menu's destructor.
+- **Under Wayland, a menu popped up over a window not yet on the
+  screen kills the program** (a protocol error), and **a pop-up of a
+  window without the focus is closed at once** by the compositor.
+  `Popup` waits for the window; the second needs a real user, so the
+  test pops up only on X11.
+- **`fl_file_chooser` keeps its title pointer** in its one window;
+  **the common dialogs take printf formats**. The shim copies the
+  title, and passes text as `"%s"`.
+- **`Fl_Choice::value(int)` hides `Fl_Menu_::value(int)`**.
+- **A menu cleared in its own callback is safe in 1.4.5**, although
+  FLTK's documentation forbids it: nothing reads the item after the
+  callback (valgrind, in plain C++, through both a menu bar's and a
+  choice's shortcut). So ofltk doesn't forbid it.
+- **A key a timer sends to a dialog ends its loop only at the next
+  event**, which never comes under Xvfb; the tests fire once more.
+
+Not done, and why:
+- `Fl_Native_File_Chooser` stays in Phase 7, as planned: it runs the
+  desktop's own chooser, which keys from a test can't answer.
+- `Fl_Sys_Menu_Bar` is an `Fl_Menu_Bar` except on macOS; menu item
+  images and multi-labels come with images (Phase 7).
+- `fl_yes`, `fl_no` and the other button labels are pointers FLTK
+  keeps; `fl_message_icon` returns an FLTK-made widget. Not bound
+  until a program needs them.
+
+### Phase 6: Text and browsers `[done]`
+
+Modules `FlText` and `FlBrowsers`. Done 2026-10-06, with poc 0.4.1 and
+FLTK 1.4.5.
+
+- **`FlText`**: `TextBuffer`, a resource the program owns, as planned
+  ("Lifetime and the collector"): `OpenBuffer`, `Close` (idempotent),
+  a collector finalizer as the backstop, `IsOpen`, and `openBuffers`,
+  the count made and not closed, for tests.
+  - Text by byte position from 0: `SetText`, `GetText`, `TextRange`,
+    `CharAt`, `ByteAt`, `Insert`, `Append`, `Remove`, `Replace`;
+    undo and redo; files (load, append, insert, save, save a range);
+    the selection; lines and words (`LineStart`, `WordEnd`,
+    `CountLines`, `SkipLines` and the rest); `SearchForward`,
+    `SearchBackward`.
+  - `Modified`, a method an extension overrides, runs after every
+    change, from FLTK's modify callback.
+  - `TextDisplay` and `TextEditor`: `SetBuffer`, `SetStyleBuffer`,
+    `AddStyle` (returns the style's character, "A" on), the cursor,
+    moving and scrolling, wrapping, line numbers, fonts and colors,
+    the editor's insert mode and tab navigation.
+  - **A buffer lives while a display shows it**, whatever the
+    program does: the C++ buffer is reference counted, `Close` gives
+    up the program's hold only, and a display lets go only after
+    FLTK's display is destroyed (`Holds`, a base class destroyed
+    after it). The display also keeps the Oberon buffer, so the
+    collector leaves it.
+  - Halts: a closed buffer used, and a display's text methods with
+    no buffer, are `ClosedResource` (73).
+- **`FlBrowsers`**: `BrowserBase` (`Fl_Browser_`, never opened),
+  `Browser`, `HoldBrowser`, `MultiBrowser`, `SelectBrowser`,
+  `FileBrowser`, `CheckBrowser`, `Tree`.
+  - Lines from 1, as FLTK numbers them: `Add`, `Insert`, `Remove`,
+    `Move`, `Swap`, `Clear`, `Load`, `GetText`, `SetText`, `Select`,
+    `Selected`, `Value`, `Deselect`, `Sort`; hiding, showing and
+    scrolling to lines; the format and column characters, and column
+    widths. `Count`, not `Size`, which is `Fl.Widget`'s.
+  - `FileBrowser`: `LoadDirectory`, `SetFilter`, `SetFileType`,
+    the icon size. `CheckBrowser`: items checked and unchecked, and
+    their counts.
+  - Halts: a line or item outside 1 to the count (`Insert`, to the
+    count plus 1) is `IndexOutOfRange` (74).
+- **`Tree`**, about FLTKAda's scope (its `progress.txt`): items added
+    by path or under an item, inserted at a position or above an
+    item, removed, cleared; finding, paths, walking (`Next`, `Prev`,
+    `Parent`, `Child`, the visible and selected items); open and
+    close; selection; activation; each item's label font, size and
+    colors; the tree's modes, spacing and colors; `CallbackItem` and
+    `CallbackReason`. Not bound: embedded widgets and icons, which
+    wait for images (Phase 7), moving items, and items made outside
+    a tree.
+  - **A `TreeItem` is a reference the program can't misuse.** FLTK
+    makes and deletes items itself, some without ofltk seeing (a
+    path's parents). So a `TreeItem` holds the item's pointer and a
+    serial; the C++ tree maps the items it has handed out to their
+    serials, and drops an item and its descendants from the map
+    before it removes them. Only the program removes items, so an
+    item is live exactly when its pointer is in the map with its
+    serial. A pointer the allocator reuses gets a new serial: the
+    test sees this happen. A dead item halts, `ClosedResource` (73).
+  - What the program does never calls back (`docallback` 0), as
+    elsewhere.
+- **Constants**, 39 more (text wrap and cursor, style attributes,
+  scrollbars, sorting, file types, tree modes and reasons), for 418
+  in `TestConstants`.
+- **Tests**:
+  - `TestText` (45 checks): the buffer's operations, files, undo,
+    search, a display's buffer and styles (a styled pixel read
+    back), the buffer kept alive by its display, and a lost buffer
+    finalized.
+  - `TestBrowsers` (53): lines and selection by the program, clicks
+    on a hold and a multi browser, column widths read back as
+    pixels, loading a file, a file browser's directory and filter,
+    a check browser's items and clicks.
+  - `TestTree` (33): items and paths, removal and liveness, open and
+    close, selection by the program and by clicks, Shift-click after
+    a removal, an item removed in its own callback, `Clear`.
+  - `HaltClosedBuffer`, `HaltNoBuffer`, `HaltBrowserLine`,
+    `HaltTreeItem`. All pass on Wayland, X11 (XWayland) and Xvfb,
+    and under valgrind on Wayland and Xvfb with 0 errors and no
+    ofltk leak.
+- **The tests catch what they're for**, each checked by breaking the
+  shim:
+  - `FlText`: `Holds` as the last base class, `Close` deleting a
+    buffer still shown, and no style guard: valgrind errors.
+  - `FlBrowsers`: the column widths or the filter passed to FLTK
+    uncopied (the test sets them from a frame since written over),
+    `textsize` called as `Fl_Browser_`'s, no top-line update, the
+    tree removing as FLTK does, the callback item kept, and no
+    serial: each fails a check.
+
+Findings, confirmed live or in FLTK's source (`doc/fltk-issues.md`,
+34 to 43):
+- **A text buffer deleted before its displays is used after it is
+  freed**: neither detaches from the other.
+- **A style buffer with no styles** makes FLTK read before the style
+  table.
+- **`search_forward` and `search_backward` read past the text when
+  matching case** (a bug; valgrind, in plain C++). The shim
+  searches itself.
+- **Browsers keep the column widths, filter and directory pointers**
+  they are given; the shim keeps copies.
+- **A browser finds its top line only when it draws**, so `TopLine`
+  and `Displayed` read stale values and a browser never drawn takes
+  no click; the shim updates it through the protected `find_item`.
+- **`Fl_Browser::textsize` and `Fl_File_Browser::textsize` hide
+  `Fl_Browser_`'s.**
+- **`Fl_Browser::load` adds an empty last line** after a final
+  newline, and **`Fl_File_Browser::load` returns the directory's
+  entries**, not the lines listed.
+- **`Fl_Tree` keeps a removed item's descendant as the last one
+  clicked**, and **its callback item after removal**; **`clear`
+  deletes the root**.
+- **A check browser starts with `FL_WHEN_NEVER`**, and a browser
+  calls back on every release (`FL_WHEN_RELEASE_ALWAYS`), changed
+  or not: documented in `FlBrowsers`.
+
+Not done, and why:
+- No editor example yet; `examples/Menus.Mod` shows the dialogs a
+  text editor would use. It can come with Phase 8's examples.
+- `Fl_Text_Editor` key bindings, and the buffer's
+  `Fl_Text_Selection` beyond the primary selection: not needed by
+  anything yet.
+
+### Phase 7: Images and the rest `[done]`
+
+Modules `FlImages`, `FlPreferences` and `FlTable`, with additions to `Fl`
+and `FlDialogs`. Done 2026-10-06, with poc 0.4.1 and FLTK 1.4.5.
+
+- shared and RGB images (data copied); offscreen drawing and
+  `fl_read_image`;
+- the clipboard, drag and drop, `Preferences`, `NativeFileChooser`,
+  `Table`.
+
+Done:
+- `FlImages` (`-lfltk_images`, from `fltk-config --use-images`):
+  - `Image`: `Load` (the format told by the file's contents, not its
+    name), `LoadData`, `OpenRGB` (the pixels copied), `Copy`, `Scale`,
+    `ColorAverage`, `Desaturate`, `Inactive`, `Draw`, `DrawPart`,
+    `Pixel`, `Alpha`, `SavePNG`;
+  - `SetImage`, `SetInactiveImage`, `SetIcon`: a widget holds its
+    images (`ofl::Shared`, counted, in `Ref`), so closing an image a
+    widget shows is safe;
+  - `Surface` (`Fl_Image_Surface`): `Begin` and `End` nest, and an
+    `End` out of order halts with the new code 77; `DrawWidget`,
+    `GetImage`; and `ReadImage`.
+- The clipboard, in `Fl`: `Copy`, `Paste`, `PasteImage`,
+  `ClipboardHasText`, `ClipboardHasImage`, `EventIsImage`; and
+  `FlImages`' `CopyToClipboard` and `TakePastedImage`. A pasted image
+  not taken is deleted by ofltk (`doc/fltk-issues.md`, 48).
+- Drag and drop: `Dnd`, `DndTextOps`, `SetDndTextOps`, bound but not
+  tested: a drag needs a real pointer, and `Fl::dnd` returns at once
+  under Wayland.
+- `FlPreferences`: `Preferences`, a database (`Open`: `User`,
+  `System`, `Memory`; `OpenFile`) or a group in one (`Group`, which
+  takes a path), with entries (`SetInt`, `SetReal`, `SetText`, `Int`,
+  `Real`, `GetText`, `TextLength`, `Entries`, `EntryName`,
+  `HasEntry`, `DeleteEntry`, `DeleteEntries`), groups (`Groups`,
+  `GroupName`, `HasGroup`, `DeleteGroup`, `DeleteGroups`, `Clear`),
+  `Flush`, `FileName` and `Close`. Reals are written in the C locale.
+  A group is its database and its path, never an `Fl_Preferences`
+  kept (`doc/fltk-issues.md`, 51). Binary entries and
+  `get_userdata_path` aren't bound. Tested by `TestPreferences` and
+  `HaltClosedGroup` (73); mutations caught: no existence check (the
+  halt test exits 0), no `delete` in `Close` (`vg-check.sh`).
+- `Fl.Option` and `Fl.SetOption` (`Fl::option`), and
+  `FlDialogs.NativeFileChooser` (`Fl_Native_File_Chooser`):
+  `OpenNativeFileChooser`, `SetKind`, `SetTitle` (copied: FLTK's
+  driver keeps it, `doc/fltk-issues.md`, 30), `SetFilter`,
+  `SetFilterValue`, `SetDirectory`, `SetPresetFile`, `SetOptions`,
+  `Show` (`Chosen`, `Cancelled`, `Failed`), `Count`, `FileName`,
+  `ErrorMessage`, `Close`. `TestDialogs` turns zenity, kdialog and GTK
+  off with `SetOption`, so FLTK's own chooser is shown and answered by
+  keys, on X11 and Wayland. The desktop's choosers are untested: they
+  are other programs, or GTK's windows, out of `Probe`'s reach.
+- `FlTable`: `Table` (`Fl_Table`) and `TableRow` (`Fl_Table_Row`),
+  whose `draw_cell` reaches the Oberon `DrawCell` (a new dispatcher,
+  `ofl_table_register`); rows, columns, headers, sizes, resizing,
+  scrolling, `FindCell`, `VisibleCells`, cell selection, row
+  selection, and the callback's row, column and context. A table is a
+  `Group` of the widgets in its cells: Fl.cpp calls it as an
+  `Fl_Table` (`doc/fltk-issues.md`, 52). Tested by `TestTable` (cells'
+  pixels, a click, selection, widgets in cells) and `HaltTableRow`
+  (74).
+- Every label goes through `ofl::label_text`: FLTK lays out an empty
+  label as a line of text, which moved label images
+  (`doc/fltk-issues.md`, 46).
+- Tests: `TestImages`, `TestClipboard`, and the halt tests
+  `HaltClosedImage` (73) and `HaltSurfaceOrder` (77). They pass under
+  headless sway and Xvfb, and both valgrind runs are clean.
+- FLTK issues 44 to 50: no window icons and no selection buffer under
+  Wayland; binary PNM unscaled; XPM color names only on X11; X11's
+  `Fl::copy` before the display is open crashes; Wayland leaks the
+  program's own pasted image.
+- Mutations caught: no image held by its widget (valgrind invalid
+  reads); "" labels (`TestImages`); pixels not copied; PNM unscaled; no
+  release in `~Ref` (`vg-check.sh`); no `drop_pasted_image` (leaks in
+  the valgrind log).
+
+Not done, and why:
+- Multi, icon and image labels, images in menu items and tree items'
+  icons: images are in place, and these can come when something needs
+  them.
+- Drag and drop is bound but untested (above).
+- `Fl_Preferences`' binary entries and `get_userdata_path`.
+
+### Phase 8: Release `[done]`
+
+Done 2026-10-06, with poc 0.4.1 and FLTK 1.4.5. `make install` as a poc
+library, and poc 0.4.0's C++ parts and recorded link flags, were done
+early, once 0.4.0 was installed ("poc 0.4.0" below).
+
+- `README.md`: what ofltk is, requirements, building and testing,
+  installing and using the library, the modules, the concepts
+  (opening, overriding, lifetime, resources, strings, halt codes),
+  and FLTK's problems.
+- Examples: ports of FLTK's `examples/` programs, one for each module
+  the first four examples left out: `TableSimple`, `TreeSimple`,
+  `TextEditorSimple`, `BrowserSimple`, `GridSimple`, `FlexSimple`,
+  `TabsSimple`, `WizardSimple`, `ProgressSimple`,
+  `NativeFileChooserSimple`, `SvgSimple` (the SVG decoded from
+  memory). Each was looked at under Xvfb against what FLTK's draws,
+  and `ProgressSimple`, `WizardSimple`, `TreeSimple` and
+  `BrowserSimple` were driven with `xdotool`.
+- `make test` runs every example too: none ends by itself, so each
+  must still be running after `EXAMPLETIME` seconds (3), when
+  `timeout` ends it (status 124). An example that halted at once
+  failed this (checked with a throwaway one).
+- The README's install instructions were followed in the scratchpad:
+  `poc -OC -library-path <lib>/ofltk` built `TableSimple` alone, and
+  it ran.
+
+Not done, and why:
+- The examples aren't run under valgrind: killed by `timeout`, a
+  program frees nothing, so its leak report means nothing.
+- No larger demo (an editor with files, a spreadsheet): the ports
+  show each module, and `Menus` the dialogs.
 
 ### Phases 9 to 13: every example FLTK ships
 
@@ -979,163 +1013,181 @@ Order: the ports that need nothing come first, because writing them
 finds the small gaps cheaply. The bindings with new lifetime problems
 (trees, animated images) come last.
 
-9. **`[done]` Ports that needed little new** (2026-10-07, poc 0.4.1, FLTK
-   1.4.5). Planned as needing nothing; writing them found three small
-   gaps, bound here.
-   - Ported: `Callbacks`, `DrawAnX`, `TextOverImageButton`,
-     `DragAndDrop`, `TableAsContainer`, `TableWithKeynav`,
-     `TableWithRightClickMenu`, `TableWithRightColumnStretchFit`,
-     `TableSpreadsheetWithKeyboardNav`, `TextDisplayWithColors`,
-     `TextEditorWithDynamicColors`, `NativeFileChooserSimpleApp`.
-   - **How a port was checked**: it and FLTK's own build (FLTK's
-     `examples/` has the binaries) were run under Xvfb, given the same
-     clicks, drags and keys with `xdotool`, and their screens compared
-     pixel by pixel (`magick compare -metric AE`). Every port matched
-     exactly, or within faint antialiasing (no pixel 1% off): as drawn,
-     and after each interaction tried, such as a dialog from each kind of
-     callback, a drag between windows, a column resized, cells selected
-     by mouse and keys, a cell edited, rows added until the scrollbar
-     shows, the window resized, text typed and deleted. What they print
-     matched too (FLTK's run with `stdbuf -oL`, since it is killed).
-     `NativeFileChooserSimpleApp` saved with Ctrl+S and Return wrote the
-     same file as FLTK's, and both showed an error for an unwritable
-     directory.
-   - **New: `FlImages.OpenXPM`**, for `TextOverImageButton`'s gradient:
-     an XPM's strings as an Oberon `ARRAY OF ARRAY OF CHAR`. A 2-D open
-     array reaches C as its first element's address, its rows `LEN(a,
-     1)` bytes apart (the test sees each row). `Fl_Pixmap` keeps the
-     lines and trusts the first line's numbers, so the shim checks the
-     line count, each row's length and its 0X against them, then copies
-     the pixmap (`copy_data`). Tested in `TestImages`, with each bad form
-     refused.
-   - **New: `Group.InitSizes`** (`Fl_Group::init_sizes`), for
-     `TableAsContainer`, which moves its cells' widgets as columns are
-     resized. `Fl_Table::init_sizes` hides `Fl_Group`'s (52), so a table
-     is called as one. Tested in `TestWidget`: a child moved goes back on
-     the group's next resize, and stays after `InitSizes`.
-   - **New: `Table.Area`**, for `TableWithRightColumnStretchFit`:
-     `Fl_Table`'s protected `wix`, `tox` and `tix` rectangles, reached
-     through pointers to members named in a subclass, as `find_cell` is.
-     Tested in `TestTable` against `recalc_dimensions`' arithmetic.
-   - **Drag and drop is tested** (`TestClipboard`), with events sent
-     by `Probe.Mouse` through FLTK's routing: enter, drag, release, and
-     leave both by dragging off and from the window system. A real drag
-     between two windows was tried in `DragAndDrop` under Xvfb.
-     - Sending `FL_DND_LEAVE` to a window never shown crashed the test in
-       an `Fl_Input`, which calls `Fl::first_window()->cursor()`
-       (`doc/fltk-issues.md`, 53), so the test uses a window with no
-       input.
-     - `Fl::handle` returns 0 for a drag off a widget the window has no
-       use for, though the widget gets `FL_DND_LEAVE`; a window passes
-       `FL_DND_LEAVE` to each child again.
-   - **Found writing them**:
-     - An extension of a widget can't have a field named `h`: the base's
-       read-only handle `h-` is visible, and poc reports the clash.
-     - poc has no string concatenation, so a label with line breaks is
-       built with `OutStr.Ln`.
-     - poc's `Files` halts when it can't create a file (`Fail`), so
-       `NativeFileChooserSimpleApp` writes through a text buffer's
-       `SaveFile`, which returns `FALSE`; its message can't say why.
-     - `exit(0)` in FLTK's examples (Escape) is `win.Hide` here, which
-       ends `Fl.Run`.
-     - On Xvfb with no window manager, a window sits 20 pixels below
-       its y.
-   - `EventXRoot` and `EventYRoot` were bound already (Phase 2), so
-     Phase 10 needn't add them.
-10. **Small additions** (7 ports):
-    - `Fl.BoxDX`, `BoxDY`, `BoxDW`, `BoxDH` (`Fl::box_dx` and the rest),
-      for `draggable-group`.
-    - `Table.TabCellNav`/`SetTabCellNav`, for `table-spreadsheet`.
-    - `TreeItem.SwapChildren`, for `tree-custom-sort`. The tree's map of
-      live items is unchanged by a swap; the test checks the order and
-      the items' serials.
-    - A browser line's icon (`Fl_Browser::icon`), for
-      `howto-browser-with-icons`. FLTK keeps the image pointer, so the
-      browser's `Keeps` holds the image, counted, until the line or the
-      browser goes, as `Ref` does for a widget's image.
-    - Multi-labels (`Fl_Multi_Label`), for widgets and menu items, for
-      `howto-menu-with-images`. Each holds text or an image, or another
-      multi-label, and FLTK keeps all the pointers: the text is copied,
-      and the images and the label are held until the widget or item
-      no longer uses them.
-    - `fl_open_uri`, for `menubar-add`, returning `FALSE` with FLTK's
-      message rather than halting.
-    - Command-line options: `Fl::args`, `Fl::arg` and `Fl::help`, and
-      `Fl_Window::show(argc, argv)`, for `howto-parse-args`. FLTK keeps
-      pointers into `argv` (the display name, geometry, title), so the
-      shim builds its own `argv`, kept for the program's life, from
-      poc's `Args`. A program's own options come back from an Oberon
-      procedure, as `Fl_Args_Handler` does.
-    - Screen queries: `Fl::w`, `Fl::h`, `Fl::screen_count`,
-      `Fl::screen_xywh`, `Fl::screen_work_area`; and `event_shift` if
-      `EventState` doesn't cover it (`event_x_root` and `event_y_root`
-      are `EventXRoot` and `EventYRoot` already). Under sway's headless output and Xvfb
-      the screen is the output's size, which the test checks.
-11. **The event loop** (3 ports):
-    - **Idle callbacks** (`Fl::add_idle`, `remove_idle`): an `Idle`
-      object, kept reachable while added as a pending `Timer` is
-      ("Lifetime and the collector"), with a `Run` method.
-    - **File descriptors** (`Fl::add_fd`, `remove_fd`, with `FL_READ`,
-      `FL_WRITE`, `FL_EXCEPT`): an `FdWatch` object, kept the same way,
-      with a `Ready(fd, when)` method. The test writes to a pipe
-      `Probe` makes, and waits for `Ready`.
-    - **The event dispatch** (`Fl::event_dispatch`): one Oberon
-      procedure that sees every event first, and `Fl.HandleDefault`
-      (`Fl::handle_`) to pass an event on. To remap a key the dispatch
-      sets the event's key and text, so `Fl` gains setters for the
-      event fields `Probe` already sets (`Fl::e_keysym`, `e_text`,
-      `e_length`). Check first that `Fl::handle_` inside a dispatch is
-      safe with pofltk's dispatch depth and deferred deletes.
-    - Running a command is not FLTK's (`popen`), so it isn't pofltk's:
-      `examples/Pipe.Mod` and `Pipe.cpp`, an example module with a C++
-      part (`popen`, `fileno`, `read`, `pclose`), as `test/Probe` is a
-      test module with one.
-    - Ports: `howto-add_fd-and-popen` (it runs `ping`, so the port runs
-      something slow that needs no network), `howto-remap-numpad-keyboard-keys`,
-      `table-sort` (its table is `ls -l`, through `Pipe`).
-12. **Trees** (3 ports):
-    - **Widgets in items** (`Fl_Tree_Item::widget`, the tree's
-      `item_draw_mode` and `widgetmarginleft`), for `tree-as-container`
-      and `tree-of-tables`. The widget is the tree's child, deleted with
-      the tree, and `~Fl_Tree_Item` leaves it alone ("Fl_Group will
-      handle destruction", `Fl_Tree_Item.cxx`). So removing an item
-      leaves its widget in the tree. Find out what FLTK then draws, and
-      whether `Item.Remove` should delete the widget, or halt while it
-      has one.
-    - **Items that draw themselves**, for `tree-custom-draw-items`: an
-      Oberon extension of `TreeItem` with a `DrawContent(render)` method,
-      FLTK's virtual `draw_item_content`. The C++ part's item class sends
-      it to Oberon through a dispatcher `FlBrowsers`' body registers, as
-      `FlTable` does for `draw_cell`. `Tree.AddItem(path, item)` adds it
-      (`Fl_Tree::add(path, newitem)`).
-      - Today the program can't make items. An Oberon item would be
-        reachable from FLTK alone, so it goes in the registry while its
-        C++ item lives. The C++ item's destructor drops it there, and
-        from the tree's map of live items, as `Ref` does for a widget.
-      - The example's `show_self` prints the tree to standard output for
-        debugging: the port walks the items itself.
-13. **New widgets and images** (6 ports):
-    - `Fl_Chart`, for `chart-simple`, in a new module `FlCharts` (or
-      `FlValuators`, if it stays alone). Each entry's label is copied
-      into the entry (`str[FL_CHART_LABEL_MAX + 1]`, `Fl_Chart.H`).
-    - Window shapes (`Fl_Window::shape`) and `Fl_Tiled_Image`, for
-      `shapedwindow`. X11 keeps a pixmap's pointer as the shape
-      (`Fl_X11_Window_Driver::shape`), so the window's `Ref` holds the
-      image. Find out whether the Wayland back end supports shapes at
-      all.
-    - Animated GIFs (`Fl_Anim_GIF_Image`), for the four `animgifimage`
-      examples, loaded from contents as `FlImages` loads every image.
-      The image redraws its canvas widget from FLTK timers, so a canvas
-      deleted first, or an image deleted while its timer is pending,
-      must be safe: test both under valgrind.
-    - `animgifimage` lists a directory (`fl_filename_list`,
-      `fl_alphasort`), which `FlDialogs` can bind, with the names copied
-      and FLTK's list freed (`fl_filename_free_list`).
-
 Not in these phases: FLTK's classes no example uses (`Fl_Clock`,
 `Fl_Positioner`, `Fl_Input_Choice`, `Fl_File_Input`, `Fl_Help_View`,
 `Fl_Overlay_Window` and others). Each is a small widget binding, for
 when a program needs it.
+
+### Phase 9: Ports that needed little new `[done]`
+
+Done 2026-10-07, with poc 0.4.1 and FLTK 1.4.5. Planned as needing
+nothing new; writing them found three small gaps, bound here.
+
+- Ported: `Callbacks`, `DrawAnX`, `TextOverImageButton`,
+  `DragAndDrop`, `TableAsContainer`, `TableWithKeynav`,
+  `TableWithRightClickMenu`, `TableWithRightColumnStretchFit`,
+  `TableSpreadsheetWithKeyboardNav`, `TextDisplayWithColors`,
+  `TextEditorWithDynamicColors`, `NativeFileChooserSimpleApp`.
+- **How a port was checked**: it and FLTK's own build (FLTK's
+  `examples/` has the binaries) were run under Xvfb, given the same
+  clicks, drags and keys with `xdotool`, and their screens compared
+  pixel by pixel (`magick compare -metric AE`). Every port matched
+  exactly, or within faint antialiasing (no pixel 1% off): as drawn,
+  and after each interaction tried, such as a dialog from each kind of
+  callback, a drag between windows, a column resized, cells selected
+  by mouse and keys, a cell edited, rows added until the scrollbar
+  shows, the window resized, text typed and deleted. What they print
+  matched too (FLTK's run with `stdbuf -oL`, since it is killed).
+  `NativeFileChooserSimpleApp` saved with Ctrl+S and Return wrote the
+  same file as FLTK's, and both showed an error for an unwritable
+  directory.
+- **New: `FlImages.OpenXPM`**, for `TextOverImageButton`'s gradient:
+  an XPM's strings as an Oberon `ARRAY OF ARRAY OF CHAR`. A 2-D open
+  array reaches C as its first element's address, its rows `LEN(a,
+  1)` bytes apart (the test sees each row). `Fl_Pixmap` keeps the
+  lines and trusts the first line's numbers, so the shim checks the
+  line count, each row's length and its 0X against them, then copies
+  the pixmap (`copy_data`). Tested in `TestImages`, with each bad form
+  refused.
+- **New: `Group.InitSizes`** (`Fl_Group::init_sizes`), for
+  `TableAsContainer`, which moves its cells' widgets as columns are
+  resized. `Fl_Table::init_sizes` hides `Fl_Group`'s (52), so a table
+  is called as one. Tested in `TestWidget`: a child moved goes back on
+  the group's next resize, and stays after `InitSizes`.
+- **New: `Table.Area`**, for `TableWithRightColumnStretchFit`:
+  `Fl_Table`'s protected `wix`, `tox` and `tix` rectangles, reached
+  through pointers to members named in a subclass, as `find_cell` is.
+  Tested in `TestTable` against `recalc_dimensions`' arithmetic.
+- **Drag and drop is tested** (`TestClipboard`), with events sent
+  by `Probe.Mouse` through FLTK's routing: enter, drag, release, and
+  leave both by dragging off and from the window system. A real drag
+  between two windows was tried in `DragAndDrop` under Xvfb.
+  - Sending `FL_DND_LEAVE` to a window never shown crashed the test in
+    an `Fl_Input`, which calls `Fl::first_window()->cursor()`
+    (`doc/fltk-issues.md`, 53), so the test uses a window with no
+    input.
+  - `Fl::handle` returns 0 for a drag off a widget the window has no
+    use for, though the widget gets `FL_DND_LEAVE`; a window passes
+    `FL_DND_LEAVE` to each child again.
+- **Found writing them**:
+  - An extension of a widget can't have a field named `h`: the base's
+    read-only handle `h-` is visible, and poc reports the clash.
+  - poc has no string concatenation, so a label with line breaks is
+    built with `OutStr.Ln`.
+  - poc's `Files` halts when it can't create a file (`Fail`), so
+    `NativeFileChooserSimpleApp` writes through a text buffer's
+    `SaveFile`, which returns `FALSE`; its message can't say why.
+  - `exit(0)` in FLTK's examples (Escape) is `win.Hide` here, which
+    ends `Fl.Run`.
+  - On Xvfb with no window manager, a window sits 20 pixels below
+    its y.
+- `EventXRoot` and `EventYRoot` were bound already (Phase 2), so
+  Phase 10 needn't add them.
+
+### Phase 10: Small additions
+
+Seven ports, and the small bindings they need:
+
+- `Fl.BoxDX`, `BoxDY`, `BoxDW`, `BoxDH` (`Fl::box_dx` and the rest),
+  for `draggable-group`.
+- `Table.TabCellNav`/`SetTabCellNav`, for `table-spreadsheet`.
+- `TreeItem.SwapChildren`, for `tree-custom-sort`. The tree's map of
+  live items is unchanged by a swap; the test checks the order and
+  the items' serials.
+- A browser line's icon (`Fl_Browser::icon`), for
+  `howto-browser-with-icons`. FLTK keeps the image pointer, so the
+  browser's `Keeps` holds the image, counted, until the line or the
+  browser goes, as `Ref` does for a widget's image.
+- Multi-labels (`Fl_Multi_Label`), for widgets and menu items, for
+  `howto-menu-with-images`. Each holds text or an image, or another
+  multi-label, and FLTK keeps all the pointers: the text is copied,
+  and the images and the label are held until the widget or item
+  no longer uses them.
+- `fl_open_uri`, for `menubar-add`, returning `FALSE` with FLTK's
+  message rather than halting.
+- Command-line options: `Fl::args`, `Fl::arg` and `Fl::help`, and
+  `Fl_Window::show(argc, argv)`, for `howto-parse-args`. FLTK keeps
+  pointers into `argv` (the display name, geometry, title), so the
+  shim builds its own `argv`, kept for the program's life, from
+  poc's `Args`. A program's own options come back from an Oberon
+  procedure, as `Fl_Args_Handler` does.
+- Screen queries: `Fl::w`, `Fl::h`, `Fl::screen_count`,
+  `Fl::screen_xywh`, `Fl::screen_work_area`; and `event_shift` if
+  `EventState` doesn't cover it (`event_x_root` and `event_y_root`
+  are `EventXRoot` and `EventYRoot` already). Under sway's headless output and Xvfb
+  the screen is the output's size, which the test checks.
+
+### Phase 11: The event loop
+
+Three ports, and what they need of the event loop:
+
+- **Idle callbacks** (`Fl::add_idle`, `remove_idle`): an `Idle`
+  object, kept reachable while added as a pending `Timer` is
+  ("Lifetime and the collector"), with a `Run` method.
+- **File descriptors** (`Fl::add_fd`, `remove_fd`, with `FL_READ`,
+  `FL_WRITE`, `FL_EXCEPT`): an `FdWatch` object, kept the same way,
+  with a `Ready(fd, when)` method. The test writes to a pipe
+  `Probe` makes, and waits for `Ready`.
+- **The event dispatch** (`Fl::event_dispatch`): one Oberon
+  procedure that sees every event first, and `Fl.HandleDefault`
+  (`Fl::handle_`) to pass an event on. To remap a key the dispatch
+  sets the event's key and text, so `Fl` gains setters for the
+  event fields `Probe` already sets (`Fl::e_keysym`, `e_text`,
+  `e_length`). Check first that `Fl::handle_` inside a dispatch is
+  safe with pofltk's dispatch depth and deferred deletes.
+- Running a command is not FLTK's (`popen`), so it isn't pofltk's:
+  `examples/Pipe.Mod` and `Pipe.cpp`, an example module with a C++
+  part (`popen`, `fileno`, `read`, `pclose`), as `test/Probe` is a
+  test module with one.
+- Ports: `howto-add_fd-and-popen` (it runs `ping`, so the port runs
+  something slow that needs no network), `howto-remap-numpad-keyboard-keys`,
+  `table-sort` (its table is `ls -l`, through `Pipe`).
+
+### Phase 12: Trees
+
+Three ports, and what they need of trees:
+
+- **Widgets in items** (`Fl_Tree_Item::widget`, the tree's
+  `item_draw_mode` and `widgetmarginleft`), for `tree-as-container`
+  and `tree-of-tables`. The widget is the tree's child, deleted with
+  the tree, and `~Fl_Tree_Item` leaves it alone ("Fl_Group will
+  handle destruction", `Fl_Tree_Item.cxx`). So removing an item
+  leaves its widget in the tree. Find out what FLTK then draws, and
+  whether `Item.Remove` should delete the widget, or halt while it
+  has one.
+- **Items that draw themselves**, for `tree-custom-draw-items`: an
+  Oberon extension of `TreeItem` with a `DrawContent(render)` method,
+  FLTK's virtual `draw_item_content`. The C++ part's item class sends
+  it to Oberon through a dispatcher `FlBrowsers`' body registers, as
+  `FlTable` does for `draw_cell`. `Tree.AddItem(path, item)` adds it
+  (`Fl_Tree::add(path, newitem)`).
+  - Today the program can't make items. An Oberon item would be
+    reachable from FLTK alone, so it goes in the registry while its
+    C++ item lives. The C++ item's destructor drops it there, and
+    from the tree's map of live items, as `Ref` does for a widget.
+  - The example's `show_self` prints the tree to standard output for
+    debugging: the port walks the items itself.
+
+### Phase 13: New widgets and images
+
+Six ports, and the widgets and images they need:
+
+- `Fl_Chart`, for `chart-simple`, in a new module `FlCharts` (or
+  `FlValuators`, if it stays alone). Each entry's label is copied
+  into the entry (`str[FL_CHART_LABEL_MAX + 1]`, `Fl_Chart.H`).
+- Window shapes (`Fl_Window::shape`) and `Fl_Tiled_Image`, for
+  `shapedwindow`. X11 keeps a pixmap's pointer as the shape
+  (`Fl_X11_Window_Driver::shape`), so the window's `Ref` holds the
+  image. Find out whether the Wayland back end supports shapes at
+  all.
+- Animated GIFs (`Fl_Anim_GIF_Image`), for the four `animgifimage`
+  examples, loaded from contents as `FlImages` loads every image.
+  The image redraws its canvas widget from FLTK timers, so a canvas
+  deleted first, or an image deleted while its timer is pending,
+  must be safe: test both under valgrind.
+- `animgifimage` lists a directory (`fl_filename_list`,
+  `fl_alphasort`), which `FlDialogs` can bind, with the names copied
+  and FLTK's list freed (`fl_filename_free_list`).
 
 ### poc 0.4.0 `[done]`
 
