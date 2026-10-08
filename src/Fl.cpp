@@ -786,10 +786,16 @@ extern char fl_i_own_selection[2];
 // image: 0 text, 1 an image. Under X11, another program's data is asked
 // for through Fl::first_window. With no window shown, FLTK asks with
 // window 0 anyway, and the X server's BadWindow error is printed, so
-// pofltk doesn't ask: the paste does nothing, as it would have.
+// pofltk doesn't ask: the paste does nothing, as it would have. An FLTK
+// built without Wayland (OpenBSD's) has no fl_wl_display.
 void ofl_paste(intptr_t receiver, int32_t source, int32_t image) {
   fl_open_display();
-  if (!fl_wl_display() && !Fl::first_window() &&
+#if defined(FLTK_USE_WAYLAND)
+  bool wayland = fl_wl_display() != 0;
+#else
+  bool wayland = false;
+#endif
+  if (!wayland && !Fl::first_window() &&
       !fl_i_own_selection[source ? 1 : 0])
     return;
   Fl::paste(*ofl::widget(receiver), source,

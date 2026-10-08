@@ -19,6 +19,7 @@ VAR
   spinner: FlValuators.Spinner;
   progress: FlValuators.Progress;
   s: ARRAY 32 OF CHAR;
+  step: LONGREAL;
   calls: INTEGER;
   used: BOOLEAN;
   i: INTEGER;
@@ -72,7 +73,11 @@ BEGIN
     "Round, Clamp, and Increment, which rounds but doesn't clamp");
   slider.SetPrecision(2); slider.SetValue(1.5D0);
   slider.Format(s);
-  Check.Check((slider.Step() = 0.01D0) & (s = "1.50"), "SetPrecision sets the step, and Format shows its digits");
+  (* Stored before it is compared: on 32-bit x86, Fl_Valuator::step()
+     computes A/B and returns it in an x87 register, at extended
+     precision, where it is not 0.01D0 until rounded to a double. *)
+  step := slider.Step();
+  Check.Check((step = 0.01D0) & (s = "1.50"), "SetPrecision sets the step, and Format shows its digits");
 
   (* kinds *)
   Check.Check((slider.Kind() = FlValuators.VertSlider) & (dial.Kind() = FlValuators.NormalDial)

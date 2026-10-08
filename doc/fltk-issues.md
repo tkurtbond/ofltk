@@ -395,6 +395,24 @@ Unless an entry says otherwise, the version is FLTK 1.4.5 (Fedora's
   will show.
 - **Confirmed**: `TestAnimGIF`.
 
+### 66. `fltk-config` leaves out X11's directories on OpenBSD
+
+- On OpenBSD 7.9 (i386, FLTK 1.4.5 built from source with CMake, X11
+  only), `fltk-config --cxxflags` gives FLTK's include directory alone,
+  and `--ldflags` gives `-lX11` and the other X libraries without
+  `-L/usr/X11R6/lib`. OpenBSD keeps X11 in `/usr/X11R6`, off the
+  compiler's paths, so `FL/platform.H`'s `#include <X11/Xlib.h>` fails,
+  and so would the link. Found 2026-10-08 on cymoril.
+- **Cause**: not traced. FLTK's own build finds X11 there, but the
+  directories don't reach `fltk-config`.
+- **Effect on pofltk**: the makefile adds `pkg-config`'s directories
+  for `x11` (`X11_CXXFLAGS` and `X11_LIBS` in `GNUmakefile`), which are
+  empty where X11 is on the usual paths. At run time OpenBSD's linker
+  must also know `/usr/X11R6/lib` (`ldconfig -m /usr/X11R6/lib`, as
+  root, if the cache lacks it).
+- **Confirmed**: `make tests` on cymoril, failing before the change and
+  building after.
+
 ## Pitfalls
 
 ### 5. FLTK keeps the label pointer it is given
@@ -957,3 +975,61 @@ Unless an entry says otherwise, the version is FLTK 1.4.5 (Fedora's
   label before such a character.
 - **Confirmed**: in the source. `TestChart` draws 17 a's then an e
   acute, and checks it is drawn as 17 a's.
+
+### 67. `fl_wl_display` is declared only in an FLTK with Wayland
+
+- `FL/platform.H` declares `fl_wl_display()` only when FLTK was built
+  with Wayland (`FLTK_USE_WAYLAND`, from `FL/fl_config.h`), so code
+  calling it doesn't compile against an FLTK for X11 alone, such as
+  the one built on OpenBSD. Found 2026-10-08 on cymoril.
+- **Cause**: `FL/platform.H` includes `wayland.H` only under
+  `FLTK_USE_WAYLAND`.
+- **Effect on pofltk**: `ofl_paste` (`src/Fl.cpp`) and
+  `ofltest_wayland` (`test/Probe.cpp`) call it inside
+  `#if defined(FLTK_USE_WAYLAND)`; without it, FLTK is on X11.
+- **Confirmed**: `make tests` on cymoril, failing before the change and
+  building after; the Wayland tests pass on Fedora.
+
+### 68. `Fl_Valuator::step()` returns extended precision on 32-bit x86
+
+- `step()` is inline, `return A/B;`. On i386 a `double` comes back in
+  an x87 register, at 80-bit precision, so `step()` after
+  `precision(2)` (A = 1, B = 100) is not equal to the double `0.01`
+  until it is stored. Found 2026-10-08 on cymoril (OpenBSD 7.9 i386).
+- **Cause**: `FL/Fl_Valuator.H`; the i386 C ABI. Not FLTK's fault, but
+  any double it computes and returns can do this.
+- **Effect on pofltk**: none in the binding; a test stores a
+  `LONGREAL` FLTK returns in a variable before comparing it exactly
+  (`TestValuators`, SetPrecision).
+- **Confirmed**: `TestValuators` on cymoril, failing before the change
+  and passing after.
+
+### 69. Two charts at different places draw differently on X11 without Cairo
+
+- Two `Fl_Chart`s of the same size, entries and labels, at x = 0 and
+  x = 200 in one window, captured with `Fl_Image_Surface` (as
+  `Probe.Capture` does), differ by a pixel of the frame on OpenBSD's
+  X11 (FLTK drawing through Xlib and Xft, without Cairo). On Fedora,
+  with Cairo, they are the same. Found 2026-10-08 on cymoril.
+- **Cause**: not found.
+- **Effect on pofltk**: none in the binding. A test compares a widget's
+  drawing with its own earlier drawing, not with another widget's
+  (`TestChart`, the label check).
+- **Confirmed**: `TestChart` on cymoril with two charts, failing, and
+  with one, passing; a chart with label cutting disabled in
+  `entry_label` still fails the one-chart check.
+
+### 70. Moving the cursor up or down in text keeps its x, not its column
+
+- `Fl_Text_Display::move_down` and `move_up` keep the cursor's
+  horizontal position in pixels, so where it lands on a line of
+  different text depends on the font's widths: from "heXX" the cursor
+  lands nearer "worl" in Noto Sans (Fedora) and nearer "world" in
+  DejaVu Sans (OpenBSD). Found 2026-10-08 on cymoril.
+- **Cause**: FLTK working as intended (`src/Fl_Text_Display.cxx`,
+  `move_up` and `move_down`, which keep `mCursorPreferredXPos`, in
+  pixels).
+- **Effect on pofltk**: none in the binding. A test that checks where
+  the cursor lands uses a monospaced font (`TestText`, Courier).
+- **Confirmed**: `TestText` on cymoril failing, and passing with
+  Courier, on Fedora and cymoril.

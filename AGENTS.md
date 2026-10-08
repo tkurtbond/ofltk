@@ -306,6 +306,49 @@ widgets never shown; `make test` stops with a message without one.
   look with `import -window root shot.png` (ImageMagick). Tests use
   `Probe`, not `xdotool`, so they need no window manager or timing.
 
+### Testing on OpenBSD i386 (cymoril)
+
+cymoril runs OpenBSD 7.9 on i386, so it tests a 32-bit build, X11
+without Cairo, and fonts other than Fedora's (2026-10-08). The agent can
+ssh to it as the user and as root.
+
+- **FLTK**: OpenBSD's package is too old, so FLTK 1.4.5 is built from
+  source in `/usr/local/sw/versions/fltk/1.4.5`, for X11 alone. Pass
+  `FLTK_CONFIG=/usr/local/sw/versions/fltk/1.4.5/bin/fltk-config` to
+  `gmake` (GNU make; OpenBSD's `make` is BSD make).
+- **Its `fltk-config` leaves out `/usr/X11R6`**, so the makefile adds
+  `pkg-config`'s directories for `x11` (`doc/fltk-issues.md`, 66). The
+  runtime linker's cache must include `/usr/X11R6/lib`
+  (`ldconfig -m /usr/X11R6/lib` as root), or the tests can't find
+  `libX11`.
+- **The display**: no sway and no valgrind there, and no `xvfb-run`.
+  Start Xvfb by hand and run `make test` on it:
+
+  ```sh
+  ulimit -d 3000000   # a higher data limit, as the runs so far used
+  /usr/X11R6/bin/Xvfb :99 -screen 0 1280x1024x24 -nolisten tcp &
+  DISPLAY=:99 gmake FLTK_CONFIG=... test
+  pkill -f 'Xvfb :99'
+  ```
+
+- **Fonts**: its `/etc/fonts/conf.d` was empty, so "sans", "serif" and
+  "mono" were all DejaVu Math TeX Gyre, and text tests failed. The
+  links xenocara installs (`lib/fontconfig/conf.d/Makefile`,
+  `CONF_LINKS`) were made by hand on 2026-10-08, and the three now
+  match DejaVu Sans, Serif and Sans Mono. `fc-match sans` checks it.
+- Tested there 2026-10-08: `make test` passes, with the poc 0.4.1
+  package (`/usr/local/bin/poc`).
+
+**So that a test passes on every system**, it must not depend on the
+font, the drawing back end, or the FPU:
+
+- store a `LONGREAL` FLTK returns before comparing it exactly
+  (`doc/fltk-issues.md`, 68);
+- where a position depends on text widths, use a monospaced font
+  (`Fl.Courier`; `doc/fltk-issues.md`, 70);
+- compare a widget's drawing with its own earlier drawing, not with
+  another widget's (`doc/fltk-issues.md`, 69).
+
 ### Valgrind
 
 - **Memory errors fail a test.** The flags are `--error-exitcode`, plus
@@ -362,6 +405,17 @@ held only in C++ memory**.
   then ran on reused memory.
 - Every Oberon object FLTK can call back into must be reachable from a
   module-level root: PLAN.md's registry.
+- **The stack scan can keep a lost object alive.** A check that the
+  collector frees something can fail where an earlier call left its
+  address in stack memory not yet overwritten: `TestText`'s first check
+  failed this way on i386 (2026-10-08). `TestText.Scrub` overwrites a
+  stretch of the stack with zeros before `Churn`.
+- **At `-opt 0`**, poc's default for 32-bit x86, each value in a module
+  body has its own stack slot for the whole body, so a reference read
+  there stays visible to the scan until the program ends. Read a
+  collectable object into a local of a procedure instead
+  (`TestText.CheckShown`), so its slot is gone when the procedure
+  returns.
 
 ### FLTK's behaviour
 

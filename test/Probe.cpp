@@ -184,10 +184,15 @@ int32_t ofltest_modal(char *buf, int32_t n) {
   return 1;
 }
 
-// 1 if FLTK draws with Wayland, 0 with X11; opens the display.
+// 1 if FLTK draws with Wayland, 0 with X11; opens the display. An FLTK
+// built without Wayland has no fl_wl_display.
 int32_t ofltest_wayland(void) {
   fl_open_display();
+#if defined(FLTK_USE_WAYLAND)
   return fl_wl_display() != 0;
+#else
+  return 0;
+#endif
 }
 
 // A pipe, for FdWatch: its read and write ends in fds[0] and fds[1]; 1

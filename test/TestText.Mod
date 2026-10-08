@@ -48,6 +48,18 @@ BEGIN
   GC.Collect
 END Churn;
 
+(* Overwrites the stack below the caller's frame, where a procedure that
+   has returned (Lose, Show) may have left an object's address for the
+   collector's conservative scan to take for a reference. Called between
+   them and Churn, at the same depth: on 32-bit x86 (OpenBSD i386) a lost
+   buffer's address survived in Churn's own frame, so the buffer outlived
+   the first collection. SYSTEM.PUT, so that the stores happen at any -opt. *)
+PROCEDURE Scrub;
+  VAR a: ARRAY 4096 OF LONGINT; i: INTEGER; zero: LONGINT;
+BEGIN
+  FOR i := 0 TO LEN(a) - 1 DO SYSTEM.PUT(SYSTEM.ADR(a[i]), zero) END
+END Scrub;
+
 (* A buffer made and lost, without Close. *)
 PROCEDURE Lose;
   VAR b: FlText.TextBuffer;
@@ -60,11 +72,25 @@ PROCEDURE Show(d: FlText.TextDisplay);
 BEGIN NEW(b); FlText.OpenBuffer(b); b.SetText("shown"); d.SetBuffer(b)
 END Show;
 
+(* Checks the buffer Show gave d: still open, with its text. A procedure,
+   not the module body, so that no copy of its address outlives the call:
+   at -opt 0 (32-bit x86's default) every value the body computes keeps a
+   stack slot of its own until the body ends, and the collector's
+   conservative scan would take it for a reference. *)
+PROCEDURE CheckShown(d: FlText.TextDisplay);
+  VAR shown: FlText.TextBuffer; t: ARRAY 16 OF CHAR;
+BEGIN
+  shown := d.Buffer();
+  Check.Check((FlText.openBuffers = 2) & shown.IsOpen(), "a buffer shown isn't collected");
+  shown.GetText(t);
+  Check.Check(t = "shown", "and keeps its text")
+END CheckShown;
+
 BEGIN
   (* First, while no other call has left the buffer's address on the
      stack, where the collector's conservative scan would take it for a
      reference. *)
-  Lose; Churn;
+  Lose; Scrub; Churn;
   Check.Check(FlText.openBuffers = 0, "a buffer lost without Close is closed by the collector");
 
   (* buffers *)
@@ -147,8 +173,14 @@ BEGIN
   b.GetText(s); Lines("heXXllo", "world", "", t);
   Check.Check((d.Buffer() = b) & (s = t) & (d.InsertPosition() = 4),
     "Insert types at the cursor");
+  (* MoveDown keeps the cursor's x, so in a proportional font where it
+     lands depends on the font's widths: "heXX" is nearer "worl" in Noto
+     Sans, nearer "world" in DejaVu Sans (OpenBSD). Courier makes it
+     column 4. *)
+  d.SetTextFont(Fl.Courier);
   ok := d.MoveDown(); i := d.InsertPosition();
   ok := d.MoveRight(); j := d.InsertPosition();
+  d.SetTextFont(Fl.Helvetica);
   Check.Check((i = 12) & (j = 13) & (d.LineStart(j) = 8) & (d.LineEnd(1) = 7), "moving the cursor, and lines");
   Check.Check(~d.MoveDown(), "FALSE at the last line");
   d.SetWrapMode(FlText.WrapAtColumn, 3);
@@ -166,11 +198,8 @@ BEGIN
   d.Delete;
   Check.Check(Probe.Capture(d2) & (d2.InsertPosition() = 0), "after one is deleted, in the other");
   d2.SetBuffer(b);
-  Show(d2); Churn;
-  other := d2.Buffer();
-  Check.Check((FlText.openBuffers = 2) & other.IsOpen(), "a buffer shown isn't collected");
-  other.GetText(s);
-  Check.Check(s = "shown", "and keeps its text");
+  Show(d2); Scrub; Churn;
+  CheckShown(d2);
 
   (* styles *)
   NEW(styles); FlText.OpenBuffer(styles);
@@ -204,7 +233,7 @@ BEGIN
   b.Close;
   win.Delete;
   Check.Check((Fl.OpenWidgets() = 0) & (FlText.openBuffers = 1), "every widget deleted; one buffer is still shown by d2");
-  d2 := NIL; other := NIL; Churn;
+  d2 := NIL; other := NIL; Scrub; Churn;
   Check.Check(FlText.openBuffers = 0, "collected with its display");
   Check.Summary
 END TestText.

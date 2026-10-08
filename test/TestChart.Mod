@@ -6,7 +6,7 @@ CONST w = 200; h = 100;
 
 VAR
   win: Fl.Window;
-  c, d: FlValuators.Chart;
+  c: FlValuators.Chart;
   min, max: LONGREAL;
   pixels: ARRAY w * h OF INTEGER;
   i: INTEGER;
@@ -41,9 +41,8 @@ BEGIN ok := Probe.Capture(k); red := Probe.Pixel(x, y) = Fl.RGB(255, 0, 0); Prob
 END Red;
 
 BEGIN
-  NEW(win); Fl.OpenWindow(win, 2 * w, h, "TestChart");
+  NEW(win); Fl.OpenWindow(win, w, h, "TestChart");
   NEW(c); FlValuators.OpenChart(c, 0, 0, w, h, "");
-  NEW(d); FlValuators.OpenChart(d, w, 0, w, h, "");
   win.End;
 
   (* Settings *)
@@ -92,14 +91,16 @@ BEGIN
   Check.Check(~Red(c, w DIV 2, h DIV 2), "Replace changes the color");
 
   (* A label is cut to 18 bytes, before a UTF-8 character crossing the
-     18th: 17 a's then an e acute are drawn as 17 a's. *)
-  c.Clear; c.Add(10.0D0, "aaaaaaaaaaaaaaaaa", Fl.Red);
-  label := "aaaaaaaaaaaaaaaaa"; label[17] := 0C3X; label[18] := 0A9X; label[19] := 0X;
-  d.SetBounds(0.0D0, 10.0D0); d.Add(10.0D0, label, Fl.Red);
+     18th: 17 a's then an e acute are drawn as 17 a's. Compared on one
+     chart: two charts side by side, with the same entries and labels,
+     were drawn a pixel apart on OpenBSD's X11 (an FLTK without Cairo). *)
+  c.Clear; c.SetBounds(0.0D0, 10.0D0); c.Add(10.0D0, "aaaaaaaaaaaaaaaaa", Fl.Red);
   Keep(c);
-  Check.Check(Same(d), "a label cut before a character crossing its 18th byte");
-  d.Replace(1, 10.0D0, "aaaaaaaaaaaaaaaaaa", Fl.Red);
-  Check.Check(~Same(d), "and not one that fits");
+  label := "aaaaaaaaaaaaaaaaa"; label[17] := 0C3X; label[18] := 0A9X; label[19] := 0X;
+  c.Replace(1, 10.0D0, label, Fl.Red);
+  Check.Check(Same(c), "a label cut before a character crossing its 18th byte");
+  c.Replace(1, 10.0D0, "aaaaaaaaaaaaaaaaaa", Fl.Red);
+  Check.Check(~Same(c), "and not one that fits");
 
   win.Delete;
   Check.Check(Fl.OpenWidgets() = 0, "every widget deleted");

@@ -32,6 +32,11 @@ FLTK_CONFIG ?= fltk-config
 # library's own directories breaks its #include_next.
 FLTK_CXXFLAGS := $(filter-out -I/usr/include,$(filter -I% -D%,$(shell $(FLTK_CONFIG) --cxxflags)))
 FLTK_LIBS     := $(shell $(FLTK_CONFIG) --use-images --ldflags)
+# X11's own directories, which fltk-config leaves out: needed where X11
+# is outside the compiler's search path (OpenBSD's /usr/X11R6), empty
+# where it is not or pkg-config isn't there.
+X11_CXXFLAGS  := $(shell pkg-config --cflags-only-I x11 2>/dev/null)
+X11_LIBS      := $(shell pkg-config --libs-only-L x11 2>/dev/null)
 # C++11, as FLTKAda's shim is, so code can move between them.
 CXXFLAGS      := -std=c++11 -Wall -Wextra -Werror
 
@@ -51,8 +56,8 @@ TESTSRC := $(TESTCXX:%=test/%.Mod) $(TESTCXX:%=test/%.cpp)
 EXAMPLECXX := Pipe
 EXAMPLESRC := $(EXAMPLECXX:%=examples/%.Mod) $(EXAMPLECXX:%=examples/%.cpp)
 
-CFLAGS := $(foreach f,$(FLTK_CXXFLAGS) $(CXXFLAGS),-c-flag $(f))
-LINK   := $(CFLAGS) $(foreach f,$(FLTK_LIBS),-link $(f))
+CFLAGS := $(foreach f,$(FLTK_CXXFLAGS) $(X11_CXXFLAGS) $(CXXFLAGS),-c-flag $(f))
+LINK   := $(CFLAGS) $(foreach f,$(X11_LIBS) $(FLTK_LIBS),-link $(f))
 
 # Each library in its own directory under POC_OBERON_LIBRARIES, so a
 # program names only the libraries it uses (as polibfyaml does).
