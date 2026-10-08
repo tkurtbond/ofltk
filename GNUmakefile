@@ -31,7 +31,11 @@ FLTK_CONFIG ?= fltk-config
 # -I/usr/include, which is searched anyway, and which ahead of the C++
 # library's own directories breaks its #include_next.
 FLTK_CXXFLAGS := $(filter-out -I/usr/include,$(filter -I% -D%,$(shell $(FLTK_CONFIG) --cxxflags)))
-FLTK_LIBS     := $(shell $(FLTK_CONFIG) --use-images --ldflags)
+FLTK_LIBS_ALL := $(shell $(FLTK_CONFIG) --use-images --ldflags)
+# Without a plain -lpng beside a versioned one (-lpng16): pkgsrc's
+# fltk-config names both, and pkgsrc installs only libpng16
+# (doc/fltk-issues.md, 71).
+FLTK_LIBS     := $(if $(filter -lpng1%,$(FLTK_LIBS_ALL)),$(filter-out -lpng,$(FLTK_LIBS_ALL)),$(FLTK_LIBS_ALL))
 # X11's own directories, which fltk-config leaves out: needed where X11
 # is outside the compiler's search path (OpenBSD's /usr/X11R6), empty
 # where it is not or pkg-config isn't there.

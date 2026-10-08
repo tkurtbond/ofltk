@@ -339,6 +339,21 @@ ssh to it as the user and as root.
 - Tested there 2026-10-08: `make test` passes, with the poc 0.4.1
   package (`/usr/local/bin/poc`).
 
+### Testing on NetBSD i386 (yishana)
+
+yishana runs NetBSD 11.0 on i386 (2026-10-08): a second 32-bit build,
+with pkgsrc's FLTK 1.4.5, which draws with Cairo and Pango, and X11's
+Luxi fonts. The agent can ssh to it as the user and as root.
+
+- **FLTK** is pkgsrc's: `FLTK_CONFIG=/usr/pkg/bin/fltk-config`. Its
+  image libraries name a `-lpng` pkgsrc doesn't install, which the
+  makefile drops (`doc/fltk-issues.md`, 71).
+- **poc** is 0.4.1, installed from the release tarball in `/usr/local`;
+  put `/usr/local/bin` first on `PATH` (ssh doesn't).
+- **The display**: Xvfb is X11's, `/usr/X11R7/bin/Xvfb`; start it by
+  hand as on cymoril. No sway, and no valgrind on NetBSD.
+- Tested there 2026-10-08: `make test` passes, all 814 checks.
+
 **So that a test passes on every system**, it must not depend on the
 font, the drawing back end, or the FPU:
 

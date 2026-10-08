@@ -413,6 +413,22 @@ Unless an entry says otherwise, the version is FLTK 1.4.5 (Fedora's
 - **Confirmed**: `make tests` on cymoril, failing before the change and
   building after.
 
+### 71. pkgsrc's `fltk-config` names a `-lpng` that pkgsrc doesn't install
+
+- On NetBSD 11.0 (i386, pkgsrc's `fltk-1.4.5nb1`), `fltk-config
+  --use-images --ldflags` gives `-lpng -lz ... -lpng16 -ljpeg`, but
+  pkgsrc's libpng installs only `libpng16` (no `libpng.so`), so every
+  link with the image library fails: "cannot find -lpng". `-lpng16`, in
+  the same list, is the library meant. Found 2026-10-08 on yishana.
+- **Cause**: the `IMAGELIBS` line of the installed `fltk-config`. Not
+  traced further.
+- **Effect on pofltk**: the makefile drops a plain `-lpng` when the list
+  also has a versioned one (`-lpng1...`) (`FLTK_LIBS` in `GNUmakefile`).
+  Elsewhere the list is unchanged: Fedora's names no png library, and
+  OpenBSD's FLTK built from source names `libpng.so` by its path.
+- **Confirmed**: `make tests` on yishana, failing before the change and
+  building after; `make test` there passes.
+
 ## Pitfalls
 
 ### 5. FLTK keeps the label pointer it is given
